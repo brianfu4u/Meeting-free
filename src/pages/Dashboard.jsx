@@ -5,6 +5,7 @@ import PanelCard from "@/components/dashboard/PanelCard";
 import PanelDrawer from "@/components/dashboard/PanelDrawer";
 import EventStream from "@/components/dashboard/EventStream";
 import StatsBar from "@/components/dashboard/StatsBar";
+import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import {
   INITIAL_PANELS,
   PANEL_ORDER,
@@ -15,7 +16,8 @@ import {
 
 let eventIdCounter = 20;
 
-export default function Dashboard() {
+function DashboardInner() {
+  const { theme } = useTheme();
   const [panels, setPanels] = useState(INITIAL_PANELS);
   const [events, setEvents] = useState(EVENT_STREAM_INITIAL);
   const [activePanel, setActivePanel] = useState(null);
@@ -176,7 +178,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen" style={{ background: "#0D1B2A" }}>
+    <div className="min-h-screen" style={{ background: theme.canvas, transition: "background 0.3s ease" }}>
       <TopBar overallHealth={overallHealth} onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
 
       <Sidebar
@@ -204,15 +206,15 @@ export default function Dashboard() {
             <div
               className="rounded-xl px-5 py-3.5 mb-5 flex items-center justify-between"
               style={{
-                background: "linear-gradient(135deg, rgba(0,199,217,0.08) 0%, rgba(0,153,168,0.04) 100%)",
-                border: "1px solid rgba(0,199,217,0.15)",
+                background: theme.welcomeBg,
+                border: `1px solid ${theme.welcomeBorder}`,
               }}
             >
               <div>
-                <div className="text-sm font-bold" style={{ color: "#F1F5F9" }}>
+                <div className="text-sm font-bold" style={{ color: theme.text }}>
                   你好，店长L · 上午班正在进行中
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: "#64748B" }}>
+                <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
                   原来管好一家诊所，真的需要实时关注这么多板块。
                 </div>
               </div>
@@ -296,5 +298,13 @@ export default function Dashboard() {
         />
       )}
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <ThemeProvider>
+      <DashboardInner />
+    </ThemeProvider>
   );
 }
