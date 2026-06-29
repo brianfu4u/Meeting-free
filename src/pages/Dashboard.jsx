@@ -8,7 +8,7 @@ import StatsBar from "@/components/dashboard/StatsBar";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import {
   INITIAL_PANELS,
-  PANEL_ORDER,
+  PANEL_GROUPS,
   EVENT_STREAM_INITIAL,
   EVENT_STREAM_QUEUE,
   NAV_ITEMS,
@@ -233,21 +233,40 @@ function DashboardInner() {
               <StatsBar panels={panels} />
             </div>
 
-            {/* 9-panel grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {PANEL_ORDER.map((panelId) => {
-                const panel = panels[panelId];
-                return (
-                  <PanelCard
-                    key={panelId}
-                    panel={panel}
-                    onClick={(p) => {
-                      setActivePanel(p);
-                      setActiveSection(panelId);
-                    }}
-                  />
-                );
-              })}
+            {/* 18-panel grouped matrix */}
+            <div className="space-y-5">
+              {PANEL_GROUPS.map((group) => (
+                <div key={group.groupId}>
+                  {/* Group header */}
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: group.groupColor }} />
+                    <span className="text-xs font-bold tracking-widest" style={{ color: group.groupColor, letterSpacing: "0.1em" }}>
+                      {group.groupLabel}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: `linear-gradient(to right, ${group.groupColor}30, transparent)` }} />
+                    <span className="text-xs" style={{ color: theme.textFaint, fontSize: "10px" }}>
+                      {group.panels.length} 个区域
+                    </span>
+                  </div>
+                  {/* Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {group.panels.map((panelId) => {
+                      const panel = panels[panelId];
+                      if (!panel) return null;
+                      return (
+                        <PanelCard
+                          key={panelId}
+                          panel={panel}
+                          onClick={(p) => {
+                            setActivePanel(p);
+                            setActiveSection(panelId);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

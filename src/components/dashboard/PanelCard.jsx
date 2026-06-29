@@ -1,17 +1,19 @@
 import React from "react";
+import { useTheme } from "@/lib/ThemeContext";
 import {
   Users, Stethoscope, AlertTriangle, Zap, UserCheck,
   CircleDollarSign, Package, TrendingUp, Server, ChevronRight,
-  ClipboardList, Microscope, Glasses, Heart, Baby,
-  Megaphone, CalendarClock, GraduationCap, Building2,
+  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
+  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
+  Wrench, Megaphone, LayoutDashboard, ShoppingBag, Ambulance,
 } from "lucide-react";
-import { useTheme } from "@/lib/ThemeContext";
 
 const ICON_MAP = {
   Users, Stethoscope, AlertTriangle, Zap, UserCheck,
   CircleDollarSign, Package, TrendingUp, Server,
-  ClipboardList, Microscope, Glasses, Heart, Baby,
-  Megaphone, CalendarClock, GraduationCap, Building2,
+  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
+  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
+  Wrench, Megaphone, LayoutDashboard, ShoppingBag, Ambulance,
 };
 
 const STATUS_CONFIG = {
@@ -86,8 +88,15 @@ export default function PanelCard({ panel, onClick }) {
             >
               <IconComp size={15} style={{ color: cfg.border }} />
             </div>
-            <div className="text-sm font-semibold" style={{ color: theme.text, lineHeight: "1.2", transition: "color 0.3s ease" }}>
-              {panel.title}
+            <div>
+              {panel.zoneCode && (
+                <div style={{ color: theme.textFaint, fontSize: "9px", letterSpacing: "0.08em", fontWeight: 600 }}>
+                  {panel.zoneCode}
+                </div>
+              )}
+              <div className="text-sm font-semibold" style={{ color: theme.text, lineHeight: "1.2", transition: "color 0.3s ease" }}>
+                {panel.title}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">

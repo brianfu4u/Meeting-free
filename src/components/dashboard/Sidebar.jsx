@@ -1,23 +1,81 @@
 import React from "react";
 import {
-  LayoutDashboard, Users, Stethoscope, AlertTriangle, Zap,
-  UserCheck, CircleDollarSign, Package, TrendingUp, Server,
-  ClipboardList, Microscope, Glasses, Heart, Baby,
-  Megaphone, CalendarClock, GraduationCap, Building2,
+  LayoutDashboard, Stethoscope, Server, CircleDollarSign,
+  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
+  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
+  Wrench, Megaphone, ShoppingBag, Ambulance,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 
 const ICON_MAP = {
-  LayoutDashboard, Users, Stethoscope, AlertTriangle, Zap,
-  UserCheck, CircleDollarSign, Package, TrendingUp, Server,
-  ClipboardList, Microscope, Glasses, Heart, Baby,
-  Megaphone, CalendarClock, GraduationCap, Building2,
+  LayoutDashboard, Stethoscope, Server, CircleDollarSign,
+  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
+  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
+  Wrench, Megaphone, ShoppingBag, Ambulance,
 };
 
 const STATUS_DOT = { green: "#16A34A", amber: "#D97706", red: "#DC2626" };
 
+const GROUP_COLORS = {
+  clinical:   "#00C7D9",
+  support:    "#16A34A",
+  management: "#D97706",
+};
+
+const GROUP_LABELS = {
+  clinical:   "一线诊疗",
+  support:    "后勤支撑",
+  management: "管理赋能",
+};
+
 export default function Sidebar({ navItems, activeSection, onNavigate, panelStatuses, isOpen, onClose }) {
   const { theme } = useTheme();
+
+  // Group nav items
+  const overview = navItems.filter((i) => !i.group);
+  const grouped = {};
+  navItems.filter((i) => i.group).forEach((i) => {
+    if (!grouped[i.group]) grouped[i.group] = [];
+    grouped[i.group].push(i);
+  });
+
+  const renderItem = (item) => {
+    const IconComp = ICON_MAP[item.icon] || LayoutDashboard;
+    const isActive = activeSection === item.id;
+    const panelStatus = item.id !== "overview" ? panelStatuses[item.id] : null;
+    const dotColor = panelStatus ? STATUS_DOT[panelStatus] : null;
+
+    return (
+      <button
+        key={item.id}
+        onClick={() => { onNavigate(item.id); onClose(); }}
+        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all duration-150 text-left"
+        style={{
+          background: isActive ? "rgba(0,199,217,0.12)" : "transparent",
+          border: isActive ? "1px solid rgba(0,199,217,0.25)" : "1px solid transparent",
+        }}
+      >
+        <div
+          className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+          style={{ background: isActive ? "rgba(0,199,217,0.2)" : "rgba(128,128,128,0.08)" }}
+        >
+          <IconComp size={12} style={{ color: isActive ? "#00C7D9" : theme.textMuted }} />
+        </div>
+        <span className="flex-1 truncate" style={{ color: isActive ? "#00C7D9" : theme.textSub, fontSize: "11px", fontWeight: isActive ? 600 : 400 }}>
+          {item.label}
+        </span>
+        {dotColor && (
+          <span
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{
+              background: dotColor,
+              animation: panelStatus === "red" ? "pulseRed 1.5s ease-in-out infinite" : "none",
+            }}
+          />
+        )}
+      </button>
+    );
+  };
 
   return (
     <>
@@ -40,44 +98,22 @@ export default function Sidebar({ navItems, activeSection, onNavigate, panelStat
           transition: "background 0.3s ease, border-color 0.3s ease, transform 0.3s ease",
         }}
       >
-        <div className="flex-1 overflow-y-auto py-3 px-2">
-          {navItems.map((item) => {
-            const IconComp = ICON_MAP[item.icon] || LayoutDashboard;
-            const isActive = activeSection === item.id;
-            const panelStatus = item.id !== "overview" ? panelStatuses[item.id] : null;
-            const dotColor = panelStatus ? STATUS_DOT[panelStatus] : null;
+        <div className="flex-1 overflow-y-auto py-2 px-2">
+          {/* Overview */}
+          {overview.map(renderItem)}
 
-            return (
-              <button
-                key={item.id}
-                onClick={() => { onNavigate(item.id); onClose(); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 transition-all duration-150 text-left"
-                style={{
-                  background: isActive ? "rgba(0,199,217,0.12)" : "transparent",
-                  border: isActive ? "1px solid rgba(0,199,217,0.25)" : "1px solid transparent",
-                }}
-              >
-                <div
-                  className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-                  style={{ background: isActive ? "rgba(0,199,217,0.2)" : "rgba(128,128,128,0.08)" }}
-                >
-                  <IconComp size={14} style={{ color: isActive ? "#00C7D9" : theme.textMuted }} />
-                </div>
-                <span className="flex-1 text-xs font-medium truncate" style={{ color: isActive ? "#00C7D9" : theme.textSub }}>
-                  {item.label}
+          {/* Grouped sections */}
+          {Object.entries(grouped).map(([groupId, items]) => (
+            <div key={groupId} className="mt-3">
+              <div className="flex items-center gap-1.5 px-2 mb-1">
+                <div className="w-1 h-3 rounded-full" style={{ background: GROUP_COLORS[groupId] }} />
+                <span style={{ color: GROUP_COLORS[groupId], fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em" }}>
+                  {GROUP_LABELS[groupId]}
                 </span>
-                {dotColor && (
-                  <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{
-                      background: dotColor,
-                      animation: panelStatus === "red" ? "pulseRed 1.5s ease-in-out infinite" : "none",
-                    }}
-                  />
-                )}
-              </button>
-            );
-          })}
+              </div>
+              {items.map(renderItem)}
+            </div>
+          ))}
         </div>
 
         <div

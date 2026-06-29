@@ -28,7 +28,7 @@ export default function StatsBar({ panels }) {
         <span className="text-xs font-semibold" style={{ color: "#4ade80" }}>{green} 正常</span>
       </div>
       <div className="ml-auto text-xs" style={{ color: theme.textFaint, fontSize: "10px" }}>
-        共 18 个板块在监控
+        共 18 个区域在监控
       </div>
     </div>
   );
