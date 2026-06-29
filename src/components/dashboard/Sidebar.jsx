@@ -2,12 +2,16 @@ import React from "react";
 import {
   LayoutDashboard, Users, Stethoscope, AlertTriangle, Zap,
   UserCheck, CircleDollarSign, Package, TrendingUp, Server,
+  ClipboardList, Microscope, Glasses, Heart, Baby,
+  Megaphone, CalendarClock, GraduationCap, Building2,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 
 const ICON_MAP = {
   LayoutDashboard, Users, Stethoscope, AlertTriangle, Zap,
   UserCheck, CircleDollarSign, Package, TrendingUp, Server,
+  ClipboardList, Microscope, Glasses, Heart, Baby,
+  Megaphone, CalendarClock, GraduationCap, Building2,
 };
 
 const STATUS_DOT = { green: "#16A34A", amber: "#D97706", red: "#DC2626" };
