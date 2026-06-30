@@ -48,31 +48,31 @@ function DashboardInner() {
     return () => clearInterval(timer);
   }, [actionDone]);
 
-  // Simulate metric fluctuations on patient flow / queue panels
+  // Simulate metric fluctuations on reception / examination panels
   useEffect(() => {
     if (actionDone) return;
     const timer = setInterval(() => {
       setPanels((prev) => ({
         ...prev,
-        patientFlow: {
-          ...prev.patientFlow,
-          metrics: prev.patientFlow.metrics.map((m) => {
-            if (m.label === "今日已接诊") {
+        reception: {
+          ...prev.reception,
+          metrics: prev.reception.metrics.map((m) => {
+            if (m.label === "今日到诊") {
               const newVal = parseInt(m.value) + Math.floor(Math.random() * 2);
               return { ...m, value: String(newVal) };
             }
-            if (m.label === "当前在院") {
-              const newVal = Math.max(18, parseInt(m.value) + (Math.random() > 0.5 ? 1 : -1));
+            if (m.label === "当前排队") {
+              const newVal = Math.max(2, Math.min(12, parseInt(m.value) + (Math.random() > 0.5 ? 1 : -1)));
               return { ...m, value: String(newVal) };
             }
             return m;
           }),
         },
-        queueCongestion: {
-          ...prev.queueCongestion,
-          metrics: prev.queueCongestion.metrics.map((m) => {
-            if (m.label === "当前等待人数") {
-              const newVal = Math.max(10, Math.min(18, parseInt(m.value) + (Math.random() > 0.5 ? 1 : -1)));
+        examination: {
+          ...prev.examination,
+          metrics: prev.examination.metrics.map((m) => {
+            if (m.label === "当前等待") {
+              const newVal = Math.max(8, Math.min(18, parseInt(m.value) + (Math.random() > 0.5 ? 1 : -1)));
               return { ...m, value: String(newVal) };
             }
             return m;
@@ -100,33 +100,23 @@ function DashboardInner() {
     // Update panels after confirmation
     setPanels((prev) => ({
       ...prev,
-      queueCongestion: {
-        ...prev.queueCongestion,
+      examination: {
+        ...prev.examination,
         status: "amber",
         liveNote: "支援已到位，拥堵正在缓解中",
-        metrics: prev.queueCongestion.metrics.map((m) => {
+        metrics: prev.examination.metrics.map((m) => {
           if (m.label === "拥堵指数") return { ...m, value: "54" };
           if (m.label === "超时等待") return { ...m, value: "1" };
           if (m.label === "平均等待时长") return { ...m, value: "16" };
           return m;
         }),
       },
-      staffStatus: {
-        ...prev.staffStatus,
-        liveNote: "视光师X已调入支援，所有人员在岗",
-        metrics: prev.staffStatus.metrics.map((m) => {
-          if (m.label === "空闲可调配") return { ...m, value: "0" };
-          if (m.label === "超负荷预警") return { ...m, value: "2" };
-          return m;
-        }),
-      },
-      operations: {
-        ...prev.operations,
-        status: "green",
-        liveNote: "调度已完成，排班正常运行",
-        metrics: prev.operations.metrics.map((m) => {
-          if (m.label === "待调度任务") return { ...m, value: "2" };
-          if (m.label === "已执行指令") return { ...m, value: "8" };
+      commandCenter: {
+        ...prev.commandCenter,
+        liveNote: "视光师X已调入支援，检查区压力缓解中",
+        metrics: prev.commandCenter.metrics.map((m) => {
+          if (m.label === "全院健康评分") return { ...m, value: "88" };
+          if (m.label === "待决策事项") return { ...m, value: "2" };
           return m;
         }),
       },
