@@ -219,8 +219,11 @@ export default function SystemBootDemo() {
 
               {/* Pulse particles */}
               {pulses.map((p) => {
-                const fromPos = p.from === "core" ? { x: CX, y: CY } : agentPos(AGENTS.find((a) => a.id === p.from).id - 1);
-                const toPos = p.to === "core" ? { x: CX, y: CY } : agentPos(AGENTS.find((a) => a.id === p.to).id - 1);
+                const core = { x: CX, y: CY };
+                const fromAgent = typeof p.from === "number" ? AGENTS.find((a) => a.id === p.from) : null;
+                const toAgent = typeof p.to === "number" ? AGENTS.find((a) => a.id === p.to) : null;
+                const fromPos = fromAgent ? agentPos(fromAgent.id - 1) : core;
+                const toPos = toAgent ? agentPos(toAgent.id - 1) : core;
                 return (
                   <g key={p.id}>
                     <line x1={fromPos.x} y1={fromPos.y} x2={toPos.x} y2={toPos.y}
