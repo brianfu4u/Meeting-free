@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import TopBar from "@/components/dashboard/TopBar";
 import Sidebar from "@/components/dashboard/Sidebar";
-import PanelCard from "@/components/dashboard/PanelCard";
-import PanelDrawer from "@/components/dashboard/PanelDrawer";
 import EventStream from "@/components/dashboard/EventStream";
-import StatsBar from "@/components/dashboard/StatsBar";
-import LiveOpsPanel from "@/components/dashboard/LiveOpsPanel";
+import FourDimensionsPanel from "@/components/dashboard/FourDimensionsPanel";
+import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import {
-  INITIAL_PANELS,
-  PANEL_GROUPS,
   EVENT_STREAM_INITIAL,
   EVENT_STREAM_QUEUE,
   NAV_ITEMS,
@@ -19,9 +15,8 @@ let eventIdCounter = 20;
 
 function DashboardInner() {
   const { theme } = useTheme();
-  const [panels, setPanels] = useState(INITIAL_PANELS);
   const [events, setEvents] = useState(EVENT_STREAM_INITIAL);
-  const [activePanel, setActivePanel] = useState(null);
+  const [activeDimension, setActiveDimension] = useState(null);
   const [activeSection, setActiveSection] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState(false);
@@ -49,41 +44,6 @@ function DashboardInner() {
     return () => clearInterval(timer);
   }, [actionDone]);
 
-  // Simulate metric fluctuations on reception / examination panels
-  useEffect(() => {
-    if (actionDone) return;
-    const timer = setInterval(() => {
-      setPanels((prev) => ({
-        ...prev,
-        reception: {
-          ...prev.reception,
-          metrics: prev.reception.metrics.map((m) => {
-            if (m.label === "今日到诊") {
-              const newVal = parseInt(m.value) + Math.floor(Math.random() * 2);
-              return { ...m, value: String(newVal) };
-            }
-            if (m.label === "当前排队") {
-              const newVal = Math.max(2, Math.min(12, parseInt(m.value) + (Math.random() > 0.5 ? 1 : -1)));
-              return { ...m, value: String(newVal) };
-            }
-            return m;
-          }),
-        },
-        examination: {
-          ...prev.examination,
-          metrics: prev.examination.metrics.map((m) => {
-            if (m.label === "当前等待") {
-              const newVal = Math.max(8, Math.min(18, parseInt(m.value) + (Math.random() > 0.5 ? 1 : -1)));
-              return { ...m, value: String(newVal) };
-            }
-            return m;
-          }),
-        },
-      }));
-    }, 7000);
-    return () => clearInterval(timer);
-  }, [actionDone]);
-
   const handleConfirm = useCallback(() => {
     setPendingAction(false);
     setActionDone(true);
@@ -97,31 +57,6 @@ function DashboardInner() {
       actionRequired: false,
     };
     setEvents((prev) => [confirmEvent, ...prev]);
-
-    // Update panels after confirmation
-    setPanels((prev) => ({
-      ...prev,
-      examination: {
-        ...prev.examination,
-        status: "amber",
-        liveNote: "支援已到位，拥堵正在缓解中",
-        metrics: prev.examination.metrics.map((m) => {
-          if (m.label === "拥堵指数") return { ...m, value: "54" };
-          if (m.label === "超时等待") return { ...m, value: "1" };
-          if (m.label === "平均等待时长") return { ...m, value: "16" };
-          return m;
-        }),
-      },
-      commandCenter: {
-        ...prev.commandCenter,
-        liveNote: "视光师X已调入支援，检查区压力缓解中",
-        metrics: prev.commandCenter.metrics.map((m) => {
-          if (m.label === "全院健康评分") return { ...m, value: "88" };
-          if (m.label === "待决策事项") return { ...m, value: "2" };
-          return m;
-        }),
-      },
-    }));
   }, []);
 
   const handleDispatch = useCallback(() => {
@@ -164,10 +99,6 @@ function DashboardInner() {
     setEvents((prev) => [escalateEvent, ...prev]);
   }, []);
 
-  const panelStatuses = Object.fromEntries(
-    Object.entries(panels).map(([k, v]) => [k, v.status])
-  );
-
   return (
     <div className="min-h-screen" style={{ background: theme.canvas, transition: "background 0.3s ease" }}>
       <TopBar overallHealth={overallHealth} onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
@@ -176,140 +107,66 @@ function DashboardInner() {
         navItems={NAV_ITEMS}
         activeSection={activeSection}
         onNavigate={setActiveSection}
-        panelStatuses={panelStatuses}
+        panelStatuses={{}}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main layout */}
-      <div
-        className="flex"
-        style={{ paddingTop: "56px" }}
-      >
+      <div className="flex" style={{ paddingTop: "56px" }}>
         {/* Sidebar spacer on desktop */}
         <div className="hidden md:block flex-shrink-0" style={{ width: "200px" }} />
 
-        {/* Main content */}
-        <div className="flex-1 min-w-0 flex flex-col xl:flex-row gap-0">
-          {/* Dashboard grid area */}
-          <div className="flex-1 min-w-0 p-4 md:p-5">
-            {/* Welcome banner */}
-            <div
-              className="rounded-xl px-5 py-3.5 mb-5 flex items-center justify-between"
-              style={{
-                background: theme.welcomeBg,
-                border: `1px solid ${theme.welcomeBorder}`,
-              }}
-            >
-              <div>
-                <div className="text-sm font-bold" style={{ color: theme.text }}>
-                  你好，店长L · 上午班正在进行中
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
-                  原来管好一家诊所，真的需要实时关注这么多板块。
-                </div>
+        {/* Main content — single column */}
+        <div className="flex-1 min-w-0 p-4 md:p-5">
+          {/* Welcome banner */}
+          <div
+            className="rounded-xl px-5 py-3.5 mb-4 flex items-center justify-between"
+            style={{ background: theme.welcomeBg, border: `1px solid ${theme.welcomeBorder}` }}
+          >
+            <div>
+              <div className="text-sm font-bold" style={{ color: theme.text }}>
+                你好，店长L · 上午班正在进行中
               </div>
-              <div className="hidden sm:flex items-center gap-2">
-                <div
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                  style={{ background: "rgba(0,199,217,0.12)", color: "#00C7D9", border: "1px solid rgba(0,199,217,0.25)" }}
-                >
-                  周六上午班 08:00–13:00
-                </div>
+              <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
+                四维实时投影 · 聚焦人、流、钱、物。
               </div>
             </div>
-
-            {/* M2 实时态势总览 — 实体库直读 */}
-            <div className="mb-4">
-              <LiveOpsPanel />
-            </div>
-
-            {/* Stats bar */}
-            <div className="mb-4">
-              <StatsBar panels={panels} />
-            </div>
-
-            {/* 18-panel grouped matrix */}
-            <div className="space-y-5">
-              {PANEL_GROUPS.map((group) => (
-                <div key={group.groupId}>
-                  {/* Group header */}
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: group.groupColor }} />
-                    <span className="text-xs font-bold tracking-widest" style={{ color: group.groupColor, letterSpacing: "0.1em" }}>
-                      {group.groupLabel}
-                    </span>
-                    <div className="flex-1 h-px" style={{ background: `linear-gradient(to right, ${group.groupColor}30, transparent)` }} />
-                    <span className="text-xs" style={{ color: theme.textFaint, fontSize: "10px" }}>
-                      {group.panels.length} 个区域
-                    </span>
-                  </div>
-                  {/* Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {group.panels.map((panelId) => {
-                      const panel = panels[panelId];
-                      if (!panel) return null;
-                      return (
-                        <PanelCard
-                          key={panelId}
-                          panel={panel}
-                          onClick={(p) => {
-                            setActivePanel(p);
-                            setActiveSection(panelId);
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div className="hidden sm:flex items-center gap-2">
+              <div
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ background: "rgba(0,199,217,0.12)", color: "#00C7D9", border: "1px solid rgba(0,199,217,0.25)" }}
+              >
+                周六上午班 08:00–13:00
+              </div>
             </div>
           </div>
 
-          {/* Event stream on tablet/mobile (below grid) */}
-          <div className="xl:hidden px-4 pb-6">
-            <div style={{ height: "460px" }}>
-              <EventStream
-                events={events}
-                pendingAction={pendingAction}
-                onConfirm={handleConfirm}
-                onDispatch={handleDispatch}
-                onDefer={handleDefer}
-                onEscalate={handleEscalate}
-                actionDone={actionDone}
-              />
-            </div>
+          {/* 四维现实空间指挥台 */}
+          <div className="mb-4">
+            <FourDimensionsPanel onOpenDimension={setActiveDimension} />
           </div>
-        </div>
 
-        {/* Fixed event stream on XL */}
-        <div
-          className="hidden xl:flex flex-col flex-shrink-0"
-          style={{
-            width: "340px",
-            height: "calc(100vh - 56px)",
-            position: "sticky",
-            top: "56px",
-            padding: "20px 20px 20px 0",
-          }}
-        >
-          <EventStream
-            events={events}
-            pendingAction={pendingAction}
-            onConfirm={handleConfirm}
-            onDispatch={handleDispatch}
-            onDefer={handleDefer}
-            onEscalate={handleEscalate}
-            actionDone={actionDone}
-          />
+          {/* 实时事件流 — 全宽，按时间滚动 */}
+          <div style={{ height: "calc(100vh - 360px)", minHeight: "420px" }}>
+            <EventStream
+              events={events}
+              pendingAction={pendingAction}
+              onConfirm={handleConfirm}
+              onDispatch={handleDispatch}
+              onDefer={handleDefer}
+              onEscalate={handleEscalate}
+              actionDone={actionDone}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Detail drawer */}
-      {activePanel && (
-        <PanelDrawer
-          panel={activePanel}
-          onClose={() => setActivePanel(null)}
+      {/* 维度详情抽屉 */}
+      {activeDimension && (
+        <DimensionDrawer
+          dimension={activeDimension}
+          onClose={() => setActiveDimension(null)}
         />
       )}
     </div>
