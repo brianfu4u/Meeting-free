@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network } from "lucide-react";
+import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
 
@@ -97,6 +98,17 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
 
       {/* Right */}
       <div className="flex items-center gap-2 md:gap-3">
+        {/* Architecture map link */}
+        <Link
+          to="/architecture"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(0,199,217,0.1)", border: "1px solid rgba(0,199,217,0.25)" }}
+          title="查看 Clinic OS 开发逻辑总图"
+        >
+          <Network size={13} style={{ color: "#00C7D9" }} />
+          <span className="text-xs font-semibold" style={{ color: "#00C7D9", fontSize: "10px" }}>架构图</span>
+        </Link>
+
         {/* Live indicator */}
         <div className="hidden sm:flex items-center gap-1.5">
           <Wifi size={12} style={{ color: "#00C7D9" }} />

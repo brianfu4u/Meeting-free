@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import Dashboard from "./pages/Dashboard";
+import ArchitectureMap from "./pages/ArchitectureMap";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -35,6 +36,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />
+      <Route path="/architecture" element={<ArchitectureMap />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
