@@ -1,0 +1,52 @@
+{
+  "name": "ScanEvent",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "\u5173\u8054PatientSession ID"
+    },
+    "qr_code": {
+      "type": "string",
+      "description": "\u626b\u7801\u5185\u5bb9\uff08\u75c5\u5386\u7801/\u8d44\u4ea7\u7801\uff09"
+    },
+    "node_name": {
+      "type": "string",
+      "description": "\u626b\u7801\u6240\u5904\u6d41\u7a0b\u8282\u70b9"
+    },
+    "scan_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u626b\u7801\u65f6\u95f4"
+    },
+    "staff_id": {
+      "type": "string",
+      "description": "\u6267\u884c\u626b\u7801\u7684\u5458\u5de5ID"
+    },
+    "gate_result": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "rejected"
+      ],
+      "default": "passed",
+      "description": "ScanGate\u51c6\u5165\u6821\u9a8c\u7ed3\u679c"
+    },
+    "reject_reason": {
+      "type": "string",
+      "description": "\u62e6\u622a\u539f\u56e0\uff08gate_result=rejected\u65f6\u586b\u5199\uff09"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "session_id",
+    "qr_code",
+    "node_name",
+    "scan_time",
+    "gate_result"
+  ]
+}

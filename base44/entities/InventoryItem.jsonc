@@ -1,0 +1,60 @@
+{
+  "name": "InventoryItem",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "item_name": {
+      "type": "string",
+      "description": "\u7269\u54c1\u540d\u79f0"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "lens",
+        "frame",
+        "medicine",
+        "consumable",
+        "equipment"
+      ],
+      "description": "\u7c7b\u522b\uff1a\u955c\u7247/\u955c\u67b6/\u836f\u54c1/\u8017\u6750/\u5668\u68b0"
+    },
+    "sku": {
+      "type": "string",
+      "description": "SKU\u7f16\u7801"
+    },
+    "quantity": {
+      "type": "number",
+      "default": 0,
+      "description": "\u5f53\u524d\u5e93\u5b58\u6570\u91cf"
+    },
+    "threshold": {
+      "type": "number",
+      "default": 0,
+      "description": "\u5b89\u5168\u5e93\u5b58\u9608\u503c\uff0c\u4f4e\u4e8e\u89e6\u53d1INVENTORY_BELOW_THRESHOLD"
+    },
+    "unit": {
+      "type": "string",
+      "description": "\u5355\u4f4d"
+    },
+    "last_check_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u6700\u8fd1\u76d8\u70b9\u65f6\u95f4\uff08\u65e9\u665a8\u70b9\u53cc\u8282\u70b9\u68c0\u67e5\uff09"
+    },
+    "below_threshold": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u662f\u5426\u4f4e\u4e8e\u9608\u503c"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "item_name",
+    "category",
+    "quantity",
+    "threshold"
+  ]
+}

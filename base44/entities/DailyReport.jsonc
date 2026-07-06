@@ -1,0 +1,65 @@
+{
+  "name": "DailyReport",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u62a5\u544a\u65e5\u671f"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly"
+      ],
+      "description": "\u65e5\u62a5/\u5468\u62a5"
+    },
+    "total_visits": {
+      "type": "number",
+      "description": "\u63a5\u8bca\u91cf"
+    },
+    "revenue_achievement_rate": {
+      "type": "number",
+      "description": "\u6536\u5165\u8fbe\u6210\u7387"
+    },
+    "line_breakdown": {
+      "type": "object",
+      "description": "\u4e09\u6761\u4e1a\u52a1\u7ebf\u5206\u9879\u6570\u636e"
+    },
+    "pending_tasks": {
+      "type": "number",
+      "description": "\u672a\u6838\u9500\u4efb\u52a1\u6570"
+    },
+    "evidence_anomalies": {
+      "type": "number",
+      "description": "\u8bc1\u636e\u94fe\u5f02\u5e38\u6c47\u603b\uff08\u542b\u7248\u672c\u8ba1\u6570\uff09"
+    },
+    "alert_summary": {
+      "type": "string",
+      "description": "\u5f02\u5e38\u4e8b\u4ef6\u6458\u8981"
+    },
+    "manager_decision_summary": {
+      "type": "object",
+      "description": "\u5e97\u957f\u51b3\u7b56\u6458\u8981 {approved:N, rejected:N, ignored:N}"
+    },
+    "next_day_warnings": {
+      "type": "string",
+      "description": "\u6b21\u65e5\u9884\u8b66\u63d0\u793a"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u751f\u6210\u65f6\u95f4"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "report_date",
+    "report_type"
+  ]
+}

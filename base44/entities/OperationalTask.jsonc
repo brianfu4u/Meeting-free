@@ -1,0 +1,84 @@
+{
+  "name": "OperationalTask",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
+      "default": "P4",
+      "description": "\u4f18\u5148\u7ea7\uff1aP1\u5e97\u957f\u6307\u4ee4/P2\u60a3\u8005\u6d41\u7d27\u8feb/P3\u6628\u65e5\u9057\u7559/P4\u5e38\u89c4\u8ba1\u5212"
+    },
+    "dispatched_by": {
+      "type": "string",
+      "description": "\u6d3e\u53d1\u6765\u6e90\uff1amanager/llm_agent"
+    },
+    "assignee_staff_id": {
+      "type": "string",
+      "description": "\u6307\u6d3e\u5458\u5de5ID"
+    },
+    "description": {
+      "type": "string",
+      "description": "\u4efb\u52a1\u63cf\u8ff0"
+    },
+    "patient_session_id": {
+      "type": "string",
+      "description": "\u951a\u5b9aPatientSession\u56e0\u679c\u94fe\uff0c\u60a3\u8005\u76f8\u5173\u4efb\u52a1\u5fc5\u586b\uff0c\u975e\u60a3\u8005\u4efb\u52a1\u53ef\u7a7a"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_approval",
+        "assigned",
+        "in_progress",
+        "pending_evidence",
+        "under_review",
+        "exception",
+        "completed"
+      ],
+      "default": "pending_approval",
+      "description": "\u4efb\u52a1\u72b6\u6001\u673a"
+    },
+    "due_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u622a\u6b62\u65f6\u95f4"
+    },
+    "current_version_id": {
+      "type": "string",
+      "description": "\u5f53\u524d\u8bc1\u636e\u7248\u672cID\uff0c\u5e97\u957f\u62d2\u7edd\u540e\u9012\u589e"
+    },
+    "total_submission_count": {
+      "type": "number",
+      "default": 0,
+      "description": "\u8de8\u6240\u6709\u7248\u672c\u7d2f\u8ba1\u63d0\u4ea4\u6b21\u6570"
+    },
+    "llm_prereview_conclusion": {
+      "type": "string",
+      "description": "LLM EvidenceEvalSkill\u9884\u5ba1\u7ed3\u8bba"
+    },
+    "manager_decision": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "rejected",
+        "ignored"
+      ],
+      "description": "\u5e97\u957f\u4e09\u9009\u4e00\u51b3\u7b56"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "priority",
+    "description",
+    "status"
+  ]
+}

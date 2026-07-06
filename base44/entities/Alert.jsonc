@@ -1,0 +1,74 @@
+{
+  "name": "Alert",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "alert_type": {
+      "type": "string",
+      "description": "\u544a\u8b66\u7c7b\u578b\uff1await_timeout/node_stalled/evidence_escalated/inventory_low\u7b49"
+    },
+    "urgency": {
+      "type": "string",
+      "enum": [
+        "yellow",
+        "red"
+      ],
+      "description": "\u7d27\u6025\u7a0b\u5ea6\uff1a\u9ec4\u8272/\u7ea2\u8272"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "\u5173\u8054PatientSession\uff08\u53ef\u7a7a\uff09"
+    },
+    "task_id": {
+      "type": "string",
+      "description": "\u5173\u8054OperationalTask\uff08\u53ef\u7a7a\uff09"
+    },
+    "message": {
+      "type": "string",
+      "description": "\u544a\u8b66\u5185\u5bb9"
+    },
+    "llm_suggestion": {
+      "type": "string",
+      "description": "LLM\u751f\u6210\u7684\u8c03\u5ea6\u5efa\u8bae"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "triggered",
+        "escalated",
+        "resolved"
+      ],
+      "default": "triggered",
+      "description": "\u544a\u8b66\u72b6\u6001\u673a"
+    },
+    "manager_decision": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "rejected",
+        "ignored"
+      ],
+      "description": "\u5e97\u957f\u4e09\u9009\u4e00\u51b3\u7b56"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u544a\u8b66\u89e6\u53d1\u65f6\u95f4"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u544a\u8b66\u89e3\u51b3\u65f6\u95f4"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "alert_type",
+    "urgency",
+    "message",
+    "status"
+  ]
+}

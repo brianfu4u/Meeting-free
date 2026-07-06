@@ -1,0 +1,86 @@
+{
+  "name": "Staff",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "staff_name": {
+      "type": "string",
+      "description": "\u5458\u5de5\u59d3\u540d"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "doctor",
+        "optometrist",
+        "vision_trainer",
+        "head_nurse",
+        "nurse",
+        "reception",
+        "customer_service",
+        "sales",
+        "logistics",
+        "marketing",
+        "finance",
+        "it",
+        "compliance",
+        "procurement",
+        "field_ops",
+        "equipment_maint",
+        "cleaning"
+      ],
+      "description": "\u5c97\u4f4d\u89d2\u8272"
+    },
+    "role_group": {
+      "type": "string",
+      "enum": [
+        "medical_core",
+        "front_sales",
+        "back_support"
+      ],
+      "description": "\u5c97\u4f4d\u7fa4\uff1a\u533b\u7597\u6838\u5fc3\u5c97/\u524d\u53f0\u5ba2\u670d\u9500\u552e\u5c97/\u540e\u53f0\u652f\u6491\u5c97"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "off_duty",
+        "on_duty",
+        "busy",
+        "awaiting_confirm",
+        "break"
+      ],
+      "default": "off_duty",
+      "description": "\u5728\u5c97\u72b6\u6001\u8272\u6807\uff1a\u6b63\u5e38\u5728\u5c97\u9752\u7eff/\u5fd9\u788c\u84dd/\u72b6\u6001\u5f85\u786e\u8ba4\u7425\u73c0/\u79bb\u5c97\u7070"
+    },
+    "pad_online": {
+      "type": "boolean",
+      "default": false,
+      "description": "PAD\u5fc3\u8df3\u5728\u7ebf\u72b6\u6001"
+    },
+    "current_task_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u5f53\u524d\u627f\u63a5\u4efb\u52a1ID\u5217\u8868"
+    },
+    "assigned_zone": {
+      "type": "string",
+      "description": "\u5206\u914d\u533a\u57df"
+    },
+    "checked_in_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u7b7e\u5230\u65f6\u95f4"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "staff_name",
+    "role",
+    "role_group",
+    "status"
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "BusinessLineFlow",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "business_line": {
+      "type": "string",
+      "enum": [
+        "optometry",
+        "medical",
+        "vision_training"
+      ],
+      "description": "\u4e1a\u52a1\u7ebf\u7c7b\u578b"
+    },
+    "line_name": {
+      "type": "string",
+      "description": "\u4e1a\u52a1\u7ebf\u540d\u79f0"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "\u6709\u5e8f\u8282\u70b9\u94fe\uff0c\u5982\uff1a\u5230\u5e97\u2192\u5c31\u5ea7\u2192\u9a8c\u5149\u53eb\u53f7\u2192\u9a8c\u5149\u5f00\u59cb\u2192\u9a8c\u5149\u5b8c\u6210\u2192\u914d\u955c\u8ddf\u8fdb\u2192\u6536\u8d39\u7ed3\u7b97"
+    },
+    "stall_timeout_minutes": {
+      "type": "number",
+      "default": 60,
+      "description": "\u540c\u4e00\u8282\u70b9\u672a\u88ab\u4e0b\u4e00\u8282\u70b9\u626b\u7801\u7684\u8d85\u65f6\u9608\u503c\uff08\u5206\u949f\uff09\uff0c\u8d85\u65f6\u53d1\u5e03NODE_STALLED"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u4e1a\u52a1\u7ebf\u662f\u5426\u542f\u7528"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "business_line",
+    "line_name",
+    "nodes"
+  ]
+}

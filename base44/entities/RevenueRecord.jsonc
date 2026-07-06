@@ -1,0 +1,54 @@
+{
+  "name": "RevenueRecord",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "\u5173\u8054PatientSession"
+    },
+    "business_line": {
+      "type": "string",
+      "enum": [
+        "optometry",
+        "medical",
+        "vision_training"
+      ],
+      "description": "\u4e1a\u52a1\u7ebf"
+    },
+    "amount": {
+      "type": "number",
+      "description": "\u8425\u6536\u91d1\u989d"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "cash",
+        "card",
+        "wechat",
+        "alipay",
+        "insurance"
+      ],
+      "description": "\u652f\u4ed8\u65b9\u5f0f"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u8bb0\u5f55\u65f6\u95f4"
+    },
+    "recorded_by": {
+      "type": "string",
+      "description": "\u7ed3\u7b97\u5458\u5de5ID"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "session_id",
+    "business_line",
+    "amount",
+    "recorded_at"
+  ]
+}
