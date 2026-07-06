@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network, Play } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
@@ -118,6 +118,17 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         >
           <Play size={13} style={{ color: "#4ade80" }} />
           <span className="text-xs font-semibold" style={{ color: "#4ade80", fontSize: "10px" }}>启动演示</span>
+        </Link>
+
+        {/* Causal canvas link */}
+        <Link
+          to="/causal-canvas"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.25)" }}
+          title="全景因果链画布"
+        >
+          <GitBranch size={13} style={{ color: "#A78BFA" }} />
+          <span className="text-xs font-semibold" style={{ color: "#A78BFA", fontSize: "10px" }}>因果画布</span>
         </Link>
 
         {/* Live indicator */}
