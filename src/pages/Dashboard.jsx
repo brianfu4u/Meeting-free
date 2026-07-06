@@ -5,6 +5,7 @@ import PanelCard from "@/components/dashboard/PanelCard";
 import PanelDrawer from "@/components/dashboard/PanelDrawer";
 import EventStream from "@/components/dashboard/EventStream";
 import StatsBar from "@/components/dashboard/StatsBar";
+import LiveOpsPanel from "@/components/dashboard/LiveOpsPanel";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import {
   INITIAL_PANELS,
@@ -216,6 +217,11 @@ function DashboardInner() {
                   周六上午班 08:00–13:00
                 </div>
               </div>
+            </div>
+
+            {/* M2 实时态势总览 — 实体库直读 */}
+            <div className="mb-4">
+              <LiveOpsPanel />
             </div>
 
             {/* Stats bar */}
