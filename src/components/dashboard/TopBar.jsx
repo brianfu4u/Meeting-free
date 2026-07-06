@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
@@ -140,6 +140,17 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         >
           <ClipboardCheck size={13} style={{ color: "#FBBF24" }} />
           <span className="text-xs font-semibold" style={{ color: "#FBBF24", fontSize: "10px" }}>每日复盘</span>
+        </Link>
+
+        {/* V9 case flow link */}
+        <Link
+          to="/v9-case"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.25)" }}
+          title="V9 案例闭环演练"
+        >
+          <Crown size={13} style={{ color: "#f87171" }} />
+          <span className="text-xs font-semibold" style={{ color: "#f87171", fontSize: "10px" }}>V9演练</span>
         </Link>
 
         {/* Live indicator */}

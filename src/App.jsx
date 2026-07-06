@@ -11,6 +11,7 @@ import ArchitectureMap from "./pages/ArchitectureMap";
 import SystemBootDemo from "./pages/SystemBootDemo";
 import CausalCanvas from "./pages/CausalCanvas";
 import DailyReview from "./pages/DailyReview";
+import V9CaseFlow from "./pages/V9CaseFlow";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -43,6 +44,7 @@ const AuthenticatedApp = () => {
       <Route path="/boot-demo" element={<SystemBootDemo />} />
       <Route path="/causal-canvas" element={<CausalCanvas />} />
       <Route path="/daily-review" element={<DailyReview />} />
+      <Route path="/v9-case" element={<V9CaseFlow />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
