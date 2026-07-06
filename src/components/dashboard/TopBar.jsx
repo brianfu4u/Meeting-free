@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
@@ -107,6 +107,17 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         >
           <Network size={13} style={{ color: "#00C7D9" }} />
           <span className="text-xs font-semibold" style={{ color: "#00C7D9", fontSize: "10px" }}>架构图</span>
+        </Link>
+
+        {/* Boot demo link */}
+        <Link
+          to="/boot-demo"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(22,163,74,0.1)", border: "1px solid rgba(22,163,74,0.25)" }}
+          title="系统启动联动演示"
+        >
+          <Play size={13} style={{ color: "#4ade80" }} />
+          <span className="text-xs font-semibold" style={{ color: "#4ade80", fontSize: "10px" }}>启动演示</span>
         </Link>
 
         {/* Live indicator */}
