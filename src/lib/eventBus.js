@@ -34,6 +34,13 @@ export const TRIGGER_TYPES = {
   AGENT_HEALTH_CHANGED: "AGENT_HEALTH_CHANGED",
 };
 
+// 三大触发锚点（宪法⑤：无锚点不触发，triggered_by: A1|A2|A3）
+export const ANCHOR_TYPES = {
+  A1: "A1", // 交叉验证锚点（纠错 / 证据）
+  A2: "A2", // 患者路径扫码锚点（流转 / 实时）
+  A3: "A3", // 系统逻辑预警锚点（态势 / 预防）
+};
+
 // 内存订阅器（前端实时联动）
 const subscribers = new Map(); // TriggerType -> Set<callback>
 
@@ -51,6 +58,11 @@ function generateEventId() {
 export async function publish(sourceAgent, triggerType, payload) {
   if (!payload || !payload.clinic_id) {
     throw new Error(`[EventBus] 宪法违规：Payload 必须包含 clinic_id。TriggerType=${triggerType}`);
+  }
+
+  // 宪法⑤：事件触发源标签 triggered_by 必须为 A1/A2/A3（若提供则校验，缺失暂不阻断，待 M2/M3 全量补全）
+  if (payload.triggered_by && !ANCHOR_TYPES[payload.triggered_by]) {
+    throw new Error(`[EventBus] 宪法违规：triggered_by 必须为 A1/A2/A3，实际 ${payload.triggered_by}`);
   }
 
   const event = {

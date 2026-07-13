@@ -4,6 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { ClinicProvider } from '@/lib/ClinicContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import Dashboard from "./pages/Dashboard";
@@ -60,10 +61,12 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <ScrollToTop />
-          <AuthenticatedApp />
-        </Router>
+        <ClinicProvider clinicId="clinic-001">
+          <Router>
+            <ScrollToTop />
+            <AuthenticatedApp />
+          </Router>
+        </ClinicProvider>
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
