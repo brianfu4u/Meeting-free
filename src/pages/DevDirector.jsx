@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { useTheme } from "@/lib/ThemeContext";
+import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { Send, Sparkles, Plus, MessageSquare, ArrowLeft, Loader, Wrench } from "lucide-react";
 import { Link } from "react-router-dom";
 import MessageBubble from "@/components/devDirector/MessageBubble";
@@ -14,7 +14,7 @@ const SUGGESTED_PROMPTS = [
   "当前哪些视光师处于空闲状态？可以调度谁去支援检查区",
 ];
 
-export default function DevDirector() {
+function DevDirectorInner() {
   const { theme } = useTheme();
   const [conversations, setConversations] = useState([]);
   const [activeConvId, setActiveConvId] = useState(null);
@@ -179,5 +179,13 @@ export default function DevDirector() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DevDirector() {
+  return (
+    <ThemeProvider>
+      <DevDirectorInner />
+    </ThemeProvider>
   );
 }
