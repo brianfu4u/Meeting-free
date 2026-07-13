@@ -13,6 +13,7 @@ import CausalCanvas from "./pages/CausalCanvas";
 import DailyReview from "./pages/DailyReview";
 import V9CaseFlow from "./pages/V9CaseFlow";
 import M3Hub from "./pages/M3Hub";
+import DevDirector from "./pages/DevDirector";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -47,6 +48,7 @@ const AuthenticatedApp = () => {
       <Route path="/daily-review" element={<DailyReview />} />
       <Route path="/v9-case" element={<V9CaseFlow />} />
       <Route path="/m3-hub" element={<M3Hub />} />
+      <Route path="/dev-director" element={<DevDirector />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
