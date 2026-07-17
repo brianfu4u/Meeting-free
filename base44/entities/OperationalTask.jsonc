@@ -85,6 +85,14 @@
     "ai_parsed": {
       "type": "object",
       "description": "StaffReportService \u7684 LLM \u8bed\u610f\u89e3\u6790\u7ed3\u679c {category,urgency,summary,suggested_action}"
+    },
+    "report_log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "\u4e8b\u4ef6\u6d41\uff1a\u6bcf\u6b21\u6c47\u62a5\uff08\u53d1\u8d77/\u8fdb\u5c55/\u6838\u9500\uff09\u8ffd\u52a0\u4e00\u6761 [{type,text,attachments,parsed,timestamp,staff_name}]"
     }
   },
   "required": [

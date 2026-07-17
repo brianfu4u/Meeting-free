@@ -71,7 +71,10 @@ Deno.serve(async (req) => {
       .join("\n");
     const fullDescription = [text, attachLines].filter(Boolean).join("\n");
 
-    // 3. 按类型归档
+    // 3. 事件流条目（每次汇报都追加到任务的 report_log）
+    const logEntry = { type: report_type, text: text || "", attachments: atts, parsed, timestamp: now, staff_name: staff.staff_name };
+
+    // 4. 按类型归档
     if (report_type === "new_event") {
       // 员工自主发起的工作 → 进入「我」的工作清单，待核销归档
       let workDesc = [text, transcripts ? "[语音转写] " + transcripts : ""].filter(Boolean).join("\n");
@@ -87,6 +90,7 @@ Deno.serve(async (req) => {
         status: "in_progress",
         report_attachments: atts,
         ai_parsed: parsed,
+        report_log: [logEntry],
       });
       archived.task_id = task.id;
 
@@ -106,18 +110,22 @@ Deno.serve(async (req) => {
     } else if (report_type === "progress" && task_id) {
       const task = await svc.entities.OperationalTask.get(task_id).catch(() => null);
       if (task && task.clinic_id === clinic_id) {
+        const newLog = [...(Array.isArray(task.report_log) ? task.report_log : []), logEntry];
         if (["pending_approval", "assigned"].includes(task.status)) {
-          await svc.entities.OperationalTask.update(task_id, { status: "in_progress" });
+          await svc.entities.OperationalTask.update(task_id, { status: "in_progress", report_log: newLog });
           archived.task_advanced = true;
+        } else {
+          await svc.entities.OperationalTask.update(task_id, { report_log: newLog });
         }
         archived.task_status = task.status;
       }
     } else if (report_type === "completion" && task_id) {
       const task = await svc.entities.OperationalTask.get(task_id).catch(() => null);
       if (task && task.clinic_id === clinic_id) {
+        const newLog = [...(Array.isArray(task.report_log) ? task.report_log : []), logEntry];
         if (task.dispatched_by === "staff_self") {
           // 员工自主工作：完成即核销归档，从工作清单消失
-          await svc.entities.OperationalTask.update(task_id, { status: "completed" });
+          await svc.entities.OperationalTask.update(task_id, { status: "completed", report_log: newLog });
           archived.task_completed = true;
         } else {
           // 管理层派发任务：完成需补证据待核销（现有流程）
@@ -136,7 +144,7 @@ Deno.serve(async (req) => {
             });
             archived.evidence_id = ev.id;
           }
-          await svc.entities.OperationalTask.update(task_id, { status: "pending_evidence" });
+          await svc.entities.OperationalTask.update(task_id, { status: "pending_evidence", report_log: newLog });
           archived.task_completed_submit = true;
         }
       }
