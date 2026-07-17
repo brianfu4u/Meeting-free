@@ -9,6 +9,7 @@ import ClockBar from "@/components/staffPad/ClockBar";
 import TaskList from "@/components/staffPad/TaskList";
 import TaskDetail from "@/components/staffPad/TaskDetail";
 import ReportSheet from "@/components/staffPad/ReportSheet";
+import HistoryList from "@/components/staffPad/HistoryList";
 import { Loader, LogIn, ArrowLeft, Plus, Activity } from "lucide-react";
 
 function StaffPadInner() {
@@ -53,6 +54,9 @@ function StaffPadInner() {
   const priority = myTasks.filter((t) => t.priority === "P1" || t.priority === "P2");
   const normal = myTasks.filter((t) => t.priority === "P3" || t.priority === "P4");
   const activeTask = myTasks.find((t) => t.id === activeTaskId);
+  const history = (tasksQ.data || [])
+    .filter((t) => t.assignee_staff_id === staff.id && ["completed", "exception"].includes(t.status))
+    .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date));
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -62,7 +66,7 @@ function StaffPadInner() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: theme.canvas }}>
       <header className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${theme.border}` }}>
-        {view === "task" && (
+        {view !== "home" && (
           <button onClick={() => setView("home")} className="p-1.5 rounded-lg" style={{ background: "rgba(255,255,255,0.04)" }}>
             <ArrowLeft size={16} style={{ color: theme.textSub }} />
           </button>
@@ -90,7 +94,12 @@ function StaffPadInner() {
             <ClockBar staff={staff} clinicId={clinicId} onChanged={refresh} />
           </div>
           <div className="flex-1 overflow-y-auto px-4 pb-28">
-            <div className="text-xs font-bold mb-2" style={{ color: theme.textSub }}>工作清单</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-bold" style={{ color: theme.textSub }}>工作清单</div>
+              <button onClick={() => setView("history")} className="text-[11px] px-2 py-1 rounded-lg flex items-center gap-1" style={{ color: "#4ade80", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.25)" }}>
+                历史 · {history.length}
+              </button>
+            </div>
             <TaskList priority={priority} normal={normal}
               onSelect={(t) => { setActiveTaskId(t.id); setView("task"); }} />
           </div>
@@ -109,6 +118,13 @@ function StaffPadInner() {
           <TaskDetail task={activeTask}
             onProgress={() => setSheet({ open: true, mode: "progress", taskId: activeTask.id })}
             onComplete={() => setSheet({ open: true, mode: "completion", taskId: activeTask.id })} />
+        </div>
+      )}
+
+      {view === "history" && (
+        <div className="flex-1 overflow-y-auto p-4 pb-28">
+          <div className="text-xs font-bold mb-2" style={{ color: theme.textSub }}>历史记录 · 已核销</div>
+          <HistoryList items={history} />
         </div>
       )}
 
