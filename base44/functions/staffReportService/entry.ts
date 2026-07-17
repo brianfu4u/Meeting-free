@@ -45,7 +45,13 @@ Deno.serve(async (req) => {
     }
     const clinic_id = staff.clinic_id;
     const now = new Date().toISOString();
-    const event_id = `rpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // V10 Event Bus 命名规范：{clinic_id}/{terminal_type}/{staff_id}/{event_type}
+    const eventTypeMap = {
+      new_event: "report_submitted",
+      progress: "progress_reported",
+      completion: "completion_reported",
+    };
+    const event_id = `${clinic_id}/staff-pad/${staff_id}/${eventTypeMap[report_type]}`;
 
     // ── 2. 采集层：归一化附件，不做推理 ──────────────────────────────────────
     const atts = Array.isArray(attachments) ? attachments : [];

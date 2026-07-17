@@ -95,6 +95,97 @@
 
 ---
 
+## V10 终端执行模型（Sub-Agent Isolation & Stream Processing）
+
+### 原则 1：逻辑上的完全封闭（Sub-Agent Isolation）
+
+每一个终端（StaffPad）背后服务的 Agent 是该终端的**专属代理**，它只负责：
+- 接收该终端发来的流（Stream）
+- 处理该终端的数据
+- **不感知其他终端的状态**
+
+这与 Clinic OS "分级治理"思想一致，避免单体系统的逻辑耦合与资源争抢。
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  StaffPad A  │     │  StaffPad B  │     │  StaffPad C  │
+│  (视光师X)   │     │  (护士N1)    │     │  (前台R2)    │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+   ┌───▼───┐           ┌───▼───┐           ┌───▼───┐
+   │Agent A│           │Agent B│           │Agent C│   ← 沙箱隔离，互不通信
+   └───┬───┘           └───┬───┘           └───┬───┘
+       │                   │                   │
+       └───────────┬───────┴───────────┬────────┘
+                   │  Event Bus       │
+              ┌────▼─────────────────▼────┐
+              │   共享数据库层（Entities）    │  ← 唯一同步通道
+              │   AuditLog / PatientSession │
+              └────────────────────────────┘
+```
+
+**硬约束：**
+- ❌ Agent 之间禁止直接握手或函数调用
+- ❌ Agent A 不能查询 Agent B 的内部状态
+- ✅ 所有状态同步必须通过 Entities 订阅（Subscription）实现
+
+### 原则 2：数据流的去中心化（Stream Processing）
+
+终端产出的不是"指令"，而是"事件流"（Event Stream）。后端服务（`staffReportService` 及未来相关逻辑）是**高性能监听器（Listener / Event Processor）**，只负责：
+
+1. **标准化入库** — 将 Stream 转化为统一格式的 AuditLog
+2. **即时触发** — 流中出现特定特征（异常、求援）时，立即调用对应因果链技能（检查 ScanEvent、触发告警）
+3. **无状态处理** — Sub-Agent 间不沟通，所有状态同步通过共享数据库层（Entities）实现
+
+### 原则 3：Event Bus 命名空间（解耦设计）
+
+所有终端事件采用分层命名空间，确保中央指挥台能监听，各 Sub-Agent 互不干扰：
+
+```
+命名格式：{clinic_id}/{terminal_type}/{staff_id}/{event_type}
+
+示例：
+  clinic-001/staff-pad/staff-001/report_submitted
+  clinic-001/staff-pad/staff-001/status_changed
+  clinic-001/scan-gate/qr-20260717-0001/node_scanned
+  clinic-001/manager-console/attention/resolved
+```
+
+- 中央指挥台订阅 `clinic-001/*` 全量（用于 Dashboard 汇总）
+- 各 Sub-Agent 仅订阅自己的命名空间（`clinic-001/staff-pad/staff-001/*`）
+- Agent 之间永远不直接订阅对方的命名空间
+
+### 原则 4：Pipeline 编排（轻量级检查点框架）
+
+每个进入系统的 Stream 自动"流过"预设检查点，基于 AuditLog 触发器实现：
+
+```
+Stream 进入
+  → ① 解析（Parse）：非结构化 → 结构化 Event
+  → ② 校验（Validate）：clinic_id 隔离 + 身份绑定校验
+  → ③ 归档（Persist）：写入 AuditLog（不可变）
+  → ④ 关联（Connect）：关联到 PatientSession 旅程
+  → ⑤ 告警判断（Detect）：检测异常特征 → 生成 AttentionItem
+  → ⑥ 自动反馈（Notify）：向终端推送确认回执
+```
+
+**Pipeline 触发规则（V10 阶段）：**
+- 检查点 ①~④：所有 Stream 必经（采集层 + 推理层基础）
+- 检查点 ⑤：仅关键业务 Stream 触发（基于 PatientSession 锚点），避免对简单打卡等非关键流进行无谓的语义压缩
+- 检查点 ⑥：所有 Stream 必经（终端需感知"系统已收到"）
+
+### V10 实施约束（写入代码的硬规则）
+
+| 约束 | 实现方式 | 验证点 |
+|-----|---------|-------|
+| Sub-Agent 隔离 | `staffReportService` 只处理传入的 `staff_id` 对应数据，不查询其他 Staff 记录 | 代码中无跨 staff_id 的查询 |
+| 无状态处理 | service 函数不持有跨请求的状态变量，每次调用独立 | 无模块级可变状态 |
+| Event Bus 命名 | AuditLog.event_id 遵循 `{clinic}/{terminal}/{staff}/{type}` 格式 | event_id 生成规则统一 |
+| 唯一同步通道 | 终端感知其他终端变化只能通过 `base44.entities.X.subscribe()` | 无 Agent 间直接调用 |
+| Pipeline 检查点 | staffReportService 内部按 6 步顺序执行，每步独立可测 | 步骤间无跳过 |
+
+---
+
 ## V10 AI 四项职责（严格对应哲学文件）
 
 1. **观察证据（Observe）** — 接收原始汇报，上传存储，不做任何判断
