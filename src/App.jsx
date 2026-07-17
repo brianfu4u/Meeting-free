@@ -17,6 +17,10 @@ import M3Hub from "./pages/M3Hub";
 import DevDirector from "./pages/DevDirector";
 import StaffPad from "./pages/StaffPad";
 import StaffManagement from "./pages/StaffManagement";
+import StaffOnboarding from "./pages/StaffOnboarding";
+import AnalyticsDashboard from "./pages/AnalyticsDashboard";
+import ClinicSettings from "./pages/ClinicSettings";
+import PerformanceReport from "./pages/PerformanceReport";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -54,6 +58,10 @@ const AuthenticatedApp = () => {
       <Route path="/dev-director" element={<DevDirector />} />
       <Route path="/staff-pad" element={<StaffPad />} />
       <Route path="/staff-mgmt" element={<StaffManagement />} />
+      <Route path="/staff-onboarding" element={<StaffOnboarding />} />
+      <Route path="/analytics-dashboard" element={<AnalyticsDashboard />} />
+      <Route path="/clinic-settings" element={<ClinicSettings />} />
+      <Route path="/performance-report" element={<PerformanceReport />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

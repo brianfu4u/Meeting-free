@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench, Users } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench, Users, UserPlus, BarChart3, Settings, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
@@ -184,6 +184,50 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         >
           <Users size={13} style={{ color: "#94A3B8" }} />
           <span className="text-xs font-semibold" style={{ color: "#94A3B8", fontSize: "10px" }}>员工管理</span>
+        </Link>
+
+        {/* Staff onboarding link */}
+        <Link
+          to="/staff-onboarding"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)" }}
+          title="员工入职邀请 · 邀请码与待审核申请"
+        >
+          <UserPlus size={13} style={{ color: "#A855F7" }} />
+          <span className="text-xs font-semibold" style={{ color: "#A855F7", fontSize: "10px" }}>入职邀请</span>
+        </Link>
+
+        {/* Analytics dashboard link */}
+        <Link
+          to="/analytics-dashboard"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(0,199,217,0.1)", border: "1px solid rgba(0,199,217,0.25)" }}
+          title="业务数据分析 · 营收/客流/任务效率"
+        >
+          <BarChart3 size={13} style={{ color: "#00C7D9" }} />
+          <span className="text-xs font-semibold" style={{ color: "#00C7D9", fontSize: "10px" }}>数据分析</span>
+        </Link>
+
+        {/* Performance report link */}
+        <Link
+          to="/performance-report"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)" }}
+          title="工作绩效报告 · 月度效率与AI评分"
+        >
+          <Trophy size={13} style={{ color: "#FBBF24" }} />
+          <span className="text-xs font-semibold" style={{ color: "#FBBF24", fontSize: "10px" }}>绩效报告</span>
+        </Link>
+
+        {/* Clinic settings link */}
+        <Link
+          to="/clinic-settings"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(148,163,184,0.12)", border: "1px solid rgba(148,163,184,0.25)" }}
+          title="系统配置中心 · 基础信息/流程开关/角色权限"
+        >
+          <Settings size={13} style={{ color: "#94A3B8" }} />
+          <span className="text-xs font-semibold" style={{ color: "#94A3B8", fontSize: "10px" }}>配置中心</span>
         </Link>
 
         {/* Live indicator */}
