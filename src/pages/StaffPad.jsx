@@ -11,7 +11,7 @@ import TaskDetail from "@/components/staffPad/TaskDetail";
 import ReportSheet from "@/components/staffPad/ReportSheet";
 import HistoryList from "@/components/staffPad/HistoryList";
 import HistoryDetail from "@/components/staffPad/HistoryDetail";
-import { Loader, LogIn, ArrowLeft, Plus, Activity } from "lucide-react";
+import { Loader, LogIn, ArrowLeft, Plus, Activity, Search } from "lucide-react";
 
 function StaffPadInner() {
   const { theme } = useTheme();
@@ -26,6 +26,8 @@ function StaffPadInner() {
     const end = new Date(); const start = new Date(); start.setDate(end.getDate() - 6);
     return { start: toL(start), end: toL(end) };
   });
+  const [histMode, setHistMode] = useState("range");
+  const [histKeyword, setHistKeyword] = useState("");
 
   if (loading) {
     return (
@@ -69,7 +71,14 @@ function StaffPadInner() {
   const filteredHistory = history.filter((t) => {
     if (!t.created_date) return false;
     const d = new Date(t.created_date);
-    return d >= new Date(histRange.start + "T00:00:00") && d <= new Date(histRange.end + "T23:59:59");
+    const inRange = d >= new Date(histRange.start + "T00:00:00") && d <= new Date(histRange.end + "T23:59:59");
+    if (!inRange) return false;
+    if (histKeyword.trim()) {
+      const kw = histKeyword.trim().toLowerCase();
+      const hay = [t.description, t.ai_parsed?.summary, t.ai_parsed?.category, t.ai_parsed?.suggested_action, t.priority].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(kw)) return false;
+    }
+    return true;
   });
 
   const invalidate = () => {
@@ -140,15 +149,38 @@ function StaffPadInner() {
       {view === "history" && (
         <div className="flex-1 overflow-y-auto p-4 pb-28">
           <div className="text-xs font-bold mb-2" style={{ color: theme.textSub }}>历史记录 · 已核销</div>
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <input type="date" value={histRange.start} min={minDateStr} max={histRange.end}
-              onChange={(e) => setHistRange((p) => ({ ...p, start: e.target.value }))}
-              className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
-            <span className="text-xs" style={{ color: theme.textFaint }}>~</span>
-            <input type="date" value={histRange.end} min={histRange.start} max={todayStr}
-              onChange={(e) => setHistRange((p) => ({ ...p, end: e.target.value }))}
-              className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
-            <span className="text-[10px]" style={{ color: theme.textFaint }}>最多30天 · 共 {filteredHistory.length} 条</span>
+          <div className="space-y-2 mb-3">
+            <div className="flex items-center gap-1.5">
+              {["range", "day"].map((m) => (
+                <button key={m} onClick={() => setHistMode(m)}
+                  className="text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-all"
+                  style={histMode === m ? { background: "rgba(0,199,217,0.15)", color: "#00C7D9", border: "1px solid rgba(0,199,217,0.4)" } : { background: theme.cardBg, color: theme.textSub, border: `1px solid ${theme.border}` }}>
+                  {m === "range" ? "时间段" : "单日"}
+                </button>
+              ))}
+              <span className="text-[10px] ml-auto" style={{ color: theme.textFaint }}>共 {filteredHistory.length} 条</span>
+            </div>
+            {histMode === "range" ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <input type="date" value={histRange.start} min={minDateStr} max={histRange.end}
+                  onChange={(e) => setHistRange((p) => ({ ...p, start: e.target.value }))}
+                  className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
+                <span className="text-xs" style={{ color: theme.textFaint }}>~</span>
+                <input type="date" value={histRange.end} min={histRange.start} max={todayStr}
+                  onChange={(e) => setHistRange((p) => ({ ...p, end: e.target.value }))}
+                  className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
+                <span className="text-[10px]" style={{ color: theme.textFaint }}>最多30天</span>
+              </div>
+            ) : (
+              <input type="date" value={histRange.start} min={minDateStr} max={todayStr}
+                onChange={(e) => setHistRange({ start: e.target.value, end: e.target.value })}
+                className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
+            )}
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: theme.textFaint }} />
+              <input type="text" value={histKeyword} onChange={(e) => setHistKeyword(e.target.value)} placeholder="搜索关键字（描述/摘要/分类/优先级）"
+                className="w-full text-xs rounded-lg pl-7 pr-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
+            </div>
           </div>
           <HistoryList items={filteredHistory} onSelect={(t) => { setActiveTaskId(t.id); setView("historyDetail"); }} />
         </div>
