@@ -1,0 +1,110 @@
+{
+  "name": "AttentionItem",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "\u5173\u8054PatientSession\uff08\u60a3\u8005\u65c5\u7a0b\u76f8\u5173\u65f6\u5fc5\u586b\uff0c\u975e\u60a3\u8005\u76f8\u5173\u53ef\u7a7a\uff09"
+    },
+    "attention_type": {
+      "type": "string",
+      "enum": [
+        "journey_gap",
+        "evidence_missing",
+        "contradiction",
+        "resource_risk",
+        "wait_timeout",
+        "staff_unresponsive"
+      ],
+      "description": "\u6ce8\u610f\u529b\u7c7b\u578b\uff1a\u65c5\u7a0b\u65ad\u70b9/\u8bc1\u636e\u7f3a\u5931/\u77db\u76fe\u6570\u636e/\u8d44\u6e90\u98ce\u9669/\u7b49\u5f85\u8d85\u65f6/\u5458\u5de5\u65e0\u54cd\u5e94"
+    },
+    "urgency": {
+      "type": "string",
+      "enum": [
+        "yellow",
+        "red"
+      ],
+      "default": "yellow",
+      "description": "\u7d27\u6025\u7a0b\u5ea6\uff1ayellow=\u4eca\u65e5\u5185\u5904\u7406\uff0cred=15\u5206\u949f\u5185\u54cd\u5e94"
+    },
+    "title": {
+      "type": "string",
+      "description": "\u4e00\u53e5\u8bdd\u6807\u9898\uff0c\u226420\u5b57\uff0c\u4f9b\u5e97\u957f\u5728AttentionQueue\u5feb\u901f\u626b\u63cf"
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "LLM\u63a8\u7406\u8fc7\u7a0b\u8bf4\u660e\uff08\u53ef\u5c55\u5f00\u67e5\u770b\uff09\uff0c\u89e3\u91ca\u4e3a\u4f55\u751f\u6210\u672c\u5efa\u8bae"
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u652f\u6491\u672c\u5efa\u8bae\u7684EvidenceItem ID\u5217\u8868\uff08\u5baa\u6cd5\u8981\u6c42\uff1a\u5efa\u8bae\u5fc5\u987b\u53ef\u6eaf\u6e90\u81f3\u8bc1\u636e\uff09"
+    },
+    "event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u652f\u6491\u672c\u5efa\u8bae\u7684AuditLog event_id\u5217\u8868"
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "AI\u5efa\u8bae\u7684\u5177\u4f53\u884c\u52a8\u65b9\u5411\uff08\u4ec5\u5efa\u8bae\uff0c\u4e0d\u6267\u884c\uff09"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "executed",
+        "ignored",
+        "escalated"
+      ],
+      "default": "open",
+      "description": "\u6ce8\u610f\u529b\u9879\u72b6\u6001\uff1aopen=\u5f85\u5e97\u957f\u5904\u7406\uff0cexecuted/ignored/escalated=\u5df2\u5904\u7406"
+    },
+    "manager_action": {
+      "type": "string",
+      "enum": [
+        "execute",
+        "ignore",
+        "escalate"
+      ],
+      "description": "\u5e97\u957f\u4e09\u9009\u4e00\u51b3\u7b56\uff1a\u6267\u884c\u5efa\u8bae/\u5ffd\u7565/\u5347\u7ea7\u5904\u7406"
+    },
+    "manager_note": {
+      "type": "string",
+      "description": "\u5e97\u957f\u5904\u7406\u5907\u6ce8"
+    },
+    "task_id_created": {
+      "type": "string",
+      "description": "\u82e5\u5e97\u957f\u9009\u62e9execute\uff0c\u7cfb\u7edf\u521b\u5efa\u7684OperationalTask ID\uff08\u552f\u4e00\u5408\u6cd5\u521b\u5efa\u8def\u5f84\uff09"
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u5e97\u957f\u505a\u51fa\u51b3\u7b56\u7684\u65f6\u95f4"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "AttentionEngine\u751f\u6210\u672c\u5efa\u8bae\u7684\u65f6\u95f4"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "attention_type",
+    "urgency",
+    "title",
+    "recommendation",
+    "status",
+    "generated_at"
+  ]
+}

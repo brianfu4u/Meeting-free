@@ -6,6 +6,10 @@
       "type": "string",
       "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
     },
+    "attention_item_id": {
+      "type": "string",
+      "description": "V10\u5baa\u6cd5\u6eaf\u6e90\u5b57\u6bb5\uff1a\u6bcf\u4e2aTask\u5fc5\u987b\u6765\u81ea\u4e00\u4e2a\u5e97\u957f\u5df2\u6279\u51c6\u7684AttentionItem\uff08staff_self\u9664\u5916\uff09"
+    },
     "priority": {
       "type": "string",
       "enum": [
@@ -19,7 +23,11 @@
     },
     "dispatched_by": {
       "type": "string",
-      "description": "\u6d3e\u53d1\u6765\u6e90\uff1amanager/llm_agent/staff_self"
+      "enum": [
+        "manager",
+        "staff_self"
+      ],
+      "description": "V10\u5baa\u6cd5\uff1a\u4efb\u52a1\u53ea\u80fd\u7531manager\uff08\u5e97\u957f\u51b3\u7b56\u540e\uff09\u6216staff_self\uff08\u5458\u5de5\u81ea\u4e3b\uff09\u53d1\u8d77\u3002AI\u4e0d\u518d\u76f4\u63a5\u521b\u5efa\u4efb\u52a1\u3002"
     },
     "assignee_staff_id": {
       "type": "string",
@@ -63,7 +71,7 @@
     },
     "llm_prereview_conclusion": {
       "type": "string",
-      "description": "LLM EvidenceEvalSkill\u9884\u5ba1\u7ed3\u8bba"
+      "description": "LLM EvidenceEvalSkill\u9884\u5ba1\u7ed3\u8bba\uff08\u4ec5\u4f9b\u53c2\u8003\uff0c\u4e0d\u4ee3\u8868\u6700\u7ec8\u51b3\u7b56\uff09"
     },
     "manager_decision": {
       "type": "string",
@@ -84,7 +92,7 @@
     },
     "ai_parsed": {
       "type": "object",
-      "description": "StaffReportService \u7684 LLM \u8bed\u610f\u89e3\u6790\u7ed3\u679c {category,urgency,summary,suggested_action}"
+      "description": "V10\uff1a\u4ec5\u4f5c\u4e3a\u53c2\u8003\u4fe1\u606f\u5b58\u6863\uff0c\u4e0d\u518d\u9a71\u52a8\u81ea\u52a8\u5316\u52a8\u4f5c {category,urgency,summary,suggested_action}"
     },
     "report_log": {
       "type": "array",
@@ -99,6 +107,7 @@
     "clinic_id",
     "priority",
     "description",
-    "status"
+    "status",
+    "dispatched_by"
   ]
 }
