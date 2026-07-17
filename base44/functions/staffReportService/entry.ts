@@ -73,6 +73,22 @@ Deno.serve(async (req) => {
 
     // 3. 按类型归档
     if (report_type === "new_event") {
+      // 员工自主发起的工作 → 进入「我」的工作清单，待核销归档
+      let workDesc = [text, transcripts ? "[语音转写] " + transcripts : ""].filter(Boolean).join("\n");
+      if (!workDesc) workDesc = atts.length ? `（${atts.length}个附件汇报）` : "（新事件）";
+      if (parsed.summary) workDesc += "\n[AI] " + parsed.summary;
+      const priority = parsed.urgency === "red" ? "P2" : "P3";
+      const task = await svc.entities.OperationalTask.create({
+        clinic_id,
+        priority,
+        dispatched_by: "staff_self",
+        assignee_staff_id: staff_id,
+        description: workDesc,
+        status: "in_progress",
+      });
+      archived.task_id = task.id;
+
+      // 同时生成管理层可见的申请单（资源/异常需经理介入时）
       const reqType = parsed.category === "资源需求" ? "procurement" : "support";
       const desc = `${fullDescription || ""}${fullDescription ? "\n" : ""}[AI摘要] ${parsed.summary || ""}${parsed.suggested_action ? "｜建议：" + parsed.suggested_action : ""}`;
       const sr = await svc.entities.StaffRequest.create({
@@ -97,23 +113,30 @@ Deno.serve(async (req) => {
     } else if (report_type === "completion" && task_id) {
       const task = await svc.entities.OperationalTask.get(task_id).catch(() => null);
       if (task && task.clinic_id === clinic_id) {
-        const img = atts.find((a) => a.type === "image");
-        if (img) {
-          const ev = await svc.entities.EvidenceItem.create({
-            clinic_id,
-            task_id,
-            version_id: task.current_version_id || `v1-${task_id}`,
-            submission_count: 1,
-            evidence_type: "image",
-            file_url: img.url,
-            submitted_at: now,
-            submitted_by: staff_id,
-            eval_result: "pending",
-          });
-          archived.evidence_id = ev.id;
+        if (task.dispatched_by === "staff_self") {
+          // 员工自主工作：完成即核销归档，从工作清单消失
+          await svc.entities.OperationalTask.update(task_id, { status: "completed" });
+          archived.task_completed = true;
+        } else {
+          // 管理层派发任务：完成需补证据待核销（现有流程）
+          const img = atts.find((a) => a.type === "image");
+          if (img) {
+            const ev = await svc.entities.EvidenceItem.create({
+              clinic_id,
+              task_id,
+              version_id: task.current_version_id || `v1-${task_id}`,
+              submission_count: 1,
+              evidence_type: "image",
+              file_url: img.url,
+              submitted_at: now,
+              submitted_by: staff_id,
+              eval_result: "pending",
+            });
+            archived.evidence_id = ev.id;
+          }
+          await svc.entities.OperationalTask.update(task_id, { status: "pending_evidence" });
+          archived.task_completed_submit = true;
         }
-        await svc.entities.OperationalTask.update(task_id, { status: "pending_evidence" });
-        archived.task_completed_submit = true;
       }
     }
 

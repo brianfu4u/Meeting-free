@@ -24,8 +24,11 @@ function Column({ title, tasks, accent, onSelect, theme }) {
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${accent}22`, color: accent }}>{t.priority}</span>
               <span className="text-[10px]" style={{ color: theme.textFaint }}>{TASK_STATUS_LABELS[t.status] || t.status}</span>
             </div>
-            <div className="text-xs leading-snug overflow-hidden" style={{ color: theme.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+            <div className="text-xs leading-snug overflow-hidden mb-1" style={{ color: theme.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
               {t.description}
+            </div>
+            <div className="text-[10px]" style={{ color: theme.textFaint }}>
+              {t.created_date ? new Date(t.created_date).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "--:--"} 发起
             </div>
           </button>
         ))}
