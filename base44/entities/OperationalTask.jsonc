@@ -19,7 +19,7 @@
     },
     "dispatched_by": {
       "type": "string",
-      "description": "\u6d3e\u53d1\u6765\u6e90\uff1amanager/llm_agent"
+      "description": "\u6d3e\u53d1\u6765\u6e90\uff1amanager/llm_agent/staff_self"
     },
     "assignee_staff_id": {
       "type": "string",
@@ -73,6 +73,18 @@
         "ignored"
       ],
       "description": "\u5e97\u957f\u4e09\u9009\u4e00\u51b3\u7b56"
+    },
+    "report_attachments": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "\u5458\u5de5\u53d1\u8d77/\u6c47\u62a5\u65f6\u9644\u5e26\u7684\u591a\u6a21\u6001\u9644\u4ef6 [{type,url,name,transcript}]"
+    },
+    "ai_parsed": {
+      "type": "object",
+      "description": "StaffReportService \u7684 LLM \u8bed\u610f\u89e3\u6790\u7ed3\u679c {category,urgency,summary,suggested_action}"
     }
   },
   "required": [

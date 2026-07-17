@@ -85,6 +85,8 @@ Deno.serve(async (req) => {
         assignee_staff_id: staff_id,
         description: workDesc,
         status: "in_progress",
+        report_attachments: atts,
+        ai_parsed: parsed,
       });
       archived.task_id = task.id;
 

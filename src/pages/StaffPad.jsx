@@ -10,6 +10,7 @@ import TaskList from "@/components/staffPad/TaskList";
 import TaskDetail from "@/components/staffPad/TaskDetail";
 import ReportSheet from "@/components/staffPad/ReportSheet";
 import HistoryList from "@/components/staffPad/HistoryList";
+import HistoryDetail from "@/components/staffPad/HistoryDetail";
 import { Loader, LogIn, ArrowLeft, Plus, Activity } from "lucide-react";
 
 function StaffPadInner() {
@@ -20,6 +21,11 @@ function StaffPadInner() {
   const [view, setView] = useState("home");
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [sheet, setSheet] = useState({ open: false, mode: "new_event", taskId: null });
+  const [histRange, setHistRange] = useState(() => {
+    const toL = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const da = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${da}`; };
+    const end = new Date(); const start = new Date(); start.setDate(end.getDate() - 6);
+    return { start: toL(start), end: toL(end) };
+  });
 
   if (loading) {
     return (
@@ -57,6 +63,14 @@ function StaffPadInner() {
   const history = (tasksQ.data || [])
     .filter((t) => t.assignee_staff_id === staff.id && ["completed", "exception"].includes(t.status))
     .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date));
+  const toLocalDate = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const da = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${da}`; };
+  const todayStr = toLocalDate(new Date());
+  const minDateStr = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return toLocalDate(d); })();
+  const filteredHistory = history.filter((t) => {
+    if (!t.created_date) return false;
+    const d = new Date(t.created_date);
+    return d >= new Date(histRange.start + "T00:00:00") && d <= new Date(histRange.end + "T23:59:59");
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -76,11 +90,13 @@ function StaffPadInner() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold truncate" style={{ color: theme.text }}>
-            {staff.staff_name} · {ROLE_LABELS[staff.role] || staff.role}
+            {view === "history" ? "历史记录 · 已核销" : view === "historyDetail" ? "历史详情" : view === "task" ? "任务详情" : `${staff.staff_name} · ${ROLE_LABELS[staff.role] || staff.role}`}
           </div>
-          <div className="text-xs truncate" style={{ color: theme.textMuted }}>
-            {clinicId} · {staff.assigned_zone || "未分配区域"}
-          </div>
+          {view === "home" && (
+            <div className="text-xs truncate" style={{ color: theme.textMuted }}>
+              {clinicId} · {staff.assigned_zone || "未分配区域"}
+            </div>
+          )}
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full font-semibold flex-shrink-0"
           style={{ background: `${STAFF_STATUS_COLORS[staff.status]}22`, color: STAFF_STATUS_COLORS[staff.status] }}>
@@ -124,7 +140,23 @@ function StaffPadInner() {
       {view === "history" && (
         <div className="flex-1 overflow-y-auto p-4 pb-28">
           <div className="text-xs font-bold mb-2" style={{ color: theme.textSub }}>历史记录 · 已核销</div>
-          <HistoryList items={history} />
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <input type="date" value={histRange.start} min={minDateStr} max={histRange.end}
+              onChange={(e) => setHistRange((p) => ({ ...p, start: e.target.value }))}
+              className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
+            <span className="text-xs" style={{ color: theme.textFaint }}>~</span>
+            <input type="date" value={histRange.end} min={histRange.start} max={todayStr}
+              onChange={(e) => setHistRange((p) => ({ ...p, end: e.target.value }))}
+              className="text-xs rounded-lg px-2 py-1.5 outline-none" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.text }} />
+            <span className="text-[10px]" style={{ color: theme.textFaint }}>最多30天 · 共 {filteredHistory.length} 条</span>
+          </div>
+          <HistoryList items={filteredHistory} onSelect={(t) => { setActiveTaskId(t.id); setView("historyDetail"); }} />
+        </div>
+      )}
+
+      {view === "historyDetail" && history.find((t) => t.id === activeTaskId) && (
+        <div className="flex-1 overflow-y-auto p-4 pb-28">
+          <HistoryDetail task={history.find((t) => t.id === activeTaskId)} />
         </div>
       )}
 
