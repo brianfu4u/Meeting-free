@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback } from "react";
 import TopBar from "@/components/dashboard/TopBar";
 import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
@@ -7,106 +7,72 @@ import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
 import AttentionQueue from "@/components/dashboard/AttentionQueue";
 import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
+import { NAV_ITEMS } from "@/data/mockData";
 import {
-  EVENT_STREAM_INITIAL,
-  EVENT_STREAM_QUEUE,
-  NAV_ITEMS,
-} from "@/data/mockData";
+  useAuditLog,
+  usePatientSessions,
+  useStaff,
+  useOperationalTasks,
+  useAlerts,
+  useInventory,
+  deriveHealthScore,
+} from "@/hooks/useClinicData";
 import { useLiveOpsFeed } from "@/hooks/useLiveOpsFeed";
 
-let eventIdCounter = 20;
+// 将 AuditLog 实体映射为 EventStream 所需的展示结构
+function mapAuditToEvent(entry) {
+  const type = (() => {
+    const t = entry.trigger_type || "";
+    if (/STALLED|ESCALATED|REJECTED|BELOW_THRESHOLD|MISSED|EXCEPTION/i.test(t)) return "critical";
+    if (/REPORT|DRAFT|SUGGEST|ATTENTION|RISK|GAP|MISSING/i.test(t)) return "warning";
+    if (/COMPLETED|APPROVED|SEATED|ARRIVED|CHECKED|GENERATED/i.test(t)) return "success";
+    return "info";
+  })();
+  const p = entry.payload || {};
+  const parts = [];
+  if (entry.source_agent) parts.push(`[${entry.source_agent.replace(/_V10$/, "")}]`);
+  if (p.staff_name) parts.push(p.staff_name);
+  if (p.patient_name) parts.push(`患者:${p.patient_name}`);
+  if (p.text) parts.push(String(p.text).slice(0, 60));
+  if (p.node_name) parts.push(`节点:${p.node_name}`);
+  if (p.item_name) parts.push(`物品:${p.item_name}`);
+  if (p.attention_title) parts.push(p.attention_title);
+  if (parts.length === 0) parts.push(entry.trigger_type || "事件");
+  return {
+    id: entry.id || entry.event_id,
+    time: new Date(entry.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+    type,
+    icon: "FileText",
+    message: parts.join(" · "),
+  };
+}
 
 function DashboardInner() {
   const { theme } = useTheme();
-  const [events, setEvents] = useState(EVENT_STREAM_INITIAL);
-  const [activeDimension, setActiveDimension] = useState(null);
-  const [activeSection, setActiveSection] = useState("overview");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState(false);
-  const [actionDone, setActionDone] = useState(false);
-  const [queueIndex, setQueueIndex] = useState(0);
-  const [overallHealth, setOverallHealth] = useState(78);
+  const [activeDimension, setActiveDimension] = React.useState(null);
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
-  // 实时事件订阅：员工打卡 / 汇报 / 扫码 / 告警秒级回显到中央看板
+  // 真实数据：事件流 + 健康分构成
+  const auditQ = useAuditLog(20);
+  const sessionsQ = usePatientSessions();
+  const staffQ = useStaff();
+  const tasksQ = useOperationalTasks();
+  const alertsQ = useAlerts();
+  const inventoryQ = useInventory();
+
+  const liveEvents = (auditQ.data || []).map(mapAuditToEvent);
+  const overallHealth = deriveHealthScore(
+    sessionsQ.data,
+    tasksQ.data,
+    alertsQ.data,
+    inventoryQ.data
+  );
+
+  // 实时事件订阅：补入 AuditLog 之外的实时推送（如 PAD 心跳）
   const handleLiveEvent = useCallback((ev) => {
-    setEvents((prev) => [ev, ...prev].slice(0, 20));
+    // liveEvents 由 React Query 轮询驱动，此处仅保留钩子以备扩展
   }, []);
   useLiveOpsFeed(handleLiveEvent);
-
-  // Auto-append events from queue
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setQueueIndex((prev) => {
-        const nextIdx = prev % EVENT_STREAM_QUEUE.length;
-        const nextEvent = {
-          ...EVENT_STREAM_QUEUE[nextIdx],
-          id: eventIdCounter++,
-          time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-        };
-        setEvents((prevEvents) => [nextEvent, ...prevEvents].slice(0, 20));
-        if (nextEvent.awaitConfirm && !actionDone) {
-          setPendingAction(true);
-        }
-        return prev + 1;
-      });
-    }, 9000);
-    return () => clearInterval(timer);
-  }, [actionDone]);
-
-  const handleConfirm = useCallback(() => {
-    setPendingAction(false);
-    setActionDone(true);
-    setOverallHealth(88);
-    const confirmEvent = {
-      id: eventIdCounter++,
-      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      type: "success",
-      icon: "CheckCircle",
-      message: "✅ 店长已确认调整。视光师X已接到调度通知，即刻前往检查区3号位支援。",
-      actionRequired: false,
-    };
-    setEvents((prev) => [confirmEvent, ...prev]);
-  }, []);
-
-  const handleDispatch = useCallback(() => {
-    const dispatchEvent = {
-      id: eventIdCounter++,
-      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      type: "success",
-      icon: "Zap",
-      message: "📡 指令已下发至视光师X：立即前往检查区3号位执行支援任务。",
-      actionRequired: false,
-    };
-    setEvents((prev) => [dispatchEvent, ...prev]);
-    handleConfirm();
-  }, [handleConfirm]);
-
-  const handleDefer = useCallback(() => {
-    setPendingAction(false);
-    const deferEvent = {
-      id: eventIdCounter++,
-      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      type: "warning",
-      icon: "Clock",
-      message: "⏱ 店长已选择稍后处理。系统将在10分钟后再次提醒。",
-      actionRequired: false,
-    };
-    setEvents((prev) => [deferEvent, ...prev]);
-    setTimeout(() => setPendingAction(true), 60000);
-  }, []);
-
-  const handleEscalate = useCallback(() => {
-    setPendingAction(false);
-    const escalateEvent = {
-      id: eventIdCounter++,
-      time: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      type: "critical",
-      icon: "AlertTriangle",
-      message: "🚨 已升级处理，通知护士长N1介入协调。请在5分钟内给出处置方案。",
-      actionRequired: false,
-    };
-    setEvents((prev) => [escalateEvent, ...prev]);
-  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: theme.canvas, transition: "background 0.3s ease" }}>
@@ -114,8 +80,8 @@ function DashboardInner() {
 
       <Sidebar
         navItems={NAV_ITEMS}
-        activeSection={activeSection}
-        onNavigate={setActiveSection}
+        activeSection="overview"
+        onNavigate={() => {}}
         panelStatuses={{}}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -123,10 +89,8 @@ function DashboardInner() {
 
       {/* Main layout */}
       <div className="flex" style={{ paddingTop: "56px" }}>
-        {/* Sidebar spacer on desktop */}
         <div className="hidden md:block flex-shrink-0" style={{ width: "200px" }} />
 
-        {/* Main content — single column */}
         <div className="flex-1 min-w-0 p-4 md:p-5">
           {/* Welcome banner */}
           <div
@@ -135,10 +99,10 @@ function DashboardInner() {
           >
             <div>
               <div className="text-sm font-bold" style={{ color: theme.text }}>
-                你好，店长L · 上午班正在进行中
+                你好，店长L · 当前门店实时态势
               </div>
               <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
-                四维实时投影 · 聚焦人、流、钱、物。
+                四维实时投影 · 聚焦人、流、钱、物。健康评分 {overallHealth}/100
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2">
@@ -146,7 +110,7 @@ function DashboardInner() {
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold"
                 style={{ background: "rgba(0,199,217,0.12)", color: "#00C7D9", border: "1px solid rgba(0,199,217,0.25)" }}
               >
-                周六上午班 08:00–13:00
+                Clinic OS V10 · 实时驱动
               </div>
             </div>
           </div>
@@ -162,17 +126,9 @@ function DashboardInner() {
             <WorkflowSnapshotPanel />
           </div>
 
-          {/* 实时事件流 — 全宽，按时间滚动 */}
+          {/* 系统事件流 — 全宽，按时间滚动 */}
           <div style={{ height: "calc(100vh - 520px)", minHeight: "320px" }}>
-            <EventStream
-              events={events}
-              pendingAction={pendingAction}
-              onConfirm={handleConfirm}
-              onDispatch={handleDispatch}
-              onDefer={handleDefer}
-              onEscalate={handleEscalate}
-              actionDone={actionDone}
-            />
+            <EventStream events={liveEvents} loading={auditQ.isLoading} />
           </div>
         </div>
       </div>

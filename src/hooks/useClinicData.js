@@ -87,6 +87,17 @@ export function useAttentionItems() {
   });
 }
 
+export function useAuditLog(limit = 20) {
+  return useQuery({
+    queryKey: ["auditLog", CLINIC_ID, limit],
+    queryFn: async () => {
+      const list = await base44.entities.AuditLog.filter({ clinic_id: CLINIC_ID }, "-timestamp", limit);
+      return list;
+    },
+    refetchInterval: 8000,
+  });
+}
+
 export function useWorkflowSnapshots(status = "active") {
   return useQuery({
     queryKey: ["workflowSnapshots", CLINIC_ID, status],

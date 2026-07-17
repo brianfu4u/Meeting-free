@@ -1,30 +1,61 @@
-import React, { useRef, useEffect } from "react";
-import { AlertTriangle, CheckCircle, Clock, Info, Zap, User, Package, TrendingUp, AlertCircle, Users } from "lucide-react";
+import React from "react";
+import { AlertTriangle, CheckCircle, Clock, Info, Zap, User, Package, TrendingUp, AlertCircle, Users, FileText } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 
 const ICON_MAP = {
-  AlertTriangle, CheckCircle, Clock, Info, Zap, User, Package, TrendingUp, AlertCircle, Users,
+  AlertTriangle, CheckCircle, Clock, Info, Zap, User, Package, TrendingUp, AlertCircle, Users, FileText,
 };
 
 const TYPE_CONFIG = {
-  critical: { icon_bg: "rgba(220,38,38,0.15)", icon_color: "#f87171", border: "rgba(220,38,38,0.2)", bg: "rgba(220,38,38,0.05)", dot: "#DC2626" },
-  warning:  { icon_bg: "rgba(217,119,6,0.15)",  icon_color: "#fbbf24", border: "rgba(217,119,6,0.2)",  bg: "rgba(217,119,6,0.04)",  dot: "#D97706" },
-  info:     { icon_bg: "rgba(0,199,217,0.12)",   icon_color: "#00C7D9", border: "rgba(0,199,217,0.15)", bg: "rgba(0,199,217,0.03)",  dot: "#00C7D9" },
-  success:  { icon_bg: "rgba(22,163,74,0.15)",   icon_color: "#4ade80", border: "rgba(22,163,74,0.2)",  bg: "rgba(22,163,74,0.04)",  dot: "#16A34A" },
+  critical: { icon_bg: "rgba(220,38,38,0.15)", icon_color: "#f87171", border: "rgba(220,38,38,0.2)", bg: "rgba(220,38,38,0.05)", dot: "#DC2626", label: "🔴 紧急预警" },
+  warning:  { icon_bg: "rgba(217,119,6,0.15)",  icon_color: "#fbbf24", border: "rgba(217,119,6,0.2)",  bg: "rgba(217,119,6,0.04)",  dot: "#D97706", label: "🟡 注意提示" },
+  info:     { icon_bg: "rgba(0,199,217,0.12)",   icon_color: "#00C7D9", border: "rgba(0,199,217,0.15)", bg: "rgba(0,199,217,0.03)",  dot: "#00C7D9", label: "ℹ️ 系统通知" },
+  success:  { icon_bg: "rgba(22,163,74,0.15)",   icon_color: "#4ade80", border: "rgba(22,163,74,0.2)",  bg: "rgba(22,163,74,0.04)",  dot: "#16A34A", label: "✅ 状态更新" },
 };
 
-function EventItem({ event, isNew, theme }) {
+// 将 AuditLog trigger_type 映射为展示类型
+function triggerToType(triggerType) {
+  if (!triggerType) return "info";
+  if (/STALLED|ESCALATED|REJECTED|BELOW_THRESHOLD|MISSED|EXCEPTION/i.test(triggerType)) return "critical";
+  if (/REPORT|DRAFT|SUGGEST|ATTENTION|RISK|GAP|MISSING/i.test(triggerType)) return "warning";
+  if (/COMPLETED|APPROVED|SEATED|ARRIVED|CHECKED|GENERATED/i.test(triggerType)) return "success";
+  return "info";
+}
+
+function triggerToIcon() {
+  return "FileText";
+}
+
+function formatTime(ts) {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "—";
+  }
+}
+
+function buildMessage(entry) {
+  const p = entry.payload || {};
+  const parts = [];
+  if (entry.source_agent) parts.push(`[${entry.source_agent}]`);
+  if (p.staff_name) parts.push(p.staff_name);
+  if (p.patient_name) parts.push(`患者:${p.patient_name}`);
+  if (p.text) parts.push(p.text.slice(0, 60));
+  if (p.node_name) parts.push(`节点:${p.node_name}`);
+  if (p.item_name) parts.push(`物品:${p.item_name}`);
+  if (p.attention_title) parts.push(p.attention_title);
+  if (parts.length === 0) parts.push(entry.trigger_type || "事件");
+  return parts.join(" · ");
+}
+
+function EventItem({ event, theme }) {
   const cfg = TYPE_CONFIG[event.type] || TYPE_CONFIG.info;
   const IconComp = ICON_MAP[event.icon] || Info;
-
   return (
     <div
-      className={`rounded-xl p-3 mb-2 ${isNew ? "animate-slide-in-top" : ""}`}
-      style={{
-        background: event.awaitConfirm ? "rgba(220,38,38,0.08)" : cfg.bg,
-        border: `1px solid ${event.awaitConfirm ? "rgba(220,38,38,0.35)" : cfg.border}`,
-        transition: "all 0.3s ease",
-      }}
+      className="rounded-xl p-3 mb-2"
+      style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, transition: "all 0.3s ease" }}
     >
       <div className="flex items-start gap-2.5">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: cfg.icon_bg }}>
@@ -32,11 +63,8 @@ function EventItem({ event, isNew, theme }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-xs font-semibold" style={{
-              color: event.awaitConfirm ? "#f87171" : event.type === "critical" ? "#f87171" : theme.textSub,
-              fontSize: "10px", letterSpacing: "0.04em",
-            }}>
-              {event.awaitConfirm ? "⚡ 待店长确认" : event.type === "critical" ? "🔴 紧急预警" : event.type === "warning" ? "🟡 注意提示" : event.type === "success" ? "✅ 状态更新" : "ℹ️ 系统通知"}
+            <span className="text-xs font-semibold" style={{ color: cfg.icon_color, fontSize: "10px", letterSpacing: "0.04em" }}>
+              {cfg.label}
             </span>
             <span className="text-xs flex-shrink-0" style={{ color: theme.textFaint, fontSize: "10px" }}>{event.time}</span>
           </div>
@@ -47,13 +75,8 @@ function EventItem({ event, isNew, theme }) {
   );
 }
 
-export default function EventStream({ events, pendingAction, onConfirm, onDispatch, onDefer, onEscalate, actionDone }) {
-  const streamRef = useRef(null);
-  const { theme, mode } = useTheme();
-
-  useEffect(() => {
-    if (streamRef.current) streamRef.current.scrollTop = 0;
-  }, [events]);
+export default function EventStream({ events, loading }) {
+  const { theme } = useTheme();
 
   return (
     <div
@@ -70,61 +93,40 @@ export default function EventStream({ events, pendingAction, onConfirm, onDispat
       <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${theme.borderSubtle}` }}>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full" style={{ background: "#00C7D9", animation: "pulseGreen 2s ease-in-out infinite" }} />
-          <span className="text-sm font-semibold" style={{ color: theme.text }}>实时事件流</span>
+          <span className="text-sm font-semibold" style={{ color: theme.text }}>系统事件流</span>
+          <span className="text-xs" style={{ color: theme.textFaint, fontSize: "10px" }}>· AuditLog 实时</span>
         </div>
         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(0,199,217,0.12)", color: "#00C7D9", border: "1px solid rgba(0,199,217,0.25)", fontSize: "10px" }}>
-          AI 智能监控
+          V10 全链路留痕
         </span>
       </div>
 
       {/* Events */}
-      <div ref={streamRef} className="flex-1 overflow-y-auto p-3">
-        {events.map((event, i) => (
-          <EventItem key={event.id} event={event} isNew={i === 0} theme={theme} />
-        ))}
+      <div className="flex-1 overflow-y-auto p-3">
+        {loading && events.length === 0 ? (
+          <div className="text-xs py-8 text-center" style={{ color: theme.textFaint }}>加载系统事件中…</div>
+        ) : events.length === 0 ? (
+          <div className="text-xs py-8 text-center" style={{ color: theme.textFaint }}>暂无系统事件</div>
+        ) : (
+          events.map((event) => (
+            <EventItem key={event.id} event={event} theme={theme} />
+          ))
+        )}
       </div>
 
-      {/* Action area */}
+      {/* V10 提示条：店长决策归口到注意力队列 */}
       <div
         className="flex-shrink-0 p-3"
         style={{ borderTop: `1px solid ${theme.borderSubtle}`, background: theme.actionAreaBg }}
       >
-        {actionDone ? (
-          <div className="rounded-xl p-3 text-center animate-fade-in" style={{ background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.25)" }}>
-            <div className="text-sm font-semibold" style={{ color: "#4ade80" }}>✅ 指令已下发</div>
-            <div className="text-xs mt-1" style={{ color: theme.textMuted }}>视光师X已调入检查区，拥堵压力正在缓解</div>
+        <div className="rounded-xl p-3 text-center" style={{ background: "rgba(0,199,217,0.06)", border: "1px solid rgba(0,199,217,0.18)" }}>
+          <div className="text-xs" style={{ color: theme.textMuted, fontSize: "11px" }}>
+            需要店长决策的事项，请在上方「注意力队列」处理
           </div>
-        ) : pendingAction ? (
-          <>
-            <div className="rounded-xl p-3 mb-3" style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.3)" }}>
-              <div className="text-xs font-semibold mb-1" style={{ color: "#f87171" }}>⚡ 待处理：排班调整建议</div>
-              <div className="text-xs" style={{ color: theme.textMsg }}>将视光师X调入检查区3号位，预计等待时间降至15分钟以内。</div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={onConfirm} className="py-2.5 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95"
-                style={{ background: "linear-gradient(135deg, #00C7D9, #0099A8)", color: "#0D1B2A", boxShadow: "0 0 16px rgba(0,199,217,0.35)" }}>
-                ✓ 确认
-              </button>
-              <button onClick={onDispatch} className="py-2.5 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95"
-                style={{ background: "rgba(0,199,217,0.15)", color: "#00C7D9", border: "1px solid rgba(0,199,217,0.35)" }}>
-                📡 下发指令
-              </button>
-              <button onClick={onDefer} className="py-2.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95"
-                style={{ background: theme.deferBtn, color: theme.deferBtnText, border: `1px solid ${theme.deferBtnBorder}` }}>
-                ⏱ 稍后处理
-              </button>
-              <button onClick={onEscalate} className="py-2.5 rounded-xl text-xs font-medium transition-all duration-150 active:scale-95"
-                style={{ background: "rgba(220,38,38,0.1)", color: "#f87171", border: "1px solid rgba(220,38,38,0.25)" }}>
-                🚨 升级处理
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-2">
-            <div className="text-xs" style={{ color: theme.textFaint }}>当前无需店长干预</div>
-            <div className="text-xs mt-1" style={{ color: theme.textFaintest, fontSize: "10px" }}>系统持续监控中...</div>
+          <div className="text-xs mt-1" style={{ color: theme.textFaint, fontSize: "10px" }}>
+            V10 宪法：AI 仅生成建议，所有动作由店长人工确认
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
