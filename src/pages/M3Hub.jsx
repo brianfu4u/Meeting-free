@@ -1,6 +1,7 @@
 /**
- * Clinic OS V9 M3 — 智能中枢交互页
- * 店长可手动触发三大 LLM 技能，查看产出与执行日志。
+ * Clinic OS V10 M3 — 智能中枢交互页
+ * 店长手动触发三大 LLM 技能，AI 仅生成建议（AttentionItem），
+ * 店长在 Dashboard 注意力队列确认后才产生实际系统变更。
  */
 
 import React, { useState, useCallback } from "react";
@@ -20,7 +21,7 @@ const SKILLS = [
     name: "任务草案生成",
     code: "TaskDraftSkill",
     anchor: "A3 系统逻辑触发",
-    desc: "扫描卡滞患者 + 空闲员工，LLM 生成调度任务草案，写入待审批队列",
+    desc: "扫描卡滞患者 + 空闲员工，LLM 生成调度建议，写入注意力队列待店长决策",
     icon: Zap,
     color: C.cyan,
     run: runTaskDraftSkill,
@@ -30,7 +31,7 @@ const SKILLS = [
     name: "全岗巡检",
     code: "PatrolSkill",
     anchor: "A3 系统逻辑触发",
-    desc: "扫描全部实体（患者/员工/库存），LLM 识别异常并生成告警",
+    desc: "扫描全部实体（患者/员工/库存），LLM 识别异常生成建议，写入注意力队列",
     icon: FileSearch,
     color: C.amber,
     run: runPatrolSkill,
@@ -40,7 +41,7 @@ const SKILLS = [
     name: "证据链预审",
     code: "EvidenceEvalSkill",
     anchor: "A1 交叉验证",
-    desc: "读取待评估证据，LLM 预审结论（合格/不足/不合格），更新证据状态",
+    desc: "读取待评估证据，LLM 预审结论；不足/不合格证据触发店长复核建议",
     icon: ShieldCheck,
     color: C.purple,
     run: runEvidenceEvalSkill,
@@ -85,8 +86,8 @@ export default function M3Hub() {
         <div className="flex items-center gap-2">
           <Brain size={16} style={{ color: C.cyan }} />
           <div>
-            <div className="text-sm font-bold" style={{ color: C.text }}>M3 智能中枢 · Intelligence Hub</div>
-            <div className="text-xs" style={{ color: C.faint }}>三大 LLM 技能 · 因果链驱动 · 产出写入实体</div>
+            <div className="text-sm font-bold" style={{ color: C.text }}>M3 智能中枢 · Intelligence Hub (V10)</div>
+            <div className="text-xs" style={{ color: C.faint }}>AI 仅生成建议 · 店长在注意力队列决策后才落地</div>
           </div>
         </div>
       </div>
