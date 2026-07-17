@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       progress: "progress_reported",
       completion: "completion_reported",
     };
-    const event_id = `${clinic_id}/staff-pad/${staff_id}/${eventTypeMap[report_type]}`;
+    const event_id = `${clinic_id}/staff-pad/${staff_id}/${eventTypeMap[report_type]}_${Date.now()}`;
 
     // ── 2. 采集层：归一化附件，不做推理 ──────────────────────────────────────
     const atts = Array.isArray(attachments) ? attachments : [];

@@ -76,6 +76,29 @@ export function useRevenueTargets() {
   });
 }
 
+export function useAttentionItems() {
+  return useQuery({
+    queryKey: ["attentionItems", CLINIC_ID],
+    queryFn: async () => {
+      const list = await base44.entities.AttentionItem.filter({ clinic_id: CLINIC_ID, status: "open" }, "-generated_at", 30);
+      return list;
+    },
+    refetchInterval: 10000,
+  });
+}
+
+export function useWorkflowSnapshots(status = "active") {
+  return useQuery({
+    queryKey: ["workflowSnapshots", CLINIC_ID, status],
+    queryFn: async () => {
+      const query = status === "all" ? { clinic_id: CLINIC_ID } : { clinic_id: CLINIC_ID, status };
+      const list = await base44.entities.WorkflowSnapshot.filter(query, "-generated_at", 20);
+      return list;
+    },
+    refetchInterval: 15000,
+  });
+}
+
 export function useClinicConfig() {
   return useQuery({
     queryKey: ["clinicConfig", CLINIC_ID],

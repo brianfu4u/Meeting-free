@@ -4,6 +4,8 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
 import FourDimensionsPanel from "@/components/dashboard/FourDimensionsPanel";
 import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
+import AttentionQueue from "@/components/dashboard/AttentionQueue";
+import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import {
   EVENT_STREAM_INITIAL,
@@ -154,8 +156,14 @@ function DashboardInner() {
             <FourDimensionsPanel onOpenDimension={setActiveDimension} />
           </div>
 
+          {/* V10 双层架构：注意力队列（战术）+ 工作流快照（战略）*/}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <AttentionQueue />
+            <WorkflowSnapshotPanel />
+          </div>
+
           {/* 实时事件流 — 全宽，按时间滚动 */}
-          <div style={{ height: "calc(100vh - 360px)", minHeight: "420px" }}>
+          <div style={{ height: "calc(100vh - 520px)", minHeight: "320px" }}>
             <EventStream
               events={events}
               pendingAction={pendingAction}
