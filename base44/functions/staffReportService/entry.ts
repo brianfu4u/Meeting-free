@@ -15,6 +15,54 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
  * → LLM 分析 → AttentionItem（建议卡片，仅供店长决策）
  * → 店长 execute 后 → Task 才被创建（由前端/Manager 动作触发，非本服务）
  */
+// ── EvidenceNormalizer（采集层独立模块）────────────────────────────────
+// V10 宪法：采集层只做证据归一化与不可变存档，不做任何推理。
+// 推理层（Recommendation）由后续 LLM 步骤单独负责，与本模块解耦。
+
+type Attachment = { type?: string; url?: string; transcript?: string; name?: string };
+
+function normalizeAttachments(raw: unknown): Attachment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (a): a is Attachment => !!a && typeof a === "object" && !!(a as Attachment).url,
+  );
+}
+
+function classifyEvidenceType(att: Attachment): "image" | "screenshot" | "voice" | "file" {
+  if (att.type === "voice") return "voice";
+  if (att.type === "file") return "file";
+  if (att.type === "screenshot") return "screenshot";
+  return "image";
+}
+
+async function archiveEvidence(
+  svc: any,
+  clinic_id: string,
+  task_id: string | null,
+  event_id: string,
+  atts: Attachment[],
+  staff_id: string,
+  now: string,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const att of atts) {
+    const ev = await svc.entities.EvidenceItem.create({
+      clinic_id,
+      task_id: task_id || null,
+      version_id: `v-${event_id}`,
+      submission_count: 1,
+      evidence_type: classifyEvidenceType(att),
+      file_url: att.url as string,
+      submitted_at: now,
+      submitted_by: staff_id,
+      eval_result: "pending",
+      eval_notes: att.transcript ? `语音转写：${att.transcript}` : null,
+    });
+    ids.push(ev.id);
+  }
+  return ids;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -53,28 +101,11 @@ Deno.serve(async (req) => {
     };
     const event_id = `${clinic_id}/staff-pad/${staff_id}/${eventTypeMap[report_type]}_${Date.now()}`;
 
-    // ── 2. 采集层：归一化附件，不做推理 ──────────────────────────────────────
-    const atts = Array.isArray(attachments) ? attachments : [];
+    // ── 2. 采集层：归一化附件（EvidenceNormalizer 独立模块）──────────────────
+    const atts = normalizeAttachments(attachments);
 
-    // ── 3. 证据存档：每个附件创建 EvidenceItem（不可变，不做推理）───────────
-    const evidenceIds: string[] = [];
-    for (const att of atts) {
-      if (att.url) {
-        const ev = await svc.entities.EvidenceItem.create({
-          clinic_id,
-          task_id: task_id || null,
-          version_id: `v-${event_id}`,
-          submission_count: 1,
-          evidence_type: att.type === "voice" ? "voice" : att.type === "file" ? "file" : "image",
-          file_url: att.url,
-          submitted_at: now,
-          submitted_by: staff_id,
-          eval_result: "pending",
-          eval_notes: att.transcript ? `语音转写：${att.transcript}` : null,
-        });
-        evidenceIds.push(ev.id);
-      }
-    }
+    // ── 3. 证据存档：EvidenceItem 不可变存档（不推理）────────────────────────
+    const evidenceIds = await archiveEvidence(svc, clinic_id, task_id || null, event_id, atts, staff_id, now);
 
     // ── 4. 结构化 Event：将汇报转化为 AuditLog 条目（系统语言） ─────────────
     const transcripts = atts.filter((a) => a.transcript).map((a) => a.transcript).join("\n");
