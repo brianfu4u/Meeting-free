@@ -1,23 +1,26 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 
 /**
- * Clinic OS V10 — Pipeline Engine（Clinic Pipeline 引擎）
+ * Clinic OS V10 — Pipeline Engine（列车编组 + 事件流核销引擎）
  *
- * V10 宪法合规说明：
- * - 本函数是「事件流核销 Pipeline」的核心执行器（战术层）
- * - 职责：接收 ScanEvent / StaffReport / 手动触发，判断是否达到压缩触发条件
- * - 压缩触发条件（基于 PatientSession 锚点，避免对非关键流浪费 LLM 积分）：
- *   1. session_stalled：患者在某节点停留超过 stall_timeout_minutes
- *   2. node_completed：关键节点完成（非打卡等简单动作）
- *   3. staff_report：员工汇报触发（含 session_id 锚点时）
- *   4. manual：店长手动触发
- * - 输出：更新 WorkflowSnapshot + 可选生成 AttentionItem（仅建议，不执行）
- * - Sub-Agent 隔离：只处理传入的 session_id，不横向查询其他 session
- * - 无状态处理：每次调用独立，不持有跨请求状态
+ * 两种 trigger 模式：
  *
- * Pipeline 六步检查点：
- * ① 解析（Parse）→ ② 校验（Validate）→ ③ 归档（Persist AuditLog）
- * → ④ 关联（Connect to PatientSession）→ ⑤ 告警判断（Detect）→ ⑥ 自动反馈（Notify）
+ * ① 会话锚点压缩（trigger != "compose"，原有逻辑）
+ *    - 接收 ScanEvent / StaffReport / 手动触发，对单条 PatientSession 旅程做语义压缩
+ *    - 输出：更新 WorkflowSnapshot + 可选 AttentionItem
+ *
+ * ② 语义编组（trigger === "compose"，V10 新增）
+ *    - 处理「游离事件」：未明确归属患者流的碎片（游离车厢）
+ *    - 读取全店 SPEC 编组规则摘要（来自 SystemSpec）作为 LLM 上下文
+ *    - 读取当前所有活跃工作流（火车）列表
+ *    - LLM 判断：挂载到既有火车 / 独立成车厢待手动调度 / 开启新工作流
+ *    - 高置信度（≥0.7）自动挂载（仅元数据组织，非运营决策）
+ *    - 低置信度/孤立 → 生成 AttentionItem，建议店长在手动调度站处理
+ *
+ * V10 宪法：
+ * - 编组挂载属于元数据组织（pipeline 本职），非运营状态变更，可自动执行
+ * - 仍不创建 OperationalTask / 不修改 clinic 运行状态
+ * - 孤立/冲突时仅产出 AttentionItem 建议
  */
 Deno.serve(async (req) => {
   try {
@@ -26,14 +29,194 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: "未登录" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
-    const { session_id, trigger, clinic_id: bodyClinicId, staff_report_text } = body || {};
-
-    if (!session_id) {
-      return Response.json({ error: "session_id 必填（PatientSession 锚点）" }, { status: 400 });
-    }
+    const { session_id, trigger, clinic_id: bodyClinicId, staff_report_text, event_id, raw_event } = body || {};
 
     const svc = base44.asServiceRole;
     const now = new Date().toISOString();
+
+    // ════════════════════════════════════════════════════════════════════
+    // ② 语义编组模式：游离事件 → 火车挂载决策
+    // ════════════════════════════════════════════════════════════════════
+    if (trigger === "compose") {
+      if (!bodyClinicId) return Response.json({ error: "compose 模式需 clinic_id" }, { status: 400 });
+      const clinic_id = bodyClinicId;
+
+      // ── 取待编组游离事件：优先 event_id 查 AuditLog，否则用 raw_event ──────
+      let composeEvent: Record<string, unknown> | null = null;
+      let composeEventId = "";
+      if (event_id) {
+        const logs = await svc.entities.AuditLog.filter({ clinic_id, event_id }, "-timestamp", 1);
+        composeEvent = logs[0] || null;
+        composeEventId = event_id;
+      } else if (raw_event) {
+        composeEventId = `${clinic_id}/compose/raw_${Date.now()}`;
+        composeEvent = {
+          event_id: composeEventId,
+          timestamp: (raw_event as Record<string, unknown>).timestamp || now,
+          source_agent: (raw_event as Record<string, unknown>).source_agent || "Unknown",
+          trigger_type: (raw_event as Record<string, unknown>).trigger_type || "UNKNOWN",
+          payload: (raw_event as Record<string, unknown>).payload || {},
+        };
+      } else {
+        return Response.json({ error: "compose 模式需 event_id 或 raw_event" }, { status: 400 });
+      }
+
+      // ── 归档编组触发本身 ─────────────────────────────────────────────────
+      const pipelineEventId = `${clinic_id}/pipeline-engine/compose/${composeEventId}/${Date.now()}`;
+      await svc.entities.AuditLog.create({
+        clinic_id,
+        event_id: pipelineEventId,
+        timestamp: now,
+        source_agent: "PipelineEngine_V10",
+        trigger_type: "PIPELINE_COMPOSE",
+        payload: { compose_event_id: composeEventId, mode: "composition" },
+      });
+
+      // ── 加载 SPEC 编组规则摘要（列车连接规则） ─────────────────────────────
+      const specs = await svc.entities.SystemSpec.filter({ clinic_id }, "department", 100);
+      const specContext = specs
+        .map((s) => s.sop_digest || `[${s.department_name} 暂无摘要]`)
+        .join("\n\n");
+
+      // ── 加载活跃火车（active/stalled 工作流） ─────────────────────────────
+      const allSnapshots = await svc.entities.WorkflowSnapshot.filter({ clinic_id }, "-generated_at", 50);
+      const activeTrains = allSnapshots.filter((t) => t.status === "active" || t.status === "stalled");
+      const trainContext = activeTrains.map((t, i) => ({
+        index: i + 1,
+        snapshot_id: t.id,
+        patient_name: t.patient_name || "未知",
+        business_line: t.business_line,
+        current_node: t.current_node || null,
+        nodes_completed: (t.nodes_completed || []).join("→"),
+        llm_summary: t.llm_summary || "",
+        total_elapsed_minutes: t.total_elapsed_minutes || 0,
+      }));
+
+      // ── LLM 编组决策（列车编组代理） ──────────────────────────────────────
+      let composeDecision: Record<string, unknown> = {};
+      try {
+        composeDecision = await svc.integrations.Core.InvokeLLM({
+          prompt: `你是 Clinic OS V10 的「列车编组代理」。
+
+任务：判断一个"游离事件"（未明确归属患者流的碎片/游离车厢）应该挂载到哪列"火车"（活跃工作流），还是作为独立车厢等待店长手动调度。
+
+判断依据（按优先级）：
+1. SPEC 编组规则：该类事件按手册应处于哪条流的哪个节点
+2. 时空重合：事件时间戳与某活跃火车的当前节点时间接近
+3. 角色逻辑：事件来源员工所属部门与某火车的业务线匹配
+
+【全店编组规则摘要（SPEC）】
+${specContext || "（暂无 SPEC，请提示店长加载）"}
+
+【当前活跃火车】
+${trainContext.length === 0 ? "（无活跃工作流）" : JSON.stringify(trainContext, null, 2)}
+
+【待编组游离事件】
+事件ID: ${composeEventId}
+来源Agent: ${composeEvent.source_agent}
+事件类型: ${composeEvent.trigger_type}
+时间: ${composeEvent.timestamp}
+负载: ${JSON.stringify(composeEvent.payload || {}).slice(0, 600)}
+
+请输出 JSON：
+{
+  "target_snapshot_id": "应挂载的 snapshot_id（无匹配则为空字符串）",
+  "target_train_index": 匹配的火车序号（无则0）,
+  "suggested_node": "该事件在工作流中对应的节点名",
+  "confidence": 0~1 的置信度,
+  "composition_type": "attach（挂载到既有火车）| orphan（独立成车厢，待店长手动调度）| new_train（建议开启新工作流）",
+  "reasoning": "编组推理过程（依据 SPEC 规则与时空重合，≤80字）",
+  "needs_manager_dispatch": true或false（低置信度或孤立时建议店长手动调度）
+}`,
+          response_json_schema: {
+            type: "object",
+            properties: {
+              target_snapshot_id: { type: "string" },
+              target_train_index: { type: "number" },
+              suggested_node: { type: "string" },
+              confidence: { type: "number" },
+              composition_type: { type: "string" },
+              reasoning: { type: "string" },
+              needs_manager_dispatch: { type: "boolean" },
+            },
+          },
+        });
+      } catch {
+        composeDecision = {
+          composition_type: "orphan",
+          confidence: 0,
+          needs_manager_dispatch: true,
+          reasoning: "编组 LLM 调用失败，降级为孤立车厢待手动调度",
+          target_snapshot_id: "",
+        };
+      }
+
+      const confidence = Number(composeDecision.confidence) || 0;
+      const AUTO_ATTACH_THRESHOLD = 0.7;
+      let attached = false;
+      let attentionItemId: string | null = null;
+
+      // ── 高置信度且明确目标 → 自动挂载（元数据组织，非运营决策） ─────────────
+      if (
+        composeDecision.composition_type === "attach" &&
+        composeDecision.target_snapshot_id &&
+        confidence >= AUTO_ATTACH_THRESHOLD
+      ) {
+        const target = activeTrains.find((t) => t.id === composeDecision.target_snapshot_id);
+        if (target) {
+          await svc.entities.WorkflowSnapshot.update(target.id, {
+            audit_log_ids: [...(target.audit_log_ids || []), composeEventId, pipelineEventId],
+          });
+          attached = true;
+        }
+      }
+
+      // ── 孤立 / 低置信度 → 生成 AttentionItem，建议店长手动调度 ──────────────
+      if (!attached) {
+        const attn = await svc.entities.AttentionItem.create({
+          clinic_id,
+          session_id: null,
+          attention_type: "journey_gap",
+          urgency: confidence < 0.4 ? "red" : "yellow",
+          title: `游离事件待调度:${String(composeEvent.trigger_type || "").slice(0, 14)}`,
+          reasoning: (composeDecision.reasoning as string) || "",
+          evidence_ids: [],
+          event_ids: [composeEventId, pipelineEventId],
+          recommendation:
+            composeDecision.composition_type === "new_train"
+              ? "建议店长确认是否开启新工作流"
+              : "建议店长在手动调度站将该事件拖至对应工作流",
+          status: "open",
+          generated_at: now,
+        });
+        attentionItemId = attn.id;
+      }
+
+      return Response.json({
+        ok: true,
+        mode: "compose",
+        compose_event_id: composeEventId,
+        composition_type: composeDecision.composition_type,
+        confidence,
+        suggested_node: composeDecision.suggested_node || null,
+        target_snapshot_id: attached ? composeDecision.target_snapshot_id : null,
+        attached,
+        attention_item_id: attentionItemId,
+        reasoning: composeDecision.reasoning,
+        pipeline_event_id: pipelineEventId,
+        active_trains_count: activeTrains.length,
+        v10_note: attached
+          ? "高置信度自动挂载（元数据组织，非运营决策）"
+          : "低置信度/孤立，已生成 AttentionItem 建议店长手动调度",
+      });
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // ① 会话锚点压缩模式（原有逻辑）
+    // ════════════════════════════════════════════════════════════════════
+    if (!session_id) {
+      return Response.json({ error: "session_id 必填（PatientSession 锚点），或使用 trigger=compose" }, { status: 400 });
+    }
 
     // ── ① 解析（Parse）：获取 PatientSession 锚点 ──────────────────────────
     let session;
@@ -81,7 +264,6 @@ Deno.serve(async (req) => {
     const totalElapsedMinutes = Math.round((Date.now() - arrivalTime) / 60000);
 
     // ── ⑤ 告警判断（Detect）：LLM 语义压缩，判断是否需要 AttentionItem ─────
-    // 只有含 PatientSession 锚点的关键流才进入压缩 Pipeline（节约 LLM 积分）
     const scanSummary = scanEvents.slice(0, 8).map((e) => `[${e.node_name}] ${new Date(e.scan_time).toLocaleTimeString("zh-CN", { hour12: false })} gate:${e.gate_result}`).join("\n");
     const stageSummary = Object.entries(stageDurations).map(([n, m]) => `${n}: ${m}分钟`).join("、");
     const clinicConfigList = await svc.entities.ClinicConfig.filter({ clinic_id }, "-updated_date", 1);
