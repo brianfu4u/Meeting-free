@@ -10,6 +10,7 @@ import {
   EVENT_STREAM_QUEUE,
   NAV_ITEMS,
 } from "@/data/mockData";
+import { useLiveOpsFeed } from "@/hooks/useLiveOpsFeed";
 
 let eventIdCounter = 20;
 
@@ -23,6 +24,12 @@ function DashboardInner() {
   const [actionDone, setActionDone] = useState(false);
   const [queueIndex, setQueueIndex] = useState(0);
   const [overallHealth, setOverallHealth] = useState(78);
+
+  // 实时事件订阅：员工打卡 / 汇报 / 扫码 / 告警秒级回显到中央看板
+  const handleLiveEvent = useCallback((ev) => {
+    setEvents((prev) => [ev, ...prev].slice(0, 20));
+  }, []);
+  useLiveOpsFeed(handleLiveEvent);
 
   // Auto-append events from queue
   useEffect(() => {
