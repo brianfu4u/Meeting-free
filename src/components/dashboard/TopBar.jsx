@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
@@ -173,6 +173,17 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         >
           <Wrench size={13} style={{ color: "#FB923C" }} />
           <span className="text-xs font-semibold" style={{ color: "#FB923C", fontSize: "10px" }}>开发总监</span>
+        </Link>
+
+        {/* Staff management link */}
+        <Link
+          to="/staff-mgmt"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(100,116,139,0.12)", border: "1px solid rgba(100,116,139,0.25)" }}
+          title="员工管理 · 邀请注册与花名册"
+        >
+          <Users size={13} style={{ color: "#94A3B8" }} />
+          <span className="text-xs font-semibold" style={{ color: "#94A3B8", fontSize: "10px" }}>员工管理</span>
         </Link>
 
         {/* Live indicator */}

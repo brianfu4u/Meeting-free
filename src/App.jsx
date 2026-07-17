@@ -16,6 +16,7 @@ import V9CaseFlow from "./pages/V9CaseFlow";
 import M3Hub from "./pages/M3Hub";
 import DevDirector from "./pages/DevDirector";
 import StaffPad from "./pages/StaffPad";
+import StaffManagement from "./pages/StaffManagement";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -52,6 +53,7 @@ const AuthenticatedApp = () => {
       <Route path="/m3-hub" element={<M3Hub />} />
       <Route path="/dev-director" element={<DevDirector />} />
       <Route path="/staff-pad" element={<StaffPad />} />
+      <Route path="/staff-mgmt" element={<StaffManagement />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
