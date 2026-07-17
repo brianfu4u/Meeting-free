@@ -190,3 +190,14 @@
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
+
+@keyframes marqueeScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marqueeScroll 36s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}

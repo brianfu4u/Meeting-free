@@ -93,13 +93,17 @@ Deno.serve(async (req) => {
     }
     const clinic_id = staff.clinic_id;
     const now = new Date().toISOString();
-    // V10 Event Bus 命名规范：{clinic_id}/{terminal_type}/{staff_id}/{event_type}
+    // 部门代号：role_group 映射为短码（一线诊疗/前台销售/后台支撑）
+    const DEPT_CODE = { medical_core: "MED", front_sales: "FRT", back_support: "BCK" };
+    const deptCode = DEPT_CODE[staff.role_group] || "GEN";
+    const ymd = now.slice(0, 10).replace(/-/g, "");
+    // V10 事件流编号：{yyyymmdd}/{clinic_id}/{dept}/{staff_id}/{event_type}_{ts}
     const eventTypeMap = {
       new_event: "report_submitted",
       progress: "progress_reported",
       completion: "completion_reported",
     };
-    const event_id = `${clinic_id}/staff-pad/${staff_id}/${eventTypeMap[report_type]}_${Date.now()}`;
+    const event_id = `${ymd}/${clinic_id}/${deptCode}/${staff_id}/${eventTypeMap[report_type]}_${Date.now()}`;
 
     // ── 2. 采集层：归一化附件（EvidenceNormalizer 独立模块）──────────────────
     const atts = normalizeAttachments(attachments);
@@ -222,6 +226,7 @@ Deno.serve(async (req) => {
 汇报类型：${report_type}
 汇报内容：${combinedText || "（仅附件，无文字）"}
 员工：${staff.staff_name}（${staff.role}）
+部门代号：${deptCode}（${staff.assigned_zone || staff.role_group || "未分配"}）
 附件数量：${atts.length}
 
 输出 JSON：
@@ -229,6 +234,7 @@ Deno.serve(async (req) => {
   "category": "任务进度|异常事件|资源需求|人员协作|其他",
   "urgency": "yellow|red",
   "summary": "一句话摘要（≤30字）",
+  "marquee_label": "供看板走马灯播放的极简动作标签，格式'部门+动作+对象'，≤12字，例：前台完成新挂号 / 特检室完成角膜地形图 / OK镜试戴完成预检",
   "needs_manager_attention": true或false,
   "attention_title": "需要店长注意时的标题（≤20字）",
   "recommendation": "建议店长采取的行动（≤50字）",
@@ -240,6 +246,7 @@ Deno.serve(async (req) => {
               category: { type: "string" },
               urgency: { type: "string", enum: ["yellow", "red"] },
               summary: { type: "string" },
+              marquee_label: { type: "string" },
               needs_manager_attention: { type: "boolean" },
               attention_title: { type: "string" },
               recommendation: { type: "string" },

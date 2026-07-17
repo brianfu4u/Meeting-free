@@ -8,6 +8,7 @@ import AttentionQueue from "@/components/dashboard/AttentionQueue";
 import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
 import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
+import EventStreamMarquee from "@/components/dashboard/EventStreamMarquee";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
 import {
@@ -115,6 +116,11 @@ function DashboardInner() {
                 Clinic OS V10 · 实时驱动
               </div>
             </div>
+          </div>
+
+          {/* 事件流走马灯 — 待核销事件循环播放 */}
+          <div className="mb-4">
+            <EventStreamMarquee />
           </div>
 
           {/* 四维现实空间指挥台 */}
