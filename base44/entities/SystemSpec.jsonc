@@ -1,0 +1,56 @@
+{
+  "name": "SystemSpec",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "department": {
+      "type": "string",
+      "description": "\u90e8\u95e8\u533a\u57df\u4ee3\u53f7\uff08\u5982 reception/optometry/medical \u7b49\uff09\uff0c\u540c\u4e00\u95e8\u5e97\u5185\u552f\u4e00"
+    },
+    "department_name": {
+      "type": "string",
+      "description": "\u90e8\u95e8\u4e2d\u6587\u540d\u79f0"
+    },
+    "department_group": {
+      "type": "string",
+      "enum": [
+        "clinical",
+        "support",
+        "management"
+      ],
+      "description": "\u90e8\u95e8\u5206\u7ec4\uff1a\u4e00\u7ebf\u8bca\u7597/\u540e\u52e4\u652f\u6491/\u7ba1\u7406\u8d4b\u80fd"
+    },
+    "sop_document": {
+      "type": "string",
+      "description": "SOP \u64cd\u4f5c\u624b\u518c\u5168\u6587\uff08Markdown \u683c\u5f0f\uff0c\u51fa\u5382\u9884\u7f6e\u6807\u51c6\u7248\uff0c\u4ec5\u5e97\u957f\u53ef\u66f4\u65b0\uff09"
+    },
+    "sop_digest": {
+      "type": "string",
+      "description": "LLM \u538b\u7f29\u540e\u7684\u7f16\u7ec4\u89c4\u5219\u6458\u8981\uff0c\u4f9b Agent\uff08pipelineEngine \u7f16\u7ec4\u4ee3\u7406\uff09\u5feb\u901f\u8bfb\u53d6\uff0c\u65e0\u9700\u91cd\u8bfb\u5168\u6587"
+    },
+    "spec_version": {
+      "type": "number",
+      "default": 1,
+      "description": "\u7248\u672c\u53f7\uff0c\u6bcf\u6b21 reload\uff08\u91cd\u65b0\u751f\u6210\u6458\u8981\uff09+1"
+    },
+    "updated_by": {
+      "type": "string",
+      "description": "\u6700\u540e\u66f4\u65b0\u4eba\uff08\u5e97\u957f user_id\uff09"
+    },
+    "loaded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u6700\u8fd1\u4e00\u6b21\u91cd\u65b0\u52a0\u8f7d\uff08\u751f\u6210 digest\uff09\u65f6\u95f4"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "department",
+    "department_name",
+    "department_group",
+    "sop_document"
+  ]
+}
