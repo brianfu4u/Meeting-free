@@ -7,6 +7,7 @@ import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
 import AttentionQueue from "@/components/dashboard/AttentionQueue";
 import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
 import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
+import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
 import {
@@ -130,6 +131,11 @@ function DashboardInner() {
           {/* 工作流闭环视图 — 全宽，店长闭环决策入口 */}
           <div className="mb-4">
             <WorkflowClosureView />
+          </div>
+
+          {/* 日结复盘 — 全宽，下班前一键总览 */}
+          <div className="mb-4">
+            <DailyReviewPanel />
           </div>
 
           {/* 系统事件流 — 全宽，按时间滚动 */}
