@@ -174,12 +174,48 @@ Deno.serve(async (req) => {
     let aiParsed: Record<string, unknown> = {};
     let attentionItemId: string | null = null;
 
+    // ── 5.1 非结构化资料解析：视觉识图 + 结构化文件抽取 ────────────────────
+    // V10 子 Agent 沙箱：采集层只做"证据 → 可读上下文"的转译，不做推理。
+    // 视觉类（image/screenshot）与文档类（file: pdf/图片）URL 直接喂视觉模型；
+    // 结构化表格类（csv/xlsx/json/html）走 ExtractDataFromUploadedFile 抽取行数据。
+    const visionUrls: string[] = atts
+      .filter((a) => a.type !== "voice")
+      .map((a) => a.url)
+      .filter((u): u is string => !!u);
+
+    let structuredContext = "";
+    const structuredAtts = atts.filter(
+      (a) => a.type === "file" && /\.(csv|xlsx|xls|json|html)$/i.test(`${a.name || ""} ${a.url || ""}`),
+    );
+    for (const sa of structuredAtts.slice(0, 2)) {
+      try {
+        const extracted = await svc.integrations.Core.ExtractDataFromUploadedFile({
+          file_url: sa.url as string,
+          json_schema: {
+            type: "object",
+            properties: {
+              rows: { type: "array", items: { type: "object", additionalProperties: true } },
+            },
+          },
+        });
+        if (extracted && extracted.status === "success" && extracted.output) {
+          const compact = JSON.stringify(extracted.output).slice(0, 1200);
+          structuredContext += `\n[结构化文件 ${sa.name || ""} 抽取行数据]\n${compact}`;
+        }
+      } catch {
+        // 抽取失败则降级，仅靠视觉模型识图
+      }
+    }
+
     if (combinedText || atts.length > 0) {
       try {
         const llmRes = await svc.integrations.Core.InvokeLLM({
+          file_urls: visionUrls.length > 0 ? visionUrls : undefined,
           prompt: `你是视光诊所运营助理（Clinic OS V10）。
 
 宪法约束：你的输出只是建议，不产生任何实际系统变更。所有决策由店长人工确认后才执行。
+
+你可能收到附带的图片/截图/PDF（file_urls）及结构化表格抽取结果，请结合视觉与文本一并研判。
 
 请分析以下员工工作汇报，判断是否需要引起店长注意：
 
@@ -197,7 +233,7 @@ Deno.serve(async (req) => {
   "attention_title": "需要店长注意时的标题（≤20字）",
   "recommendation": "建议店长采取的行动（≤50字）",
   "reasoning": "为什么需要或不需要店长关注的推理过程"
-}`,
+}${structuredContext ? "\n\n[结构化附件抽取]\n" + structuredContext : ""}`,
           response_json_schema: {
             type: "object",
             properties: {
