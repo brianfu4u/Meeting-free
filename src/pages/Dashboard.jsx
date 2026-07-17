@@ -6,6 +6,7 @@ import FourDimensionsPanel from "@/components/dashboard/FourDimensionsPanel";
 import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
 import AttentionQueue from "@/components/dashboard/AttentionQueue";
 import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
+import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
 import {
@@ -126,8 +127,13 @@ function DashboardInner() {
             <WorkflowSnapshotPanel />
           </div>
 
+          {/* 工作流闭环视图 — 全宽，店长闭环决策入口 */}
+          <div className="mb-4">
+            <WorkflowClosureView />
+          </div>
+
           {/* 系统事件流 — 全宽，按时间滚动 */}
-          <div style={{ height: "calc(100vh - 520px)", minHeight: "320px" }}>
+          <div style={{ height: "calc(100vh - 760px)", minHeight: "260px" }}>
             <EventStream events={liveEvents} loading={auditQ.isLoading} />
           </div>
         </div>
