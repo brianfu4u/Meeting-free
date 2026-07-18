@@ -205,30 +205,39 @@ Deno.serve(async (req) => {
     }
 
     // ── migrate：幂等迁移同店所有 GuessPolicy 的 hard_guardrails ──────────
+    // dry_run=true 时仅统计不写库；返回 scanned/migrated/skipped/failed/failed_record_ids。
+    // 幂等：已结构化（迁移后与现有一致）的记录计入 skipped，不重复修改；二次运行 migrated 必为 0。
     if (action === "migrate") {
       if (user.role !== "admin") {
         return Response.json({ error: "仅店长可执行迁移" }, { status: 403 });
       }
       if (!clinic_id) return Response.json({ error: "clinic_id 必填" }, { status: 400 });
+      const dry_run = body.dry_run === true;
       const all = await svc.entities.GuessPolicy.filter({ clinic_id });
       let scanned = all.length;
       let migrated = 0;
+      let skipped = 0;
       let failed = 0;
-      const failed_ids: string[] = [];
+      const failed_record_ids: string[] = [];
       for (const rec of all) {
         try {
           const current = rec.hard_guardrails || [];
           const migratedGuardrails = migrateHardGuardrails(current);
-          // 幂等：若迁移后与现有一致，则不重复修改
-          if (deepEqual(migratedGuardrails, current)) continue;
-          await svc.entities.GuessPolicy.update(rec.id, { hard_guardrails: migratedGuardrails });
+          // 幂等：若迁移后与现有一致，则计入 skipped，不重复修改
+          if (deepEqual(migratedGuardrails, current)) {
+            skipped++;
+            continue;
+          }
+          if (!dry_run) {
+            await svc.entities.GuessPolicy.update(rec.id, { hard_guardrails: migratedGuardrails });
+          }
           migrated++;
         } catch (e) {
           failed++;
-          failed_ids.push(rec.id);
+          failed_record_ids.push(rec.id);
         }
       }
-      return Response.json({ ok: true, scanned, migrated, failed, failed_ids });
+      return Response.json({ ok: true, dry_run, scanned, migrated, skipped, failed, failed_record_ids });
     }
 
     return Response.json({ error: "action 必须为 publish / update / migrate" }, { status: 400 });
