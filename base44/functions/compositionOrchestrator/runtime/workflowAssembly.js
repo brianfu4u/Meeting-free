@@ -1,4 +1,4 @@
-// GENERATED_PHASE2_MIRROR source=src/lib/composition/workflowAssembly.js blob=66898b0c45511f99051b187f859a241bfccd3cfe
+// GENERATED_PHASE2_MIRROR source=src/lib/composition/workflowAssembly.js blob=223c1d41b963d21f330a05d66c4fcd7605a80a4f
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS V10 — Workflow Assembly（修订版 R2）
@@ -103,6 +103,7 @@ function normalizeHypothesis(h, { clinicId, policyVersion, assemblyRunId, cluste
   );
 
   return {
+    source_proposal_id: sourceProposalId,
     workflow_hypothesis_id: buildHypothesisId(sourceProposalId, idx),
     workflow_family: h.workflow_family || cluster?.workflow_family_hint || null,
     composition_type: h.composition_type || cluster?.composition_type || "orphan",
