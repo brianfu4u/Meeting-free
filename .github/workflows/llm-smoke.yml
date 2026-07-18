@@ -1,0 +1,26 @@
+name: LLM Smoke (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      base44_endpoint:
+        description: "Base44 guessPolicyService function URL"
+        required: true
+      base44_token:
+        description: "Base44 auth token (Bearer)"
+        required: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Real LLM Assembly Smoke (imports actual ASSEMBLY_JSON_SCHEMA)
+        env:
+          BASE44_ENDPOINT: ${{ github.event.inputs.base44_endpoint }}
+          BASE44_TOKEN: ${{ github.event.inputs.base44_token }}
+        run: node src/lib/composition/llmSmokeCi.mjs
