@@ -135,6 +135,8 @@ describe("Phase 3 attention descriptor", () => {
       evidenceFactCardIds: ["f1"],
       generatedAt: "2026-07-18T10:00:00.000Z",
     });
+    expect(result.attention_type).toBe("evidence_missing");
+    expect(result.urgency).toBe("yellow");
     expect(result.title).toBeTruthy();
     expect(result.recommendation).toBeTruthy();
     expect(result.generated_at).toBeTruthy();

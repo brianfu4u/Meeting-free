@@ -1,3 +1,5 @@
+// GENERATED_PHASE3_MIRROR source=src/lib/phase3/orchestratorCore.js blob=c6403ac98dce71a441e999e3e7606ba4b9363685
+// Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS Phase 3 — Composition Orchestrator Core
  *
@@ -10,7 +12,7 @@ import {
   assertAttachCompleteness,
   canPerform,
   computeRunIdempotencyKey,
-} from "./contract";
+} from "./phase3Contract.js";
 
 const RUN_ERROR_CODES = new Set([
   "authorization_failed",
