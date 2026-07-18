@@ -1,32 +1,39 @@
 /**
- * Clinic OS V10 — Guardrail Validator（修订版 R2）
+ * Clinic OS V10 — Guardrail Validator（修订版 R2.2）
  *
- * R2：
- * - 独立检查：Artifact/目标 Workflow 同租户、引用 ID 真实、Artifact 不重复、主体硬冲突、物理时间不可能；
- * - 结构化 Policy rule_code 执行（switch），禁止自然语言 includes() 作为正式规则；
- * - Tie 或全部阻断 → bestHypothesisId = null + needsManagerDispatch = true；
- * - 校验结果是 needs_manager_dispatch 的唯一来源。
+ * R2.2：
+ * - 主体冲突检查读取 EvidenceFactCard（subject_fingerprint + subject_quality），不假设 Artifact 有 subject_quality；
+ * - Snapshot 存在性 / Tenant / snapshot_version 校验；版本不一致 → stale_proposal 阻断；
+ * - needs_manager_dispatch 唯一来源：假设校验结果 + clustering validation_issues；
+ * - 结构化 rule_code 分发；legacy_text / 未知 rule_code 均阻断（不静默忽略）。
  */
+
+import { KNOWN_RULE_CODES } from "./policyUtils";
 
 export function validateHypotheses(hypotheses, context = {}) {
   const {
     artifacts = [],
     workflows = [],
+    snapshots = [],
+    factCards = [],
     clinicId,
     guessPolicy = {},
     committedArtifactIds = [],
     now = Date.now(),
+    validationIssues = [],
   } = context;
 
   const artifactById = new Map(artifacts.map((a) => [a.id, a]));
   const workflowById = new Map(workflows.map((w) => [w.id, w]));
+  const snapshotById = new Map(snapshots.map((s) => [s.id, s]));
+  const factCardByArtifactId = new Map(factCards.map((fc) => [fc.artifact_id, fc]));
   const committed = new Set(committedArtifactIds);
   const hardRules = guessPolicy.hard_guardrails || [];
 
   const checked = (hypotheses || []).map((h) => {
     const blocks = [
-      ...independentChecks(h, { artifactById, workflowById, clinicId, committed }),
-      ...policyChecks(h, { artifactById, workflowById, hardRules, now }),
+      ...independentChecks(h, { artifactById, workflowById, snapshotById, clinicId, committed }),
+      ...policyChecks(h, { factCardByArtifactId, workflowById, snapshotById, hardRules, now }),
     ];
     return { hypothesis: h, blocked: blocks.length > 0, blocks };
   });
@@ -38,12 +45,15 @@ export function validateHypotheses(hypotheses, context = {}) {
   let needsManagerDispatch = false;
 
   if (ranked.length === 0) {
-    needsManagerDispatch = true; // 全部被硬护栏阻断
+    needsManagerDispatch = true;
   } else if (ranked.length >= 2 && compareHypotheses(ranked[0], ranked[1]) === 0) {
-    needsManagerDispatch = true; // 多候选无法明显区分 → 不默认选第一个
+    needsManagerDispatch = true;
   } else {
     bestHypothesisId = ranked[0].workflow_hypothesis_id;
   }
+
+  // Guardrail 是 needs_manager_dispatch 唯一来源：clustering validation_issues 也汇入
+  if (validationIssues.length > 0) needsManagerDispatch = true;
 
   return {
     checked,
@@ -52,11 +62,11 @@ export function validateHypotheses(hypotheses, context = {}) {
     bestHypothesisId,
     needsManagerDispatch,
     allBlocked: ranked.length === 0,
+    validationIssues,
   };
 }
 
-/** 始终执行的独立完整性检查（不依赖 Policy 配置） */
-function independentChecks(h, { artifactById, workflowById, clinicId, committed }) {
+function independentChecks(h, { artifactById, workflowById, snapshotById, clinicId, committed }) {
   const blocks = [];
   const ordered = h.ordered_artifact_ids || [];
 
@@ -69,7 +79,6 @@ function independentChecks(h, { artifactById, workflowById, clinicId, committed 
     }
   }
 
-  // 簇内 Artifact ID 重复
   if (new Set(ordered).size !== ordered.length) {
     blocks.push({ rule_code: "duplicate_artifact_id" });
   }
@@ -90,6 +99,21 @@ function independentChecks(h, { artifactById, workflowById, clinicId, committed 
     blocks.push({ rule_code: "new_train_with_target" });
   }
 
+  // Snapshot 存在性 / Tenant / snapshot_version
+  if (h.target_snapshot_id) {
+    const snap = snapshotById.get(h.target_snapshot_id);
+    if (!snap) {
+      blocks.push({ rule_code: "target_snapshot_not_found" });
+    } else {
+      if (clinicId && snap.clinic_id && snap.clinic_id !== clinicId) {
+        blocks.push({ rule_code: "cross_tenant_snapshot" });
+      }
+      if (h.target_snapshot_version != null && snap.snapshot_version != null && h.target_snapshot_version !== snap.snapshot_version) {
+        blocks.push({ rule_code: "stale_proposal", expected: h.target_snapshot_version, actual: snap.snapshot_version });
+      }
+    }
+  }
+
   for (const aid of ordered) {
     if (committed.has(aid)) blocks.push({ rule_code: "duplicate_evidence", artifact_id: aid });
   }
@@ -97,18 +121,18 @@ function independentChecks(h, { artifactById, workflowById, clinicId, committed 
   return blocks;
 }
 
-/** Policy 驱动的结构化规则（按 rule_code 分发，禁止 includes() 字符串匹配） */
-function policyChecks(h, { artifactById, workflowById, hardRules, now }) {
+function policyChecks(h, { factCardByArtifactId, workflowById, snapshotById, hardRules, now }) {
   const blocks = [];
   const ordered = h.ordered_artifact_ids || [];
 
   for (const rule of hardRules) {
     switch (rule.rule_code) {
       case "subject_conflict": {
+        // 读取 EvidenceFactCard 的 subject_fingerprint + subject_quality
         const names = ordered
-          .map((id) => artifactById.get(id))
-          .filter((a) => a && a.subject_quality === "high" && a.subject_fingerprint)
-          .map((a) => a.subject_fingerprint.name)
+          .map((aid) => factCardByArtifactId.get(aid))
+          .filter((fc) => fc && fc.subject_quality === "high" && fc.subject_fingerprint)
+          .map((fc) => fc.subject_fingerprint.name)
           .filter(Boolean);
         if (new Set(names).size > 1) blocks.push({ rule_code: "subject_conflict" });
         break;
@@ -117,15 +141,16 @@ function policyChecks(h, { artifactById, workflowById, hardRules, now }) {
         const maxGapMs = (rule.max_gap_minutes ?? 1440) * 60 * 1000;
         const wf = h.target_workflow_id ? workflowById.get(h.target_workflow_id) : null;
         for (const aid of ordered) {
-          const a = artifactById.get(aid);
-          if (!a || !a.captured_at) continue;
-          const t = new Date(a.captured_at).getTime();
+          const fc = factCardByArtifactId.get(aid);
+          const capturedAt = fc?.occurred_at;
+          if (!capturedAt) continue;
+          const t = new Date(capturedAt).getTime();
           if (Number.isNaN(t)) continue;
           if (t > now + 60 * 1000) {
             blocks.push({ rule_code: "time_impossible", artifact_id: aid, reason: "future" });
           }
-          if (wf && wf.arrival_time) {
-            const start = new Date(wf.arrival_time).getTime();
+          if (wf && wf.started_at) {
+            const start = new Date(wf.started_at).getTime();
             if (!Number.isNaN(start) && t < start - maxGapMs) {
               blocks.push({ rule_code: "time_impossible", artifact_id: aid, reason: "before_workflow_start" });
             }
@@ -140,9 +165,16 @@ function policyChecks(h, { artifactById, workflowById, hardRules, now }) {
         }
         break;
       }
-      default:
-        // 未知 rule_code 不执行（不臆测）
+      case "legacy_text": {
+        // 旧数据迁移后的标记：不静默忽略，强制阻断以推动重新编写
+        blocks.push({ rule_code: "legacy_text", original: rule.original || null });
         break;
+      }
+      default: {
+        // 未知 rule_code 不得静默忽略
+        blocks.push({ rule_code: "unknown_rule", attempted: rule.rule_code });
+        break;
+      }
     }
   }
   return blocks;
@@ -154,13 +186,6 @@ function fragmentsExplained(h) {
   return ordered.filter((id) => !unexplained.has(id)).length;
 }
 
-/**
- * 顺序比较（无加权）：
- * 1. 解释碎片数 多者优先
- * 2. 无依据假设 少者优先
- * 3. 矛盾 少者优先
- * 4. 全部相等返回 0（tie）
- */
 export function compareHypotheses(a, b) {
   const fa = fragmentsExplained(a);
   const fb = fragmentsExplained(b);
@@ -176,3 +201,5 @@ export function compareHypotheses(a, b) {
 
   return 0;
 }
+
+export { KNOWN_RULE_CODES };

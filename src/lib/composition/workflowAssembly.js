@@ -38,14 +38,17 @@ export async function assembleWorkflow({
   );
 
   const sortedArtifactIds = [...(cluster.artifact_ids || [])].sort();
-  let source_proposal_id = null;
-  if (clinicId && sortedArtifactIds.length > 0 && policyVersion != null) {
-    source_proposal_id = computeProposalIdempotencyKey({
-      clinicId,
-      sortedArtifactIds,
-      policyVersion,
-    });
+  // R2.7：source_proposal_id 缺失时禁止生成 hypothesis（删除 hyp-0 兜底）
+  if (!clinicId || sortedArtifactIds.length === 0 || policyVersion == null) {
+    throw new Error(
+      "assembleWorkflow: source_proposal_id requires clinic_id + sorted artifact_ids + policy_version"
+    );
   }
+  const source_proposal_id = computeProposalIdempotencyKey({
+    clinicId,
+    sortedArtifactIds,
+    policyVersion,
+  });
 
   const prompt = buildAssemblyPrompt({
     factCards: cardsForCluster,
@@ -85,8 +88,8 @@ export async function assembleWorkflow({
 }
 
 function buildHypothesisId(sourceProposalId, idx) {
-  // 确定性 ID：proposal_id + candidate_index；无 proposal_id 时退化为稳定索引（无随机）
-  return sourceProposalId ? `${sourceProposalId}#h${idx}` : `hyp-${idx}`;
+  // 确定性 ID：proposal_id + candidate_index；source_proposal_id 缺失时禁止生成（见 assembleWorkflow 守卫）
+  return `${sourceProposalId}#h${idx}`;
 }
 
 function normalizeHypothesis(h, { clinicId, policyVersion, assemblyRunId, cluster, sourceProposalId, idx, workflow, snapshot }) {

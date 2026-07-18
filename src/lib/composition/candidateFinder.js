@@ -1,58 +1,67 @@
 /**
- * Clinic OS V10 — Candidate Finder（修订版 R2）
+ * Clinic OS V10 — Candidate Finder（修订版 R2.2）
  *
- * R2：统一通用 Workflow 契约。
- * - 显式绑定用 explicit_workflow_id（artifact.source_workflow_id || factCard.explicit_workflow_id）；
- * - 时空匹配用 captured_at / occurred_at，禁止用 extracted_at 作业务时间；
- * - 影子模式：LLM 输出一律不自动挂接，confidence 仅记录。
+ * R2.2：
+ * - 通用时间契约：temporal_anchors / started_at / last_event_at（替代 arrival_time/node_scan_timestamps）；
+ * - 强制 clinic_id 隔离：仅在同一门店内寻找候选；
+ * - 限制候选数（MAX_CANDIDATES），避免候选爆炸；
+ * - 影子模式：LLM/时空候选一律不自动挂接。
  */
 
 import { PROMPT_VERSIONS } from "./prompts";
 
 const SPATIOTEMPORAL_WINDOW_MIN = 120;
+const MAX_CANDIDATES = 5;
 
-export function deterministicCandidates({ artifact, factCard, workflows }) {
+function collectWorkflowTimes(w) {
+  const times = [];
+  if (Array.isArray(w.temporal_anchors)) times.push(...w.temporal_anchors);
+  if (w.started_at) times.push(w.started_at);
+  if (w.last_event_at) times.push(w.last_event_at);
+  return times
+    .filter(Boolean)
+    .map((t) => new Date(t).getTime())
+    .filter((t) => !Number.isNaN(t));
+}
+
+export function deterministicCandidates({ artifact, factCard, workflows, clinicId }) {
   const source = artifact || factCard;
   if (!source) throw new Error("deterministicCandidates: source required");
   if (!Array.isArray(workflows)) return [];
+
+  // 强制 clinic_id 隔离
+  const scoped = clinicId ? workflows.filter((w) => w.clinic_id === clinicId) : workflows;
   const candidates = [];
 
-  // 1. 明确 ID 匹配（显式绑定，确定性，可自动挂接）
+  // 1. 明确 ID 匹配（确定性，可自动挂接）
   const explicitId = artifact?.source_workflow_id || factCard?.explicit_workflow_id;
   if (explicitId) {
-    const hit = workflows.find((w) => w.id === explicitId);
+    const hit = scoped.find((w) => w.id === explicitId);
     if (hit) {
       candidates.push({ workflow_id: hit.id, method: "explicit_id", score: 1.0, reason: "显式绑定 explicit_workflow_id" });
       return candidates;
     }
   }
 
-  // 2. 时空匹配：仅产生候选，不自动挂接（时间不能单独确定身份）
+  // 2. 时空匹配：通用时间锚点；仅候选，不自动挂接
   const capturedAt = artifact?.captured_at || factCard?.occurred_at;
   if (capturedAt) {
     const ts = new Date(capturedAt).getTime();
     if (!Number.isNaN(ts)) {
-      for (const w of workflows) {
-        const nodeTimes = w.node_scan_timestamps || {};
-        const scanPoints = Object.values(nodeTimes)
-          .filter(Boolean)
-          .map((t) => new Date(t).getTime())
-          .filter((t) => !Number.isNaN(t));
-        if (scanPoints.length === 0 && w.arrival_time) {
-          scanPoints.push(new Date(w.arrival_time).getTime());
-        }
-        const within = scanPoints.some(
-          (pt) => Math.abs(pt - ts) <= SPATIOTEMPORAL_WINDOW_MIN * 60 * 1000
-        );
+      for (const w of scoped) {
+        const times = collectWorkflowTimes(w);
+        const within = times.some((pt) => Math.abs(pt - ts) <= SPATIOTEMPORAL_WINDOW_MIN * 60 * 1000);
         if (within) {
           candidates.push({
             workflow_id: w.id,
             method: "spatiotemporal",
             score: 0.6,
-            reason: `±${SPATIOTEMPORAL_WINDOW_MIN}分钟内存在节点记录（仅候选，不自动挂接）`,
+            reason: `±${SPATIOTEMPORAL_WINDOW_MIN}分钟内存在时间锚点（仅候选，不自动挂接）`,
           });
         }
       }
+      // 限制候选数
+      if (candidates.length > MAX_CANDIDATES) candidates.length = MAX_CANDIDATES;
     }
   }
 
@@ -105,14 +114,9 @@ export async function llmCandidateMatch({ factCard, workflows, invokeLLM }) {
   ];
 }
 
-/**
- * 影子模式编排。
- * - explicit_id：可自动挂接；
- * - spatiotemporal / llm：一律仅候选，linkedWorkflowId=null。
- * 无 llmThreshold，confidence 永不决定挂接。
- */
-export async function resolveWorkflowLink({ artifact, factCard, workflows, invokeLLM }) {
-  const det = deterministicCandidates({ artifact, factCard, workflows });
+export async function resolveWorkflowLink({ artifact, factCard, workflows, invokeLLM, clinicId }) {
+  const scoped = clinicId ? (workflows || []).filter((w) => w.clinic_id === clinicId) : workflows || [];
+  const det = deterministicCandidates({ artifact, factCard, workflows: scoped, clinicId });
   const explicit = det.find((c) => c.method === "explicit_id");
   if (explicit) {
     return { candidates: det, linkedWorkflowId: explicit.workflow_id, method: "explicit_id", needsManagerReview: false };
@@ -120,8 +124,8 @@ export async function resolveWorkflowLink({ artifact, factCard, workflows, invok
 
   let candidates = det.filter((c) => c.method === "spatiotemporal");
   if (invokeLLM && factCard) {
-    const llm = await llmCandidateMatch({ factCard, workflows, invokeLLM });
-    candidates = [...candidates, ...llm];
+    const llm = await llmCandidateMatch({ factCard, workflows: scoped, invokeLLM });
+    candidates = [...candidates, ...llm].slice(0, MAX_CANDIDATES);
   }
 
   return { candidates, linkedWorkflowId: null, method: "candidate_only", needsManagerReview: true };

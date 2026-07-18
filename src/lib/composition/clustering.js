@@ -1,10 +1,10 @@
 /**
- * Clinic OS V10 — Clustering（修订版 R2）
+ * Clinic OS V10 — Clustering（修订版 R2.2）
  *
- * R2：
- * - 通用 workflow_id 契约（explicit_workflow_id）；
- * - clusterOrphans 程序校验：ID 真实、每簇≥2 不同碎片、拒绝重复、重叠簇标记 alternative_group、
- *   非法 LLM 输出进入 orphan/manager_required。
+ * R2.2：
+ * - Orphan Cluster 整簇校验：任一不存在 ID 或重复 ID → 整簇作废（不过滤/去重后继续接受）；
+ * - Clustering 不再输出 manager_required，仅输出 validation_issues；
+ * - 最终 needs_manager_dispatch 由 Guardrail 统一计算。
  */
 
 import { buildOrphanClusterPrompt, ORPHAN_CLUSTER_JSON_SCHEMA } from "./prompts";
@@ -42,23 +42,23 @@ export function clusterFactCards(factCards) {
 }
 
 /**
- * Orphan-to-Orphan 聚类 + 程序校验。
- * 校验规则：
- * - fact_card_id 必须真实存在于 orphanCards；
- * - 簇内去重；
- * - 每簇 ≥2 不同碎片，否则丢弃为非法；
- * - 跨簇重叠（共享 fact_card_id）→ 同一 alternative_group，不可同时成立；
- * - 非法/重叠 → manager_required=true。
+ * Orphan-to-Orphan 聚类 + 整簇校验。
+ * 校验规则（整簇作废，不修复）：
+ * - 任一 fact_card_id 不存在 → 整簇作废；
+ * - 簇内存在重复 ID → 整簇作废；
+ * - 每簇 <2 → 作废；
+ * - 跨簇重叠 → 同一 alternative_group，并记入 validation_issues。
+ * 输出 validation_issues，不输出 manager_required（由 Guardrail 统一决定）。
  */
 export async function clusterOrphans({ orphanCards, invokeLLM, maxClusters = 3 }) {
   if (!Array.isArray(orphanCards) || orphanCards.length === 0) {
-    return { clusters: [], unclustered: [], manager_required: false, alternative_groups: [] };
+    return { clusters: [], unclustered: [], validation_issues: [], alternative_groups: [] };
   }
   if (!invokeLLM) {
     return {
       clusters: [],
       unclustered: orphanCards.map((c) => ({ fact_card_id: c.id, artifact_id: c.artifact_id })),
-      manager_required: false,
+      validation_issues: [],
       alternative_groups: [],
     };
   }
@@ -75,44 +75,52 @@ export async function clusterOrphans({ orphanCards, invokeLLM, maxClusters = 3 }
 
   const rawClusters = (result?.clusters || []).slice(0, maxClusters);
   const valid = [];
-  let invalidDropped = 0;
+  const validation_issues = [];
 
-  for (const raw of rawClusters) {
-    const rawIds = raw?.fact_card_ids || [];
-    // 1. 真实性：仅保留存在的 id
-    const realIds = rawIds.filter((id) => orphanIds.has(id));
-    if (realIds.length !== rawIds.length) invalidDropped++;
-    // 2. 簇内去重
-    const distinctIds = [...new Set(realIds)];
-    if (distinctIds.length !== realIds.length) invalidDropped++;
-    // 3. 每簇 ≥2 不同碎片
-    if (distinctIds.length < 2) {
-      invalidDropped++;
+  for (let i = 0; i < rawClusters.length; i++) {
+    const raw = rawClusters[i];
+    const ids = raw?.fact_card_ids || [];
+
+    // 整簇校验：任一不存在或重复 → 整簇作废
+    const hasNonexistent = ids.some((id) => !orphanIds.has(id));
+    const hasDup = new Set(ids).size !== ids.length;
+    if (hasNonexistent || hasDup) {
+      validation_issues.push({
+        type: "orphan_cluster_illegal",
+        cluster_index: i,
+        fact_card_ids: ids,
+        reason: hasNonexistent ? "nonexistent_id" : "duplicate_id",
+      });
+      continue;
+    }
+    if (ids.length < 2) {
+      validation_issues.push({ type: "orphan_cluster_too_small", cluster_index: i, fact_card_ids: ids });
       continue;
     }
     valid.push({
-      fact_card_ids: distinctIds,
+      fact_card_ids: ids,
       workflow_family_hint: raw.workflow_family_hint || null,
       confidence: raw.confidence ?? null,
       reason: raw.reason || "",
     });
   }
 
-  // 4. 跨簇重叠 → alternative_group
+  // 跨簇重叠 → alternative_group
   const groups = assignAlternativeGroups(valid);
   const groupCount = new Map();
   groups.forEach((g) => groupCount.set(g, (groupCount.get(g) || 0) + 1));
   const hasOverlap = [...groupCount.values()].some((c) => c > 1);
+  if (hasOverlap) validation_issues.push({ type: "orphan_cluster_overlap" });
 
-  const clusters = valid.map((cl, i) => ({
-    cluster_id: `new_train-${i + 1}`,
+  const clusters = valid.map((cl, idx) => ({
+    cluster_id: `new_train-${idx + 1}`,
     fact_card_ids: cl.fact_card_ids,
     artifact_ids: cl.fact_card_ids.map((id) => cardById.get(id)?.artifact_id).filter(Boolean),
     workflow_family_hint: cl.workflow_family_hint,
     confidence: cl.confidence,
     reason: cl.reason,
     composition_type: "new_train",
-    alternative_group: groups[i],
+    alternative_group: groups[idx],
   }));
 
   const clusteredIds = new Set(clusters.flatMap((c) => c.fact_card_ids));
@@ -120,12 +128,10 @@ export async function clusterOrphans({ orphanCards, invokeLLM, maxClusters = 3 }
     .filter((c) => !clusteredIds.has(c.id))
     .map((c) => ({ fact_card_id: c.id, artifact_id: c.artifact_id }));
 
-  const manager_required = invalidDropped > 0 || hasOverlap;
-
   return {
     clusters,
     unclustered,
-    manager_required,
+    validation_issues,
     alternative_groups: [...new Set(groups)],
   };
 }
@@ -166,14 +172,15 @@ export async function buildCompositionClusters({ factCards, workflows, invokeLLM
     .map((u) => factCards.find((c) => c.id === u.fact_card_id))
     .filter(Boolean);
 
-  const { clusters: newTrainCandidates, unclustered, manager_required, alternative_groups } =
+  const { clusters: newTrainCandidates, unclustered, validation_issues, alternative_groups } =
     await clusterOrphans({ orphanCards, invokeLLM });
 
+  // 不输出 manager_required；仅输出 validation_issues，由 Guardrail 统一计算最终 needs_manager_dispatch
   return {
     attachTrains: trains,
     newTrainCandidates,
     remainingOrphans: unclustered,
-    orphan_manager_required: manager_required,
+    validation_issues,
     alternative_groups,
   };
 }

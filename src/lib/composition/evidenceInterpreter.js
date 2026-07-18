@@ -58,6 +58,7 @@ export async function interpretArtifact({
     workflow_family_hint: result?.workflow_family_hint || null,
     subject_type: result?.subject_type || null,
     subject_fingerprint: result?.subject_fingerprint || null,
+    subject_quality: result?.subject_quality || "medium",
     // 业务发生时间：证物 captured_at 兜底，禁止用 extracted_at 作为业务时间
     occurred_at: result?.occurred_at || artifact.captured_at || null,
     // 解读时刻（仅记录，非业务时间）
