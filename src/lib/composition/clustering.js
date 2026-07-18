@@ -1,26 +1,21 @@
 /**
- * Clinic OS V10 — Clustering（修订版）
+ * Clinic OS V10 — Clustering（修订版 R2）
  *
- * 修订要点：
- * - 新增 Orphan-to-Orphan 多碎片编组：多个无 workflow_id 的 FactCard 可相互建立候选关联，
- *   形成 1~3 个候选 new_train 簇；
- * - 列车编组改用通用 workflow_id（替代 session_id）；
- * - 孤立碎片聚类由 LLM 推断（可注入 mock），confidence 仅记录不决定状态。
+ * R2：
+ * - 通用 workflow_id 契约（explicit_workflow_id）；
+ * - clusterOrphans 程序校验：ID 真实、每簇≥2 不同碎片、拒绝重复、重叠簇标记 alternative_group、
+ *   非法 LLM 输出进入 orphan/manager_required。
  */
 
 import { buildOrphanClusterPrompt, ORPHAN_CLUSTER_JSON_SCHEMA } from "./prompts";
 
-/**
- * 将已归属的 FactCard 按 workflow_id 聚类为「编组列车」；无主碎片归 unlinked。
- * 输入 factCards 需带 _resolvedWorkflowId 与 _linkMethod（由 Candidate Finder 注入）。
- */
 export function clusterFactCards(factCards) {
   if (!Array.isArray(factCards)) return { trains: [], unlinked: [] };
   const trainMap = new Map();
   const unlinked = [];
 
   for (const card of factCards) {
-    const wid = card._resolvedWorkflowId || card.workflow_id;
+    const wid = card._resolvedWorkflowId || card.explicit_workflow_id;
     const method = card._linkMethod || (wid ? "explicit_id" : "unlinked");
     if (!wid) {
       unlinked.push({ fact_card_id: card.id, artifact_id: card.artifact_id, reason: "无归属 workflow" });
@@ -47,21 +42,29 @@ export function clusterFactCards(factCards) {
 }
 
 /**
- * Orphan-to-Orphan 聚类：将多个无主碎片由 LLM 推断是否可共同形成 new_train。
- * 输出候选簇列表（最多 maxClusters 个），每簇至少 2 张碎片；无法成簇的保留为 unclustered。
- * confidence 仅记录，不决定自动挂接。
+ * Orphan-to-Orphan 聚类 + 程序校验。
+ * 校验规则：
+ * - fact_card_id 必须真实存在于 orphanCards；
+ * - 簇内去重；
+ * - 每簇 ≥2 不同碎片，否则丢弃为非法；
+ * - 跨簇重叠（共享 fact_card_id）→ 同一 alternative_group，不可同时成立；
+ * - 非法/重叠 → manager_required=true。
  */
 export async function clusterOrphans({ orphanCards, invokeLLM, maxClusters = 3 }) {
   if (!Array.isArray(orphanCards) || orphanCards.length === 0) {
-    return { clusters: [], unclustered: [] };
+    return { clusters: [], unclustered: [], manager_required: false, alternative_groups: [] };
   }
   if (!invokeLLM) {
-    // 无 LLM 无法推断 orphan 间关联，全部保留，不臆测
     return {
       clusters: [],
       unclustered: orphanCards.map((c) => ({ fact_card_id: c.id, artifact_id: c.artifact_id })),
+      manager_required: false,
+      alternative_groups: [],
     };
   }
+
+  const orphanIds = new Set(orphanCards.map((c) => c.id));
+  const cardById = new Map(orphanCards.map((c) => [c.id, c]));
 
   const prompt = buildOrphanClusterPrompt({ orphanCards });
   const result = await invokeLLM({
@@ -70,53 +73,111 @@ export async function clusterOrphans({ orphanCards, invokeLLM, maxClusters = 3 }
     model: "automatic",
   });
 
-  const rawClusters = (result?.clusters || [])
-    .filter((cl) => (cl.fact_card_ids || []).length >= 2)
-    .slice(0, maxClusters);
+  const rawClusters = (result?.clusters || []).slice(0, maxClusters);
+  const valid = [];
+  let invalidDropped = 0;
 
-  const clusters = rawClusters.map((cl, i) => {
-    const ids = cl.fact_card_ids || [];
-    const cardsInCluster = orphanCards.filter((c) => ids.includes(c.id));
-    return {
-      cluster_id: `new_train-${i + 1}`,
-      fact_card_ids: ids,
-      artifact_ids: cardsInCluster.map((c) => c.artifact_id).filter(Boolean),
-      workflow_family_hint: cl.workflow_family_hint || null,
-      confidence: cl.confidence ?? null, // 仅记录
-      reason: cl.reason || "",
-      composition_type: "new_train",
-    };
-  });
+  for (const raw of rawClusters) {
+    const rawIds = raw?.fact_card_ids || [];
+    // 1. 真实性：仅保留存在的 id
+    const realIds = rawIds.filter((id) => orphanIds.has(id));
+    if (realIds.length !== rawIds.length) invalidDropped++;
+    // 2. 簇内去重
+    const distinctIds = [...new Set(realIds)];
+    if (distinctIds.length !== realIds.length) invalidDropped++;
+    // 3. 每簇 ≥2 不同碎片
+    if (distinctIds.length < 2) {
+      invalidDropped++;
+      continue;
+    }
+    valid.push({
+      fact_card_ids: distinctIds,
+      workflow_family_hint: raw.workflow_family_hint || null,
+      confidence: raw.confidence ?? null,
+      reason: raw.reason || "",
+    });
+  }
+
+  // 4. 跨簇重叠 → alternative_group
+  const groups = assignAlternativeGroups(valid);
+  const groupCount = new Map();
+  groups.forEach((g) => groupCount.set(g, (groupCount.get(g) || 0) + 1));
+  const hasOverlap = [...groupCount.values()].some((c) => c > 1);
+
+  const clusters = valid.map((cl, i) => ({
+    cluster_id: `new_train-${i + 1}`,
+    fact_card_ids: cl.fact_card_ids,
+    artifact_ids: cl.fact_card_ids.map((id) => cardById.get(id)?.artifact_id).filter(Boolean),
+    workflow_family_hint: cl.workflow_family_hint,
+    confidence: cl.confidence,
+    reason: cl.reason,
+    composition_type: "new_train",
+    alternative_group: groups[i],
+  }));
 
   const clusteredIds = new Set(clusters.flatMap((c) => c.fact_card_ids));
   const unclustered = orphanCards
     .filter((c) => !clusteredIds.has(c.id))
     .map((c) => ({ fact_card_id: c.id, artifact_id: c.artifact_id }));
 
-  return { clusters, unclustered };
+  const manager_required = invalidDropped > 0 || hasOverlap;
+
+  return {
+    clusters,
+    unclustered,
+    manager_required,
+    alternative_groups: [...new Set(groups)],
+  };
 }
 
-/**
- * 整合：产出 attach 列车 + new_train 候选 + 剩余孤立碎片。
- */
+function assignAlternativeGroups(clusters) {
+  const n = clusters.length;
+  if (n === 0) return [];
+  const parent = Array.from({ length: n }, (_, i) => i);
+  function find(x) {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  }
+  function union(a, b) {
+    parent[find(a)] = find(b);
+  }
+  const idToIdx = new Map();
+  clusters.forEach((cl, i) => {
+    for (const id of cl.fact_card_ids) {
+      if (idToIdx.has(id)) union(i, idToIdx.get(id));
+      else idToIdx.set(id, i);
+    }
+  });
+  const roots = parent.map(find);
+  const rootRank = new Map();
+  let r = 0;
+  return roots.map((root) => {
+    if (!rootRank.has(root)) rootRank.set(root, `alt-${++r}`);
+    return rootRank.get(root);
+  });
+}
+
 export async function buildCompositionClusters({ factCards, workflows, invokeLLM }) {
   const { trains, unlinked } = clusterFactCards(factCards);
   const orphanCards = unlinked
     .map((u) => factCards.find((c) => c.id === u.fact_card_id))
     .filter(Boolean);
 
-  const { clusters: newTrainCandidates, unclustered } = await clusterOrphans({ orphanCards, invokeLLM });
+  const { clusters: newTrainCandidates, unclustered, manager_required, alternative_groups } =
+    await clusterOrphans({ orphanCards, invokeLLM });
 
   return {
     attachTrains: trains,
     newTrainCandidates,
     remainingOrphans: unclustered,
+    orphan_manager_required: manager_required,
+    alternative_groups,
   };
 }
 
-/**
- * 按 workflow_family 二次分桶（不同业务线不混编）。
- */
 export function clusterByBusinessLine(factCards, workflows) {
   const base = clusterFactCards(factCards);
   const wfLine = new Map((workflows || []).map((w) => [w.id, w.workflow_family]));

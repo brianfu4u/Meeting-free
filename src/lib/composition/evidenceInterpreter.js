@@ -1,15 +1,10 @@
 /**
- * Clinic OS V10 — Evidence Interpreter
+ * Clinic OS V10 — Evidence Interpreter（修订版 R2）
  *
- * 职责：将一个 Artifact 解读为结构化 EvidenceFactCard（字段级溯源 + 抽取质量）。
- * 作为 LLM 分析缓存层：源 Artifact 变更后置 stale=true 重新解读。
- *
- * 输入契约：
- *   { artifact, sopDigest, businessLine, policyVersion, invokeLLM }
- * 输出：EvidenceFactCard 草案（未持久化），调用方负责写入与回填 artifact.evidence_fact_card_id。
- *
- * invokeLLM 为可注入的 LLM 调用器，签名同 base44.integrations.Core.InvokeLLM，
- * 便于单元测试以 mock 替换。
+ * R2：统一通用 Workflow 契约。
+ * - 删除 session_id / _interpreter_session_hint；
+ * - 输出 explicit_workflow_id / workflow_family_hint / subject_type / subject_fingerprint；
+ * - 业务时间用 occurred_at（= artifact.captured_at 兜底），extracted_at 仅记录解读时刻。
  */
 
 import {
@@ -19,8 +14,6 @@ import {
 } from "./prompts";
 
 function pickModel(artifactType) {
-  // 图像/截图走视觉模型；语音先转写（调用方应已 TranscribeAudio 并落 file_url 为文本时再进来）；
-  // 文件类走通用文本模型。默认 automatic 以节省积分。
   if (artifactType === "image" || artifactType === "screenshot") return "gemini_3_flash";
   return "automatic";
 }
@@ -60,14 +53,19 @@ export async function interpretArtifact({
     artifact_id: artifact.id,
     fields,
     business_date: artifact.business_date,
-    session_id: null, // 解读阶段不绑定，交由 Candidate Finder
+    // 通用 Workflow 契约
+    explicit_workflow_id: artifact.source_workflow_id || null,
+    workflow_family_hint: result?.workflow_family_hint || null,
+    subject_type: result?.subject_type || null,
+    subject_fingerprint: result?.subject_fingerprint || null,
+    // 业务发生时间：证物 captured_at 兜底，禁止用 extracted_at 作为业务时间
+    occurred_at: result?.occurred_at || artifact.captured_at || null,
+    // 解读时刻（仅记录，非业务时间）
     extracted_at: new Date().toISOString(),
     model_version: model,
     prompt_version: PROMPT_VERSIONS.EVIDENCE_INTERPRETER,
     policy_version: policyVersion ?? null,
     stale: false,
-    // 候选匹配辅助线索
-    _interpreter_session_hint: result?.session_hint || null,
   };
 }
 
