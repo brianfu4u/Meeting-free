@@ -98,6 +98,10 @@
     "active_policy_version": {
       "type": "number",
       "description": "\u5f53\u524d\u751f\u6548\u7684 GuessPolicy \u7248\u672c"
+    },
+    "publish_lock_request_id": {
+      "type": "string",
+      "description": "\u53d1\u5e03\u4e92\u65a5\u9501\uff1a\u5f53\u524d\u6301\u6709 GuessPolicy \u53d1\u5e03\u4e34\u754c\u533a\u7684\u5e42\u7b49\u952e\uff0cnull=\u7a7a\u95f2\u3002\u57fa\u4e8e ClinicConfig \u5355\u6587\u6863 updateMany CAS \u539f\u5b50\u83b7\u53d6\uff0c\u4fdd\u8bc1 clinic \u7ea7\u53d1\u5e03\u4e92\u65a5\uff0c\u66ff\u4ee3 created_date \u4e50\u89c2\u542f\u53d1\u3002"
     }
   },
   "required": [

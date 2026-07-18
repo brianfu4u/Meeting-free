@@ -191,6 +191,32 @@ function makeRealOps(svc: any): any {
     markPublished: async (id: string, now: string, uid: string) =>
       svc.entities.GuessPolicy.update(id, { status: "published", published_at: now, published_by: uid }),
     deleteStaging: async (id: string) => svc.entities.GuessPolicy.delete(id),
+    acquireLock: async (cid: string, key: string) => {
+      try {
+        await svc.entities.ClinicConfig.updateMany(
+          { clinic_id: cid, publish_lock_request_id: null },
+          { $set: { publish_lock_request_id: key } }
+        );
+      } catch {
+        return { acquired: false };
+      }
+      try {
+        const l = await svc.entities.ClinicConfig.filter({ clinic_id: cid });
+        return { acquired: l[0]?.publish_lock_request_id === key };
+      } catch {
+        return { acquired: false };
+      }
+    },
+    releaseLock: async (cid: string, key: string) => {
+      try {
+        await svc.entities.ClinicConfig.updateMany(
+          { clinic_id: cid, publish_lock_request_id: key },
+          { $set: { publish_lock_request_id: null } }
+        );
+      } catch {
+        // 释放失败不阻断主流程；锁由持有者标识，下次发布 CAS 仍可识别
+      }
+    },
   };
 }
 

@@ -4,12 +4,19 @@
  * 被后端 entry.ts（Deno，注入真实 Base44 SDK ops）与 vitest（Node，注入 mock ops）
  * 共同复用。所有副作用通过 PublishOps 注入；编排器本身只做纯逻辑 + 补偿。
  *
- * 顺序：idempotency_key 必填 → 按 key 查既有命中直接返回 → 计算 next_version →
- * 版本校验 → 校验候选 → 创建暂存 → post-create 去重 → 退役旧 → 更新 config →
- * 标记 published。任一步失败触发 compensate；补偿不完整则返回 compensation_failed。
+ * 并发模型（R3 阻断修复）：
+ * - 真正原子互斥通过 ClinicConfig 单文档 CAS 锁（acquireLock/releaseLock）实现，
+ *   不再依赖 created_date earliest 这种乐观启发。MongoDB 单文档 updateMany 原子，
+ *   `{clinic_id, publish_lock_request_id: null} → $set:{publish_lock_request_id: key}`
+ *   保证同 clinic 同时只有一个请求进入发布临界区。
+ * - 幂等命中按 Policy 状态分类（classifyHit）：published=幂等成功 / draft·reviewed=
+ *   publish_in_progress(409) / retired=idempotent_retired(409) / 多条=integrity_conflict(409)。
+ * - post-create 去重仅作安全网，且不再把 rival draft 当作成功结果。
  *
- * Base44 Entity 不支持复合唯一索引，故 post-create 乐观去重为平台能力上限：
- * 创建后立即 recheck，若发现更早的同 key / 同版本竞态记录，本请求认负删除自身并返回 winner。
+ * 顺序：idempotency_key 必填 → 预查幂等（快路径，无锁）→ 获取 CAS 锁 →
+ * 锁内重查幂等 → 计算 next_version → 版本校验 → 校验候选 → 创建暂存 →
+ * post-create 去重（安全网）→ 退役旧 → 更新 config → 标记 published。
+ * 任一步失败触发 compensate；补偿不完整则返回 compensation_failed。
  */
 import { migrateHardGuardrails, validatePolicyForPublish } from "./contract.ts";
 
@@ -36,7 +43,11 @@ export interface PublishResult {
     | "validation_failed"
     | "missing_idempotency_key"
     | "publish_failed"
-    | "compensation_failed";
+    | "compensation_failed"
+    | "publish_in_progress"
+    | "integrity_conflict"
+    | "idempotent_retired"
+    | "publish_lock_busy";
   http_status: number;
   policy?: any;
   policy_id?: string;
@@ -45,6 +56,7 @@ export interface PublishResult {
   idempotent?: boolean;
   error?: string;
   errors?: string[];
+  record_ids?: string[];
   compensation?: CompensationReport;
 }
 
@@ -62,6 +74,8 @@ export interface PublishOps {
   restoreConfigActive(configId: string, originalActive: number | null): Promise<void>;
   markPublished(id: string, now: string, userId: string): Promise<any>;
   deleteStaging(id: string): Promise<void>;
+  acquireLock(clinic_id: string, key: string): Promise<{ acquired: boolean }>;
+  releaseLock(clinic_id: string, key: string): Promise<void>;
 }
 
 export interface PublishInput {
@@ -80,13 +94,42 @@ function ts(d: any): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
-function earliest(records: any[]): any {
+/**
+ * 幂等命中分类：按记录状态返回明确结果，绝不把 draft/retired 当作当前发布成功。
+ * 多条同 key → integrity_conflict，输出记录 ID，不静默选 earliest。
+ */
+function classifyHit(records: any[]): PublishResult | null {
   if (!records || records.length === 0) return null;
-  return [...records].sort((a, b) => ts(a.created_date) - ts(b.created_date))[0];
+  if (records.length > 1) {
+    return {
+      ok: false,
+      status: "integrity_conflict",
+      http_status: 409,
+      error: "幂等键命中多条记录（数据完整性冲突）",
+      record_ids: records.map((r) => r.id),
+    };
+  }
+  const rec = records[0];
+  if (rec.status === "published") {
+    return { ok: true, status: "idempotent", http_status: 200, policy: rec, policy_id: rec.id, idempotent: true };
+  }
+  if (rec.status === "draft" || rec.status === "reviewed") {
+    return { ok: false, status: "publish_in_progress", http_status: 409, error: "该幂等键对应的发布仍在进行中", policy_id: rec.id };
+  }
+  if (rec.status === "retired") {
+    return {
+      ok: false,
+      status: "idempotent_retired",
+      http_status: 409,
+      error: "该幂等键对应的发布已被退役（被更新版本取代），请使用新 key 重新发布",
+      policy_id: rec.id,
+    };
+  }
+  return { ok: false, status: "integrity_conflict", http_status: 409, error: "未知策略状态: " + rec.status, policy_id: rec.id };
 }
 
 export async function orchestratePublish(input: PublishInput, ops: PublishOps): Promise<PublishResult> {
-  const { clinic_id, user_id } = input;
+  const { clinic_id } = input;
   const key = input.idempotency_key;
 
   // 1. 幂等键必填
@@ -94,20 +137,43 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     return { ok: false, status: "missing_idempotency_key", http_status: 400, error: "idempotency_key 必填" };
   }
 
-  // 2. 先按 key 查既有；命中直接返回（在任何版本校验之前）—— 保证重试幂等
-  const existing = await ops.findByIdempotencyKey(clinic_id, key);
-  if (existing && existing.length > 0) {
-    const winner = earliest(existing);
-    return { ok: true, status: "idempotent", http_status: 200, policy: winner, policy_id: winner.id, idempotent: true };
-  }
+  // 2. 预查幂等（快路径，无锁）：已 published → 幂等成功；draft → 进行中；retired → 已退役
+  const preExisting = await ops.findByIdempotencyKey(clinic_id, key);
+  const preHit = classifyHit(preExisting);
+  if (preHit) return preHit;
 
-  // 3. 计算 next_version（服务端单调，不信任前端）
+  // 3. 获取 CAS 锁（ClinicConfig 单文档原子互斥）
+  const lock = await ops.acquireLock(clinic_id, key);
+  if (!lock.acquired) {
+    return {
+      ok: false,
+      status: "publish_lock_busy",
+      http_status: 409,
+      error: "另一发布进行中，请重试（相同幂等键重试将命中幂等）",
+    };
+  }
+  try {
+    return await publishUnderLock(input, ops, key);
+  } finally {
+    await ops.releaseLock(clinic_id, key).catch(() => {});
+  }
+}
+
+async function publishUnderLock(input: PublishInput, ops: PublishOps, key: string): Promise<PublishResult> {
+  const { clinic_id, user_id } = input;
+
+  // 4. 锁内权威重查幂等（并发窗口内另一请求可能已完成）
+  const existing = await ops.findByIdempotencyKey(clinic_id, key);
+  const hit = classifyHit(existing);
+  if (hit) return hit;
+
+  // 5. 计算 next_version（服务端单调，不信任前端）
   const all = await ops.findAllPolicies(clinic_id);
   const versions = all.map((r: any) => Number(r.policy_version) || 0);
   const maxV = versions.length ? Math.max(...versions) : 0;
   const nextV = maxV + 1;
 
-  // 4. 版本校验：若调用方传版本，必须等于 nextV
+  // 6. 版本校验
   if (input.policy_version != null && Number(input.policy_version) !== nextV) {
     return {
       ok: false,
@@ -119,7 +185,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     };
   }
 
-  // 5. 候选校验（迁移 + 发布校验，逻辑来自 contract.ts 唯一源）
+  // 7. 候选校验（迁移 + 发布校验，逻辑来自 contract.ts 唯一源）
   const migrated = migrateHardGuardrails(input.hard_guardrails || []);
   const candidate = { hard_guardrails: migrated, tracks: input.tracks, decision_rules: input.decision_rules };
   const { valid, errors } = validatePolicyForPublish(candidate);
@@ -129,7 +195,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
 
   const now = new Date().toISOString();
 
-  // 6. 创建暂存（draft）
+  // 8. 创建暂存（draft）
   let staging: any;
   try {
     staging = await ops.createStaging({
@@ -145,23 +211,21 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     return { ok: false, status: "publish_failed", http_status: 500, error: "暂存创建失败：" + e.message, next_version: nextV };
   }
 
-  // 7. post-create 乐观去重（平台无复合唯一索引的并发兜底）
-  // 7a. 同 key 并发：存在更早的同 key 记录 → 本请求认负，删除自身，返回 winner
+  // 9. post-create 去重（安全网；锁内本不应触发。命中 rival 按 classify 分类，draft 不当成功）
   try {
     const byKey = await ops.recheckByIdempotencyKey(clinic_id, key);
-    const rival = byKey.find((r: any) => r.id !== staging.id && ts(r.created_date) < ts(staging.created_date));
-    if (rival) {
+    const rivals = byKey.filter((r: any) => r.id !== staging.id && ts(r.created_date) < ts(staging.created_date));
+    if (rivals.length > 0) {
       await ops.deleteStaging(staging.id);
-      return { ok: true, status: "idempotent", http_status: 200, policy: rival, policy_id: rival.id, idempotent: true };
+      return classifyHit(rivals);
     }
   } catch (e: any) {
     await ops.deleteStaging(staging.id).catch(() => {});
     return { ok: false, status: "publish_failed", http_status: 500, error: "幂等去重检查失败：" + e.message, next_version: nextV };
   }
-  // 7b. 同版本并发：存在更早的同版本记录 → 认负，删除自身，返回 version_conflict + winner
   try {
     const byVer = await ops.recheckByVersion(clinic_id, nextV);
-    const rival = byVer.find((r: any) => r.id !== staging.id && ts(r.created_date) < ts(staging.created_date));
+    const rival = byVer.find((r: any) => r.id !== staging.id);
     if (rival) {
       await ops.deleteStaging(staging.id);
       return {
@@ -170,7 +234,6 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
         http_status: 409,
         error: "并发版本冲突：另一请求已创建该版本",
         next_version: nextV,
-        policy: rival,
         policy_id: rival.id,
       };
     }
@@ -179,13 +242,13 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     return { ok: false, status: "publish_failed", http_status: 500, error: "版本去重检查失败：" + e.message, next_version: nextV };
   }
 
-  // 8. 快照旧 published + config active（供补偿恢复）
+  // 10. 快照旧 published + config active（供补偿恢复）
   const oldPublished = await ops.findPublished(clinic_id);
   const oldSnap = oldPublished.map((o: any) => ({ id: o.id, retired_at: o.retired_at ?? null }));
   const cfg = await ops.findConfig(clinic_id);
   const originalActive = cfg?.active_policy_version ?? null;
 
-  // 9. 退役旧 published（逐条；中途失败触发补偿，仅恢复本次实际被修改的记录）
+  // 11. 退役旧 published
   const retiredIds: string[] = [];
   for (let i = 0; i < oldPublished.length; i++) {
     const o = oldPublished[i];
@@ -198,6 +261,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
         retiredIdsAlready: retiredIds,
         cfgId: cfg?.id ?? null,
         originalActive,
+        configWasUpdated: false,
         stagingId: staging.id,
         failedStage: "retire@" + i,
         reason: "退役第 " + i + " 条失败：" + e.message,
@@ -206,13 +270,14 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     }
   }
 
-  // 10. config 必须存在
+  // 12. config 必须存在
   if (!cfg) {
     const comp = await compensate(ops, {
       oldSnap,
       retiredIdsAlready: retiredIds,
       cfgId: null,
       originalActive,
+      configWasUpdated: false,
       stagingId: staging.id,
       failedStage: "config_missing",
       reason: "ClinicConfig 不存在",
@@ -220,7 +285,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     return finishFailure(comp, "ClinicConfig 不存在", nextV);
   }
 
-  // 11. 更新 config.active_policy_version
+  // 13. 更新 config.active_policy_version
   try {
     await ops.updateConfigActive(cfg.id, nextV);
   } catch (e: any) {
@@ -229,6 +294,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
       retiredIdsAlready: retiredIds,
       cfgId: cfg.id,
       originalActive,
+      configWasUpdated: true,
       stagingId: staging.id,
       failedStage: "config_update",
       reason: "ClinicConfig 更新失败：" + e.message,
@@ -236,7 +302,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     return finishFailure(comp, "ClinicConfig 更新失败：" + e.message, nextV);
   }
 
-  // 12. 标记暂存为 published（最后一步，全部成功后）
+  // 14. 标记暂存为 published（最后一步）
   let published: any;
   try {
     published = await ops.markPublished(staging.id, now, user_id);
@@ -246,6 +312,7 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
       retiredIdsAlready: retiredIds,
       cfgId: cfg.id,
       originalActive,
+      configWasUpdated: true,
       stagingId: staging.id,
       failedStage: "publish_mark",
       reason: "发布标记失败：" + e.message,
@@ -270,6 +337,7 @@ async function compensate(
     retiredIdsAlready: string[];
     cfgId: string | null;
     originalActive: number | null;
+    configWasUpdated: boolean;
     stagingId: string;
     failedStage: string;
     reason: string;
@@ -289,7 +357,7 @@ async function compensate(
     reconciliation: [],
   };
 
-  // 恢复本次实际被退役的旧 published（逐条；任一失败记录到 reconciliation）
+  // 恢复本次实际被退役的旧 published
   for (const id of args.retiredIdsAlready) {
     const snap = args.oldSnap.find((s) => s.id === id);
     try {
@@ -302,8 +370,8 @@ async function compensate(
     }
   }
 
-  // 恢复 config（若本次已更新过）
-  if (args.cfgId && args.originalActive !== undefined && args.originalActive !== null) {
+  // 恢复 config：仅当本次确实更新过 config。originalActive 可能为 null，必须显式恢复为 null。
+  if (args.cfgId && args.configWasUpdated) {
     try {
       await ops.restoreConfigActive(args.cfgId, args.originalActive);
       report.config_restored = true;
@@ -313,7 +381,7 @@ async function compensate(
       report.succeeded = false;
     }
   } else if (args.cfgId) {
-    // config 未被本次更新（如 retire 失败时），无需恢复
+    // config 本次未被更新 → 仍处于正确状态，无需恢复
     report.config_restored = true;
   }
 

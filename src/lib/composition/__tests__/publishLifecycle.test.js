@@ -14,6 +14,11 @@ import {
  * 后端发布生命周期测试（编排器 + 契约纯函数）。
  * 编排器副作用通过 mock ops 注入；失败注入经 ops 的 inject 集合实现，
  * 部署态 entry.ts 永不含注入逻辑。
+ *
+ * R3 阻断修复新增：
+ * - 幂等命中按 Policy 状态分类（publish_in_progress / idempotent_retired / integrity_conflict）；
+ * - originalActive=null 补偿（显式 configWasUpdated）；
+ * - 真实并发集成测试（Promise.all + CAS mock 锁），不依赖 created_date。
  */
 const CID = "clinic-test";
 let _id = 0;
@@ -68,6 +73,20 @@ function makeOps(seed = {}) {
       if (injectSet.has("delete_staging")) throw new Error("injected delete_staging");
       state.policies = state.policies.filter((p) => p.id !== id);
     },
+    // CAS 锁：单文档原子获取（mock 同步实现，无 await 间隙 → 真实互斥）
+    acquireLock: async (cid, key) => {
+      if (!state.config) return { acquired: false };
+      if (state.config.publish_lock_request_id == null) {
+        state.config.publish_lock_request_id = key;
+        return { acquired: true };
+      }
+      return { acquired: false };
+    },
+    releaseLock: async (cid, key) => {
+      if (state.config && state.config.publish_lock_request_id === key) {
+        state.config.publish_lock_request_id = null;
+      }
+    },
   };
 }
 
@@ -82,11 +101,13 @@ const input = (over = {}) => ({
   ...over,
 });
 
+const cfg = (over = {}) => ({ id: "cfg", active_policy_version: null, ...over });
+
 describe("publish — 幂等与版本单调", () => {
   it("相同 idempotency_key 重试返回同一 policy_id", async () => {
     const ops = makeOps({
       policies: [{ id: "v1", clinic_id: CID, policy_version: 1, status: "published", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" }],
-      config: { id: "cfg", active_policy_version: 1 },
+      config: cfg({ active_policy_version: 1 }),
     });
     const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
     expect(r.status).toBe("idempotent");
@@ -95,12 +116,11 @@ describe("publish — 幂等与版本单调", () => {
     expect(r.idempotent).toBe(true);
   });
 
-  it("重试发生在 next_version 已变化之后仍幂等命中（版本校验在 key 查询之后）", async () => {
+  it("重试发生在 next_version 已变化之后仍幂等命中（预查在版本校验之前）", async () => {
     const ops = makeOps({
       policies: [{ id: "v1", clinic_id: CID, policy_version: 1, status: "published", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" }],
-      config: { id: "cfg", active_policy_version: 1 },
+      config: cfg({ active_policy_version: 1 }),
     });
-    // next_version 应为 2，但传 99；因先命中 key，不应返回 version_conflict
     const r = await orchestratePublish(input({ idempotency_key: "k1", policy_version: 99 }), ops);
     expect(r.status).toBe("idempotent");
     expect(r.policy_id).toBe("v1");
@@ -115,7 +135,7 @@ describe("publish — 幂等与版本单调", () => {
   });
 
   it("版本不等于 next_version → 409 version_conflict", async () => {
-    const ops = makeOps();
+    const ops = makeOps({ config: cfg() });
     const r = await orchestratePublish(input({ policy_version: 5 }), ops);
     expect(r.status).toBe("version_conflict");
     expect(r.http_status).toBe(409);
@@ -124,23 +144,89 @@ describe("publish — 幂等与版本单调", () => {
   });
 });
 
-describe("publish — 并发去重（post-create 乐观兜底）", () => {
-  it("两个并发相同 key：后到者认负删除自身，只保留 winner", async () => {
+describe("publish — 幂等命中按 Policy 状态分类（R3 阻断2）", () => {
+  it("命中 draft → publish_in_progress(409)，不得 ok:true", async () => {
     const ops = makeOps({
+      policies: [{ id: "d1", clinic_id: CID, policy_version: 1, status: "draft", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" }],
+      config: cfg(),
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("publish_in_progress");
+    expect(r.ok).toBe(false);
+    expect(r.http_status).toBe(409);
+    expect(r.policy_id).toBe("d1");
+  });
+
+  it("命中 reviewed → publish_in_progress(409)", async () => {
+    const ops = makeOps({
+      policies: [{ id: "r1", clinic_id: CID, policy_version: 1, status: "reviewed", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" }],
+      config: cfg(),
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("publish_in_progress");
+    expect(r.ok).toBe(false);
+  });
+
+  it("命中 retired → idempotent_retired(409)，不得当作当前发布成功", async () => {
+    const ops = makeOps({
+      policies: [{ id: "old", clinic_id: CID, policy_version: 1, status: "retired", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" }],
+      config: cfg({ active_policy_version: 2 }),
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("idempotent_retired");
+    expect(r.ok).toBe(false);
+    expect(r.http_status).toBe(409);
+  });
+
+  it("命中多条同 key → integrity_conflict(409)，输出记录 ID，不静默选 earliest", async () => {
+    const ops = makeOps({
+      policies: [
+        { id: "a", clinic_id: CID, policy_version: 1, status: "published", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" },
+        { id: "b", clinic_id: CID, policy_version: 1, status: "published", publish_idempotency_key: "k1", created_date: "2024-01-02T00:00:00Z" },
+      ],
+      config: cfg(),
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("integrity_conflict");
+    expect(r.ok).toBe(false);
+    expect(r.http_status).toBe(409);
+    expect(r.record_ids).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+});
+
+describe("publish — post-create 去重安全网（R3 阻断2）", () => {
+  it("post-create 命中 rival draft → publish_in_progress，不得当成功", async () => {
+    const ops = makeOps({
+      config: cfg(),
       onCreate: (state, rec) => {
-        // 模拟并发：另一请求更早创建了同 key 记录
         state.policies.push({ id: "rival", clinic_id: CID, policy_version: 1, status: "draft", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" });
       },
     });
     const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
-    expect(r.status).toBe("idempotent");
-    expect(r.policy_id).toBe("rival");
+    expect(r.status).toBe("publish_in_progress");
+    expect(r.http_status).toBe(409);
+    expect(r.ok).toBe(false);
     // 认负者自身已删除，只剩 rival
     expect(ops.state.policies.map((p) => p.id)).toEqual(["rival"]);
   });
 
-  it("两个并发相同版本不同 key：后到者认负，返回 version_conflict + winner", async () => {
+  it("post-create 命中 rival published → idempotent 成功", async () => {
     const ops = makeOps({
+      config: cfg(),
+      onCreate: (state, rec) => {
+        state.policies.push({ id: "rival", clinic_id: CID, policy_version: 1, status: "published", publish_idempotency_key: "k1", created_date: "2024-01-01T00:00:00Z" });
+      },
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("idempotent");
+    expect(r.ok).toBe(true);
+    expect(r.policy_id).toBe("rival");
+    expect(ops.state.policies.map((p) => p.id)).toEqual(["rival"]);
+  });
+
+  it("两个并发相同版本不同 key：后到者认负，version_conflict + winner", async () => {
+    const ops = makeOps({
+      config: cfg(),
       onCreate: (state, rec) => {
         state.policies.push({ id: "rival", clinic_id: CID, policy_version: 1, status: "draft", publish_idempotency_key: "k2", created_date: "2024-01-01T00:00:00Z" });
       },
@@ -155,7 +241,7 @@ describe("publish — 并发去重（post-create 乐观兜底）", () => {
 
 describe("publish — 成功路径", () => {
   it("空状态发布 v1：暂存→标记 published，config.active=1", async () => {
-    const ops = makeOps({ config: { id: "cfg", active_policy_version: null } });
+    const ops = makeOps({ config: cfg() });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("published");
     expect(r.ok).toBe(true);
@@ -174,7 +260,7 @@ describe("publish — 补偿回滚（失败注入）", () => {
   ];
 
   it("退役第 0 条失败：无记录被改，完整回滚", async () => {
-    const ops = makeOps({ policies: threePublished(), config: { id: "cfg", active_policy_version: 3 }, inject: "retire@0" });
+    const ops = makeOps({ policies: threePublished(), config: cfg({ active_policy_version: 3 }), inject: "retire@0" });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("publish_failed");
     expect(r.compensation.succeeded).toBe(true);
@@ -184,7 +270,7 @@ describe("publish — 补偿回滚（失败注入）", () => {
   });
 
   it("退役第 1 条失败：已退役的第 0 条被恢复，完整回滚", async () => {
-    const ops = makeOps({ policies: threePublished(), config: { id: "cfg", active_policy_version: 3 }, inject: "retire@1" });
+    const ops = makeOps({ policies: threePublished(), config: cfg({ active_policy_version: 3 }), inject: "retire@1" });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("publish_failed");
     expect(r.compensation.succeeded).toBe(true);
@@ -194,7 +280,7 @@ describe("publish — 补偿回滚（失败注入）", () => {
   });
 
   it("退役第 2（最后）条失败：已退役的第 0/1 条被恢复，完整回滚", async () => {
-    const ops = makeOps({ policies: threePublished(), config: { id: "cfg", active_policy_version: 3 }, inject: "retire@2" });
+    const ops = makeOps({ policies: threePublished(), config: cfg({ active_policy_version: 3 }), inject: "retire@2" });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("publish_failed");
     expect(r.compensation.restored_retired_ids).toEqual(["a", "b"]);
@@ -202,7 +288,7 @@ describe("publish — 补偿回滚（失败注入）", () => {
   });
 
   it("ClinicConfig 更新失败：已退役恢复 + config 恢复原值，完整回滚", async () => {
-    const ops = makeOps({ policies: [{ id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" }], config: { id: "cfg", active_policy_version: 1 }, inject: "config_update" });
+    const ops = makeOps({ policies: [{ id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" }], config: cfg({ active_policy_version: 1 }), inject: "config_update" });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("publish_failed");
     expect(r.compensation.succeeded).toBe(true);
@@ -213,33 +299,37 @@ describe("publish — 补偿回滚（失败注入）", () => {
   });
 
   it("最终 published 标记失败：config + 已退役恢复，完整回滚", async () => {
-    const ops = makeOps({ policies: [{ id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" }], config: { id: "cfg", active_policy_version: 1 }, inject: "publish_mark" });
+    const ops = makeOps({ policies: [{ id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" }], config: cfg({ active_policy_version: 1 }), inject: "publish_mark" });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("publish_failed");
     expect(r.compensation.succeeded).toBe(true);
     expect(ops.state.policies[0].status).toBe("published");
     expect(ops.state.config.active_policy_version).toBe(1);
   });
-});
 
-describe("publish — 补偿本身失败 → compensation_failed", () => {
-  it("恢复 config 失败：返回 compensation_failed + reconciliation", async () => {
-    const ops = makeOps({
-      policies: [{ id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" }],
-      config: { id: "cfg", active_policy_version: 1 },
-      inject: ["publish_mark", "compensation"],
-    });
+  it("originalActive=null：config 更新成功后 markPublished 失败 → config 恢复为 null，config_restored=true（R3 阻断1）", async () => {
+    const ops = makeOps({ config: cfg({ active_policy_version: null }), inject: "publish_mark" });
+    const r = await orchestratePublish(input(), ops);
+    expect(r.status).toBe("publish_failed");
+    expect(r.compensation.succeeded).toBe(true);
+    expect(r.compensation.config_restored).toBe(true);
+    expect(ops.state.config.active_policy_version).toBeNull();
+  });
+
+  it("originalActive=null：config 更新成功后 restoreConfigActive 失败 → compensation_failed", async () => {
+    const ops = makeOps({ config: cfg({ active_policy_version: null }), inject: ["publish_mark", "compensation"] });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("compensation_failed");
-    expect(r.compensation.succeeded).toBe(false);
     expect(r.compensation.config_restore_failed).toBe(true);
     expect(r.compensation.reconciliation.some((x) => x.stage === "restore_config")).toBe(true);
   });
+});
 
+describe("publish — 补偿本身失败 → compensation_failed", () => {
   it("删除暂存失败：返回 compensation_failed", async () => {
     const ops = makeOps({
       policies: [{ id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" }],
-      config: { id: "cfg", active_policy_version: 1 },
+      config: cfg({ active_policy_version: 1 }),
       inject: ["publish_mark", "delete_staging"],
     });
     const r = await orchestratePublish(input(), ops);
@@ -253,12 +343,80 @@ describe("publish — 补偿本身失败 → compensation_failed", () => {
         { id: "a", clinic_id: CID, policy_version: 1, status: "published", created_date: "2024-01-01T00:00:00Z" },
         { id: "b", clinic_id: CID, policy_version: 2, status: "published", created_date: "2024-01-02T00:00:00Z" },
       ],
-      config: { id: "cfg", active_policy_version: 2 },
+      config: cfg({ active_policy_version: 2 }),
       inject: ["retire@1", "restore_retired"],
     });
     const r = await orchestratePublish(input(), ops);
     expect(r.status).toBe("compensation_failed");
     expect(r.compensation.failed_restore_retired_ids).toContain("a");
+  });
+});
+
+describe("publish — 真实并发集成测试（R3 阻断3：CAS 锁，非 created_date 启发）", () => {
+  it("相同 clinic + key 并发：只存在一条 Policy，另一请求 publish_lock_busy", async () => {
+    const ops = makeOps({ config: cfg() });
+    const [a, b] = await Promise.all([
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+    ]);
+    const results = [a, b];
+    const published = results.filter((r) => r.status === "published");
+    const busy = results.filter((r) => r.status === "publish_lock_busy");
+    expect(published.length).toBe(1);
+    expect(busy.length).toBe(1);
+    const k1Policies = ops.state.policies.filter((p) => p.publish_idempotency_key === "k1");
+    expect(k1Policies.length).toBe(1);
+    expect(k1Policies[0].status).toBe("published");
+  });
+
+  it("相同 clinic + version、不同 key 并发：只能一个成功；busy 者重试后发布下一版本", async () => {
+    const ops = makeOps({ config: cfg() });
+    const [a, b] = await Promise.all([
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+      orchestratePublish(input({ idempotency_key: "k2" }), ops),
+    ]);
+    const published = [a, b].filter((r) => r.status === "published");
+    expect(published.length).toBe(1);
+    const versions = ops.state.policies.map((p) => p.policy_version);
+    expect(new Set(versions).size).toBe(versions.length); // 无重复版本
+    // busy 者重试 → 发布 v2
+    const busy = [a, b].find((r) => r.status === "publish_lock_busy");
+    const busyKey = busy === a ? "k1" : "k2";
+    const r2 = await orchestratePublish(input({ idempotency_key: busyKey }), ops);
+    expect(r2.status).toBe("published");
+    expect(r2.next_version).toBe(2);
+    // 全局无重复版本
+    const allVersions = ops.state.policies.map((p) => p.policy_version);
+    expect(new Set(allVersions).size).toBe(allVersions.length);
+  });
+
+  it("两个 created_date 完全相同也不能双成功（CAS 锁保证，非 created_date 比较）", async () => {
+    const fixedDate = "2026-07-18T00:00:00Z";
+    const ops = makeOps({
+      config: cfg(),
+      onCreate: (state, rec) => {
+        rec.created_date = fixedDate; // 强制任何创建的暂存 created_date 完全相同
+      },
+    });
+    const [a, b] = await Promise.all([
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+    ]);
+    const published = [a, b].filter((r) => r.status === "published");
+    expect(published.length).toBe(1);
+    const k1 = ops.state.policies.filter((p) => p.publish_idempotency_key === "k1");
+    expect(k1.length).toBe(1);
+    expect(k1[0].status).toBe("published");
+  });
+
+  it("锁释放后相同 key 重试命中幂等成功", async () => {
+    const ops = makeOps({ config: cfg() });
+    const first = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(first.status).toBe("published");
+    // 锁已释放（finally），重试相同 key → 预查命中 published → idempotent
+    const again = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(again.status).toBe("idempotent");
+    expect(again.policy_id).toBe(first.policy_id);
   });
 });
 
