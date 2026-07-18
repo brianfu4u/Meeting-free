@@ -142,23 +142,10 @@ export function validatePolicyForPublish(policy) {
 }
 
 /**
- * 项5：真实 publish/update 入口。先迁移旧 Policy 数据，再发布校验。
- * legacy_text 迁移结果会被发布校验拒绝（推动重新编写为结构化规则）。
- * 返回 { valid, errors, policy }；valid=false 时 policy=null。
+ * 宪法 R2.4：GuessPolicy 的 publish/update 唯一权威入口是后端 guessPolicyService。
+ * 前端不得形成平行发布入口（不直接写库）。本模块仅提供发布校验与迁移的纯函数，
+ * 供客户端预校验与单测使用；真实写入必须经后端入口（迁移 → 发布校验 → 落库）。
+ *
+ * 此前曾存在命名暗示发布入口的 preparePolicyForPublish/publishGuessPolicy/updateGuessPolicy，
+ * 已移除以消除“平行发布入口”歧义。客户端如需发布，应调用后端 guessPolicyService。
  */
-export function preparePolicyForPublish(policy) {
-  const migrated = {
-    ...(policy || {}),
-    hard_guardrails: migrateHardGuardrails(policy?.hard_guardrails || []),
-  };
-  const { valid, errors } = validatePolicyForPublish(migrated);
-  return { valid, errors, policy: valid ? migrated : null };
-}
-
-export function publishGuessPolicy(policy) {
-  return preparePolicyForPublish(policy);
-}
-
-export function updateGuessPolicy(policy) {
-  return preparePolicyForPublish(policy);
-}

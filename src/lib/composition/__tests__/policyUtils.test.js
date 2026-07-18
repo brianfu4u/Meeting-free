@@ -6,10 +6,9 @@ import {
   PUBLISHABLE_RULE_CODES,
   validatePolicyTracks,
   validatePolicyForPublish,
-  publishGuessPolicy,
-  updateGuessPolicy,
 } from "../policyUtils";
 import { TRACK_IDS } from "../prompts";
+import * as policyUtilsModule from "../policyUtils";
 
 describe("policyUtils — KNOWN_RULE_CODES", () => {
   it("含 subject_conflict / time_impossible / attach_to_closed_workflow / legacy_text", () => {
@@ -133,29 +132,42 @@ describe("policyUtils — 项5：发布校验拒绝 legacy_text", () => {
   });
 });
 
-describe("policyUtils — 项5：publishGuessPolicy / updateGuessPolicy 迁移 + 校验入口", () => {
-  it("旧字符串规则经迁移后被发布入口拒绝（推动重写）", () => {
-    const res = publishGuessPolicy({ hard_guardrails: ["旧自然语言规则"] });
+describe("policyUtils — 项5：迁移 + 发布校验（真实写入权威在后端 guessPolicyService，前端仅预校验）", () => {
+  // 模拟后端入口的两步语义：先 migrateHardGuardrails，再 validatePolicyForPublish
+  function prepareForPublish(policy) {
+    const migrated = {
+      ...(policy || {}),
+      hard_guardrails: migrateHardGuardrails(policy?.hard_guardrails || []),
+    };
+    const { valid, errors } = validatePolicyForPublish(migrated);
+    return { valid, errors, policy: valid ? migrated : null };
+  }
+  it("旧字符串规则经迁移后被发布校验拒绝（推动重写）", () => {
+    const res = prepareForPublish({ hard_guardrails: ["旧自然语言规则"] });
     expect(res.valid).toBe(false);
     expect(res.policy).toBeNull();
-    // 迁移确实执行了（内部含 legacy_text）
     expect(res.errors.some((e) => e.match(/not publishable/))).toBe(true);
   });
-  it("结构化规则通过发布入口并返回迁移后 policy", () => {
-    const res = publishGuessPolicy({ hard_guardrails: [{ rule_code: "subject_conflict" }], tracks: [{ track_id: "causal_chain", guardrails: ["x"] }] });
+  it("结构化规则通过发布校验并返回迁移后 policy", () => {
+    const res = prepareForPublish({ hard_guardrails: [{ rule_code: "subject_conflict" }], tracks: [{ track_id: "causal_chain", guardrails: ["x"] }] });
     expect(res.valid).toBe(true);
     expect(res.policy).toBeTruthy();
     expect(res.policy.hard_guardrails[0]).toEqual({ rule_code: "subject_conflict" });
   });
-  it("updateGuessPolicy 同样执行迁移与校验", () => {
-    const res = updateGuessPolicy({ hard_guardrails: ["旧规则", { rule_code: "time_impossible", max_gap_minutes: 60 }] });
-    expect(res.valid).toBe(false); // legacy_text 迁移后被拒
+  it("混合旧字符串 + 结构化规则经迁移后被发布校验拒绝", () => {
+    const res = prepareForPublish({ hard_guardrails: ["旧规则", { rule_code: "time_impossible", max_gap_minutes: 60 }] });
+    expect(res.valid).toBe(false);
     expect(res.policy).toBeNull();
   });
-  it("全结构化 policy 经 update 入口通过", () => {
-    const res = updateGuessPolicy({ hard_guardrails: [{ rule_code: "attach_to_closed_workflow" }] });
+  it("全结构化 policy 通过发布校验", () => {
+    const res = prepareForPublish({ hard_guardrails: [{ rule_code: "attach_to_closed_workflow" }] });
     expect(res.valid).toBe(true);
     expect(res.policy).toBeTruthy();
+  });
+  it("前端模块不再导出 publishGuessPolicy/updateGuessPolicy（无平行发布入口）", () => {
+    expect(policyUtilsModule.publishGuessPolicy).toBeUndefined();
+    expect(policyUtilsModule.updateGuessPolicy).toBeUndefined();
+    expect(policyUtilsModule.preparePolicyForPublish).toBeUndefined();
   });
 });
 
