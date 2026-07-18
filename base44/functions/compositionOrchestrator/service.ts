@@ -6,6 +6,8 @@ import type {
 } from "./contracts.ts";
 
 const ACTIONS = new Set(["interpret", "run", "query", "listRuns"]);
+const ACTIVE_HYPOTHESIS_STATUSES = ["pending_review", "selected", "dispatched"];
+const RUN_LOCK_LEASE_MS = 30_000;
 
 function response(http_status: number, body: Record<string, unknown>): ServiceResult {
   return { ok: http_status >= 200 && http_status < 300, http_status, ...body };
@@ -131,7 +133,34 @@ async function listRuns(
   if (!runs.every((item) => tenantSafe(ops, actor.clinic_id, item))) {
     return response(403, { error_code: "tenant_scope_violation" });
   }
-  return response(200, { runs, limit });
+
+  if (request.include_hypothesis_summary !== true) {
+    return response(200, { runs, limit, hypothesis_summary_included: false });
+  }
+
+  const runIds = runs
+    .map((item) => item.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const summaries = runIds.length
+    ? await ops.listActiveHypothesisSummaries(
+        actor.clinic_id,
+        runIds,
+        ACTIVE_HYPOTHESIS_STATUSES
+      )
+    : {};
+  const summarizedRuns = runs.map((item) => ({
+    ...item,
+    hypothesis_summary:
+      typeof item.id === "string"
+        ? summaries[item.id] || { active_count: 0, status_counts: {} }
+        : { active_count: 0, status_counts: {} },
+  }));
+  return response(200, {
+    runs: summarizedRuns,
+    limit,
+    hypothesis_summary_included: true,
+    active_hypothesis_statuses: ACTIVE_HYPOTHESIS_STATUSES,
+  });
 }
 
 async function run(
