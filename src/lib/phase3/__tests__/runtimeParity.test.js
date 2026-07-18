@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
