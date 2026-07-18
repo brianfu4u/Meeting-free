@@ -9,7 +9,7 @@ export const PHASE2_RUNTIME_SOURCES = {
   "src/lib/composition/evidenceInterpreter.js": "1fe84faf2f7be6ed9ba4f5ab121e19a651d1a9f2",
   "src/lib/composition/candidateFinder.js": "cd2264b4aa5417c667b922482221562f01b6f996",
   "src/lib/composition/clustering.js": "bcdf4db155bd85d493106236531f3300216a1770",
-  "src/lib/composition/workflowAssembly.js": "66898b0c45511f99051b187f859a241bfccd3cfe",
+  "src/lib/composition/workflowAssembly.js": "223c1d41b963d21f330a05d66c4fcd7605a80a4f",
   "src/lib/composition/guardrailValidator.js": "1207e1ccce1365c025a53586aa4e0d5233fc089f",
   "src/lib/tenant/tenantContext.js": "b7504dcf1c9fb86ff2ec30bc4f0b9a439cf4a82c",
 };
