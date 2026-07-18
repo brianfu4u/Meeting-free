@@ -4,27 +4,26 @@ import {
   KNOWN_RULE_CODES,
   PUBLISHABLE_RULE_CODES,
   TRACK_IDS,
+  RULE_DESCRIPTORS,
+  TRACK_DESCRIPTORS,
+  UPDATABLE_STATUSES,
   migrateHardGuardrails,
-  validatePolicyTracks,
   validatePolicyForPublish,
+  canUpdatePolicy,
+  isAuthorizedForClinicPure,
   buildContract,
 } from "./contract.ts";
+import { orchestratePublish } from "./publishOrchestrator.ts";
 
 /**
  * Clinic OS V10 — GuessPolicyService（GuessPolicy 唯一发布/更新/迁移后端入口）
  *
- * R2.4 Phase2 修订：
- * 1. 版本单调：policy_version 不得信任前端输入；服务端计算 next_version = max+1。
- *    调用方传入版本必须等于 next_version，否则 409；拒绝重复/低版本。
- * 2. 发布补偿（真正原子）：create staging(draft) → 快照旧 published + 原 active →
- *    retire 旧 → 更新 ClinicConfig → 标记 staging published。任一步失败回滚旧状态并
- *    删除暂存记录，返回非 2xx；禁止 ok:true+warnings 表示生命周期关键步骤失败。
- * 3. 请求幂等：publish_idempotency_key 重复请求只产生一条 Policy。
- * 4. 共享契约：KNOWN/PUBLISHABLE_RULE_CODES、TRACK_IDS、迁移/校验逻辑全部来自
- *    ./contract.ts（单一权威源），前端不再复制。
- * 5. 只读 action：metadata（active/max/next + 可发布规则 + 轨道 + 契约版本）、
- *    contract（返回 buildContract）。
- * 6. 跨租户授权：isAuthorizedForClinic 不从请求体取信 clinic_id。
+ * 发布主逻辑下沉至 publishOrchestrator.ts（纯逻辑 + 注入 ops），本文件只负责：
+ * - 鉴权 / 租户隔离；
+ * - 构造真实 Base44 SDK ops 注入编排器；
+ * - metadata / contract / update / migrate 辅助 action。
+ *
+ * 禁止在本文件复制规则码/轨道/校验/迁移逻辑（全部来自 contract.ts）。
  */
 
 Deno.serve(async (req) => {
@@ -41,151 +40,42 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, ...buildContract() });
     }
 
-    // ── metadata：只读，返回版本与可发布规则（需授权） ──────────────────
+    // ── metadata：只读，返回版本与描述符（需授权） ──────────────────────
     if (action === "metadata") {
-      if (user.role !== "admin") {
-        return Response.json({ error: "仅店长可查看策略元数据" }, { status: 403 });
-      }
+      if (user.role !== "admin") return Response.json({ error: "仅店长可查看策略元数据" }, { status: 403 });
       if (!clinic_id) return Response.json({ error: "clinic_id 必填" }, { status: 400 });
-      if (!(await isAuthorizedForClinic(svc, user, clinic_id))) {
+      if (!(await isAuthorized(svc, user, clinic_id))) {
         return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
       }
-      const meta = await computeMetadata(svc, clinic_id);
-      return Response.json({ ok: true, ...meta });
+      return Response.json({ ok: true, ...(await computeMetadata(svc, clinic_id)) });
     }
 
-    // ── publish：店长发布新版本（版本单调 + 幂等 + 补偿回滚） ────────────
+    // ── publish：店长发布新版本（编排器：版本单调+幂等+补偿） ────────────
     if (action === "publish") {
-      if (user.role !== "admin") {
-        return Response.json({ error: "仅店长可发布策略" }, { status: 403 });
-      }
+      if (user.role !== "admin") return Response.json({ error: "仅店长可发布策略" }, { status: 403 });
       if (!clinic_id) return Response.json({ error: "clinic_id 必填" }, { status: 400 });
-      if (!(await isAuthorizedForClinic(svc, user, clinic_id))) {
+      if (!(await isAuthorized(svc, user, clinic_id))) {
         return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
       }
-      const { hard_guardrails, tracks, decision_rules, policy_version, idempotency_key } = body;
-
-      // 版本单调：服务端计算 next_version
-      const meta = await computeMetadata(svc, clinic_id);
-      const nextV = meta.next_policy_version;
-      if (policy_version != null && Number(policy_version) !== nextV) {
-        return Response.json(
-          { ok: false, error: "版本冲突：必须等于服务端 next_version", next_version: nextV, provided: Number(policy_version) },
-          { status: 409 }
-        );
-      }
-      const finalVersion = nextV;
-
-      // 幂等：相同 idempotency_key 已存在则直接返回既有 Policy
-      if (idempotency_key) {
-        const existing = await svc.entities.GuessPolicy.filter({
+      const ops = makeRealOps(svc);
+      const result = await orchestratePublish(
+        {
           clinic_id,
-          publish_idempotency_key: idempotency_key,
-        });
-        if (existing && existing.length > 0) {
-          return Response.json({
-            ok: true,
-            idempotent: true,
-            policy_id: existing[0].id,
-            policy: existing[0],
-            next_version: nextV,
-          });
-        }
-      }
-
-      // 发布校验
-      const migrated = migrateHardGuardrails(hard_guardrails || []);
-      const candidate = { hard_guardrails: migrated, tracks, decision_rules };
-      const { valid, errors } = validatePolicyForPublish(candidate);
-      if (!valid) {
-        return Response.json({ ok: false, errors, policy: null }, { status: 400 });
-      }
-
-      const now = new Date().toISOString();
-
-      // 步骤 1：创建暂存记录（draft，未发布）
-      let staging: any;
-      try {
-        staging = await svc.entities.GuessPolicy.create({
-          clinic_id,
-          policy_version: finalVersion,
-          status: "draft",
-          hard_guardrails: migrated,
-          tracks: tracks || [],
-          decision_rules: decision_rules || {},
-          publish_idempotency_key: idempotency_key || null,
-        });
-      } catch (e) {
-        return Response.json({ ok: false, error: "暂存创建失败", detail: (e as Error).message }, { status: 500 });
-      }
-
-      // 步骤 2：快照旧 published + 原 active version
-      const older = await svc.entities.GuessPolicy.filter({ clinic_id, status: "published" });
-      const oldSnap = older.map((o: any) => ({ id: o.id, retired_at: o.retired_at }));
-      let cfgRec: any = null;
-      let originalActive: any = undefined;
-      try {
-        const cfgList = await svc.entities.ClinicConfig.filter({ clinic_id });
-        cfgRec = cfgList[0] || null;
-        originalActive = cfgRec?.active_policy_version ?? null;
-      } catch {
-        // 读取失败后续按无 config 处理
-      }
-
-      // 步骤 3：退役旧 published
-      try {
-        for (const o of older) {
-          await svc.entities.GuessPolicy.update(o.id, { status: "retired", retired_at: now });
-        }
-      } catch (e) {
-        await safeDelete(svc, staging.id);
-        return Response.json({ ok: false, error: "退役旧版本失败，已回滚", detail: (e as Error).message }, { status: 500 });
-      }
-
-      // 步骤 4：更新 ClinicConfig.active_policy_version
-      if (!cfgRec) {
-        // 无 config 视为生命周期失败：回滚旧 published + 删除暂存
-        await restoreOlder(svc, oldSnap);
-        await safeDelete(svc, staging.id);
-        return Response.json({ ok: false, error: "ClinicConfig 不存在，已回滚" }, { status: 500 });
-      }
-      try {
-        await svc.entities.ClinicConfig.update(cfgRec.id, { active_policy_version: finalVersion });
-      } catch (e) {
-        await restoreOlder(svc, oldSnap);
-        await safeDelete(svc, staging.id);
-        return Response.json({ ok: false, error: "ClinicConfig 更新失败，已回滚", detail: (e as Error).message }, { status: 500 });
-      }
-
-      // 步骤 5：标记暂存为 published（最后一步，全部成功后）
-      try {
-        const published = await svc.entities.GuessPolicy.update(staging.id, {
-          status: "published",
-          published_at: now,
-          published_by: user.id,
-        });
-        return Response.json({
-          ok: true,
-          policy_id: published.id,
-          policy: published,
-          next_version: nextV,
-        });
-      } catch (e) {
-        // 关键失败：config 已更新但发布标记失败 → 回滚 config + 旧 published + 删除暂存
-        try {
-          await svc.entities.ClinicConfig.update(cfgRec.id, { active_policy_version: originalActive });
-        } catch {}
-        await restoreOlder(svc, oldSnap);
-        await safeDelete(svc, staging.id);
-        return Response.json({ ok: false, error: "发布标记失败，已回滚", detail: (e as Error).message }, { status: 500 });
-      }
+          idempotency_key: body.idempotency_key,
+          policy_version: body.policy_version,
+          hard_guardrails: body.hard_guardrails,
+          tracks: body.tracks,
+          decision_rules: body.decision_rules,
+          user_id: user.id,
+        },
+        ops
+      );
+      return Response.json(result, { status: result.http_status });
     }
 
-    // ── update：更新既有策略记录（不得绕过发布生命周期） ──────────────────
+    // ── update：更新既有策略（仅 draft/reviewed；published/retired 禁止） ─
     if (action === "update") {
-      if (user.role !== "admin") {
-        return Response.json({ error: "仅店长可更新策略" }, { status: 403 });
-      }
+      if (user.role !== "admin") return Response.json({ error: "仅店长可更新策略" }, { status: 403 });
       const { policy_id, hard_guardrails, tracks, decision_rules, status } = body;
       if (!policy_id) return Response.json({ error: "policy_id 必填" }, { status: 400 });
       if (status !== undefined) {
@@ -197,8 +87,14 @@ Deno.serve(async (req) => {
       } catch {
         return Response.json({ error: "策略不存在" }, { status: 404 });
       }
-      if (!(await isAuthorizedForClinic(svc, user, rec.clinic_id))) {
+      if (!(await isAuthorized(svc, user, rec.clinic_id))) {
         return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
+      }
+      if (!canUpdatePolicy(rec.status)) {
+        return Response.json(
+          { ok: false, error: "已发布/退役策略不可原地修改；请通过 publish 创建新版本", current_status: rec.status },
+          { status: 409 }
+        );
       }
       const migrated = migrateHardGuardrails(hard_guardrails ?? rec.hard_guardrails ?? []);
       const candidate = {
@@ -207,9 +103,7 @@ Deno.serve(async (req) => {
         decision_rules: decision_rules ?? rec.decision_rules,
       };
       const { valid, errors } = validatePolicyForPublish(candidate);
-      if (!valid) {
-        return Response.json({ ok: false, errors, policy: null }, { status: 400 });
-      }
+      if (!valid) return Response.json({ ok: false, errors }, { status: 400 });
       const patch: any = { hard_guardrails: migrated };
       if (tracks !== undefined) patch.tracks = tracks;
       if (decision_rules !== undefined) patch.decision_rules = decision_rules;
@@ -217,40 +111,50 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, policy: updated });
     }
 
-    // ── migrate：幂等迁移同店所有 GuessPolicy 的 hard_guardrails ──────────
+    // ── migrate：受控迁移同店所有 GuessPolicy 的 hard_guardrails（逐条审计） ─
     if (action === "migrate") {
-      if (user.role !== "admin") {
-        return Response.json({ error: "仅店长可执行迁移" }, { status: 403 });
-      }
+      if (user.role !== "admin") return Response.json({ error: "仅店长可执行迁移" }, { status: 403 });
       if (!clinic_id) return Response.json({ error: "clinic_id 必填" }, { status: 400 });
-      if (!(await isAuthorizedForClinic(svc, user, clinic_id))) {
+      if (!(await isAuthorized(svc, user, clinic_id))) {
         return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
       }
       const dry_run = body.dry_run === true;
       const all = await svc.entities.GuessPolicy.filter({ clinic_id });
-      let scanned = all.length;
+      const audit: any[] = [];
       let migrated = 0;
       let skipped = 0;
       let failed = 0;
-      const failed_record_ids: string[] = [];
       for (const rec of all) {
-        try {
-          const current = rec.hard_guardrails || [];
-          const migratedGuardrails = migrateHardGuardrails(current);
-          if (deepEqual(migratedGuardrails, current)) {
-            skipped++;
-            continue;
+        const before = rec.hard_guardrails || [];
+        const after = migrateHardGuardrails(before);
+        const changed = JSON.stringify(after) !== JSON.stringify(before);
+        if (!changed) {
+          skipped++;
+          audit.push({ id: rec.id, status: rec.status, policy_version: rec.policy_version, action: "skipped" });
+          continue;
+        }
+        if (!dry_run) {
+          try {
+            await svc.entities.GuessPolicy.update(rec.id, { hard_guardrails: after });
+            migrated++;
+            audit.push({
+              id: rec.id,
+              status: rec.status,
+              policy_version: rec.policy_version,
+              action: "migrated",
+              before_summary: summarizeGuardrails(before),
+              after_summary: summarizeGuardrails(after),
+            });
+          } catch (e) {
+            failed++;
+            audit.push({ id: rec.id, status: rec.status, policy_version: rec.policy_version, action: "failed", error: (e as Error).message });
           }
-          if (!dry_run) {
-            await svc.entities.GuessPolicy.update(rec.id, { hard_guardrails: migratedGuardrails });
-          }
+        } else {
           migrated++;
-        } catch {
-          failed++;
-          failed_record_ids.push(rec.id);
+          audit.push({ id: rec.id, status: rec.status, policy_version: rec.policy_version, action: "dry_run_migrated" });
         }
       }
-      return Response.json({ ok: true, dry_run, scanned, migrated, skipped, failed, failed_record_ids });
+      return Response.json({ ok: true, dry_run, scanned: all.length, migrated, skipped, failed, audit });
     }
 
     return Response.json({ error: "action 必须为 metadata / contract / publish / update / migrate" }, { status: 400 });
@@ -259,7 +163,36 @@ Deno.serve(async (req) => {
   }
 });
 
-// ── helpers ───────────────────────────────────────────────────────────
+// ── 真实 Base44 SDK ops（注入编排器） ─────────────────────────────────
+function makeRealOps(svc: any): any {
+  return {
+    findByIdempotencyKey: async (cid: string, key: string) =>
+      svc.entities.GuessPolicy.filter({ clinic_id: cid, publish_idempotency_key: key }),
+    findAllPolicies: async (cid: string) => svc.entities.GuessPolicy.filter({ clinic_id: cid }),
+    findPublished: async (cid: string) =>
+      svc.entities.GuessPolicy.filter({ clinic_id: cid, status: "published" }),
+    findConfig: async (cid: string) => {
+      const l = await svc.entities.ClinicConfig.filter({ clinic_id: cid });
+      return l[0] || null;
+    },
+    createStaging: async (input: any) => svc.entities.GuessPolicy.create(input),
+    recheckByIdempotencyKey: async (cid: string, key: string) =>
+      svc.entities.GuessPolicy.filter({ clinic_id: cid, publish_idempotency_key: key }),
+    recheckByVersion: async (cid: string, v: number) =>
+      svc.entities.GuessPolicy.filter({ clinic_id: cid, policy_version: v }),
+    retirePolicy: async (id: string, now: string) =>
+      svc.entities.GuessPolicy.update(id, { status: "retired", retired_at: now }),
+    restoreRetired: async (id: string, retired_at: any) =>
+      svc.entities.GuessPolicy.update(id, { status: "published", retired_at }),
+    updateConfigActive: async (cfgId: string, v: number) =>
+      svc.entities.ClinicConfig.update(cfgId, { active_policy_version: v }),
+    restoreConfigActive: async (cfgId: string, orig: number | null) =>
+      svc.entities.ClinicConfig.update(cfgId, { active_policy_version: orig }),
+    markPublished: async (id: string, now: string, uid: string) =>
+      svc.entities.GuessPolicy.update(id, { status: "published", published_at: now, published_by: uid }),
+    deleteStaging: async (id: string) => svc.entities.GuessPolicy.delete(id),
+  };
+}
 
 async function computeMetadata(svc: any, clinic_id: string) {
   const all = await svc.entities.GuessPolicy.filter({ clinic_id });
@@ -267,8 +200,8 @@ async function computeMetadata(svc: any, clinic_id: string) {
   const maxV = versions.length ? Math.max(...versions) : 0;
   let active: any = null;
   try {
-    const cfgList = await svc.entities.ClinicConfig.filter({ clinic_id });
-    active = cfgList[0]?.active_policy_version ?? null;
+    const l = await svc.entities.ClinicConfig.filter({ clinic_id });
+    active = l[0]?.active_policy_version ?? null;
   } catch {
     active = null;
   }
@@ -280,49 +213,40 @@ async function computeMetadata(svc: any, clinic_id: string) {
     publishable_rule_codes: PUBLISHABLE_RULE_CODES,
     known_rule_codes: KNOWN_RULE_CODES,
     track_ids: TRACK_IDS,
+    rule_descriptors: RULE_DESCRIPTORS,
+    track_descriptors: TRACK_DESCRIPTORS,
+    updatable_statuses: UPDATABLE_STATUSES,
     contract_version: CONTRACT_VERSION,
   };
 }
 
-async function isAuthorizedForClinic(svc: any, user: any, clinic_id: string): Promise<boolean> {
+async function isAuthorized(svc: any, user: any, clinic_id: string): Promise<boolean> {
   if (!clinic_id || !user?.id) return false;
   try {
     const cfgs = await svc.entities.ClinicConfig.filter({ clinic_id });
     if (!cfgs || cfgs.length === 0) return false;
-    if (cfgs.some((c: any) => c.created_by_id === user.id)) return true;
-    for (const c of cfgs) {
-      if (!c.manager_id) continue;
+    const managerIds = [...new Set(cfgs.map((c: any) => c.manager_id).filter(Boolean))];
+    const staffByManagerId = new Map();
+    for (const mid of managerIds) {
       try {
-        const staff = await svc.entities.Staff.get(c.manager_id);
-        if (staff && staff.user_id === user.id) return true;
+        const s = await svc.entities.Staff.get(mid);
+        if (s) staffByManagerId.set(mid, s);
       } catch {
         // manager_id 可能不是 Staff.id，忽略
       }
     }
+    return isAuthorizedForClinicPure(user, cfgs, staffByManagerId);
   } catch {
     return false;
   }
-  return false;
 }
 
-async function restoreOlder(svc: any, oldSnap: { id: string; retired_at: any }[]) {
-  for (const o of oldSnap) {
-    try {
-      await svc.entities.GuessPolicy.update(o.id, { status: "published", retired_at: o.retired_at ?? null });
-    } catch {
-      // 尽力恢复
-    }
-  }
-}
-
-async function safeDelete(svc: any, id: string) {
+function summarizeGuardrails(g: any): string {
   try {
-    await svc.entities.GuessPolicy.delete(id);
+    return (g || [])
+      .map((x: any) => (typeof x === "string" ? "legacy_str" : x?.rule_code || "obj"))
+      .join(",");
   } catch {
-    // 尽力清理暂存
+    return "?";
   }
-}
-
-function deepEqual(a: any, b: any): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
 }

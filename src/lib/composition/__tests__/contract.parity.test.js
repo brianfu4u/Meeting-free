@@ -4,6 +4,11 @@ import {
   KNOWN_RULE_CODES,
   PUBLISHABLE_RULE_CODES,
   TRACK_IDS,
+  RULE_DESCRIPTORS,
+  TRACK_DESCRIPTORS,
+  UPDATABLE_STATUSES,
+  canUpdatePolicy,
+  isAuthorizedForClinicPure,
   migrateHardGuardrails,
   validatePolicyTracks,
   validateGuessPolicy,
@@ -110,5 +115,32 @@ describe("contract — validateGuessPolicy 运行期校验", () => {
   });
   it("缺省视为通过", () => {
     expect(validateGuessPolicy({}).valid).toBe(true);
+  });
+});
+
+describe("contract — 描述符与授权纯函数 parity", () => {
+  it("buildContract 含 rule_descriptors / track_descriptors / updatable_statuses", () => {
+    const c = buildContract();
+    expect(c.rule_descriptors).toEqual(RULE_DESCRIPTORS);
+    expect(c.track_descriptors).toEqual(TRACK_DESCRIPTORS);
+    expect(c.updatable_statuses).toEqual(UPDATABLE_STATUSES);
+  });
+  it("RULE_DESCRIPTORS codes 与 PUBLISHABLE_RULE_CODES 一致", () => {
+    expect(RULE_DESCRIPTORS.map((d) => d.rule_code)).toEqual(PUBLISHABLE_RULE_CODES);
+  });
+  it("TRACK_DESCRIPTORS track_ids 与 TRACK_IDS 一致", () => {
+    expect(TRACK_DESCRIPTORS.map((d) => d.track_id)).toEqual(TRACK_IDS);
+  });
+  it("canUpdatePolicy: draft/reviewed 允许，published/retired 拒绝", () => {
+    expect(canUpdatePolicy("draft")).toBe(true);
+    expect(canUpdatePolicy("reviewed")).toBe(true);
+    expect(canUpdatePolicy("published")).toBe(false);
+    expect(canUpdatePolicy("retired")).toBe(false);
+  });
+  it("isAuthorizedForClinicPure: 创建人/manager 绑定员工授权，否则拒绝", () => {
+    expect(isAuthorizedForClinicPure({ id: "u1" }, [{ created_by_id: "u1" }], new Map())).toBe(true);
+    expect(isAuthorizedForClinicPure({ id: "u1" }, [{ manager_id: "s1" }], new Map([["s1", { user_id: "u1" }]]))).toBe(true);
+    expect(isAuthorizedForClinicPure({ id: "u2" }, [{ manager_id: "s1" }], new Map([["s1", { user_id: "u1" }]]))).toBe(false);
+    expect(isAuthorizedForClinicPure({ id: "u1" }, [], new Map())).toBe(false);
   });
 });
