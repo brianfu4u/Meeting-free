@@ -8,8 +8,6 @@
  * - 结构化 rule_code 分发；legacy_text / 未知 rule_code 均阻断（不静默忽略）。
  */
 
-import { KNOWN_RULE_CODES } from "./policyUtils";
-
 export function validateHypotheses(hypotheses, context = {}) {
   // R2.4：Guardrail 自身必须要求 clinicId（租户隔离强制）
   if (!context.clinicId) {
@@ -240,5 +238,3 @@ export function compareHypotheses(a, b) {
 
   return 0;
 }
-
-export { KNOWN_RULE_CODES };

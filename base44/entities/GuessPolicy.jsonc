@@ -99,6 +99,10 @@
       "type": "string",
       "format": "date-time",
       "description": "\u9000\u5f79\u65f6\u95f4"
+    },
+    "publish_idempotency_key": {
+      "type": "string",
+      "description": "\u53d1\u5e03\u8bf7\u6c42\u5e42\u7b49\u952e\uff1a\u76f8\u540c clinic_id + key \u7684\u91cd\u590d publish \u8bf7\u6c42\u53ea\u4ea7\u751f\u4e00\u6761 Policy"
     }
   },
   "required": [

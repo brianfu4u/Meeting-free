@@ -1,150 +1,31 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
+import {
+  CONTRACT_VERSION,
+  KNOWN_RULE_CODES,
+  PUBLISHABLE_RULE_CODES,
+  TRACK_IDS,
+  migrateHardGuardrails,
+  validatePolicyTracks,
+  validatePolicyForPublish,
+  buildContract,
+} from "./contract.ts";
 
 /**
  * Clinic OS V10 — GuessPolicyService（GuessPolicy 唯一发布/更新/迁移后端入口）
  *
- * R2.4 修订（本次）：
- * 1. 跨租户修复：admin 身份由 ClinicConfig.created_by_id===user.id 或
- *    ClinicConfig.manager_id→Staff.user_id===user.id 推导，**不从请求体取信 clinic_id**。
- *    publish/update/migrate 三 action 均强制 isAuthorizedForClinic 校验。
- * 2. update 不得绕过发布生命周期：移除 status 字段更新；status 仅经 publish 新版本流转。
- * 3. publish 原子性：先 create 新版本成功 → 再退役旧 published → 再更新 ClinicConfig；
- *    create 失败时旧 published 仍有效；ClinicConfig 更新失败外显为 warning（不静默）。
- * 4. update 的 clinic_id 一律取自 DB 记录 rec.clinic_id，不接受请求体 clinic_id 覆盖。
- *
- * 宪法：
- * - 写入仅店长（admin）且必须属于该门店；
- * - legacy_text 与未知 rule_code 均不得正常发布（发布校验拒绝）；
- * - clinic_id 物理隔离。
- *
- * 注：迁移/校验逻辑在本后端入口内联实现（持久化权威源），与 src/lib/composition/policyUtils.js
- * 的纯函数保持一致语义；前端纯函数仅用于客户端预校验与单测，不构成平行发布入口。
+ * R2.4 Phase2 修订：
+ * 1. 版本单调：policy_version 不得信任前端输入；服务端计算 next_version = max+1。
+ *    调用方传入版本必须等于 next_version，否则 409；拒绝重复/低版本。
+ * 2. 发布补偿（真正原子）：create staging(draft) → 快照旧 published + 原 active →
+ *    retire 旧 → 更新 ClinicConfig → 标记 staging published。任一步失败回滚旧状态并
+ *    删除暂存记录，返回非 2xx；禁止 ok:true+warnings 表示生命周期关键步骤失败。
+ * 3. 请求幂等：publish_idempotency_key 重复请求只产生一条 Policy。
+ * 4. 共享契约：KNOWN/PUBLISHABLE_RULE_CODES、TRACK_IDS、迁移/校验逻辑全部来自
+ *    ./contract.ts（单一权威源），前端不再复制。
+ * 5. 只读 action：metadata（active/max/next + 可发布规则 + 轨道 + 契约版本）、
+ *    contract（返回 buildContract）。
+ * 6. 跨租户授权：isAuthorizedForClinic 不从请求体取信 clinic_id。
  */
-
-const KNOWN_RULE_CODES = [
-  "subject_conflict",
-  "time_impossible",
-  "attach_to_closed_workflow",
-  "legacy_text",
-];
-
-const PUBLISHABLE_RULE_CODES = [
-  "subject_conflict",
-  "time_impossible",
-  "attach_to_closed_workflow",
-];
-
-const TRACK_IDS = [
-  "subject_fingerprint",
-  "causal_chain",
-  "temporal_continuity",
-  "department_handoff",
-  "actor_device_location",
-  "document_lineage",
-  "open_loop_closure",
-];
-
-function migrateHardGuardrails(guardrails: any[]): any[] {
-  if (!Array.isArray(guardrails)) return [];
-  return guardrails.map((g) => {
-    if (typeof g === "string") {
-      return { rule_code: "legacy_text", original: g };
-    }
-    if (g && typeof g === "object" && !Array.isArray(g)) {
-      if (g.rule_code && KNOWN_RULE_CODES.includes(g.rule_code)) return g;
-      return { rule_code: "legacy_text", original: JSON.stringify(g) };
-    }
-    return { rule_code: "legacy_text", original: String(g) };
-  });
-}
-
-function validatePolicyTracks(policy: any) {
-  const errors: string[] = [];
-  const tracks = policy?.tracks;
-  if (tracks == null) return { valid: true, errors };
-  if (!Array.isArray(tracks)) return { valid: false, errors: ["tracks must be array"] };
-  const known = new Set(TRACK_IDS);
-  const seen = new Set<string>();
-  tracks.forEach((t: any, i: number) => {
-    if (!t || typeof t !== "object" || Array.isArray(t)) {
-      errors.push(`tracks[${i}] must be object`);
-      return;
-    }
-    if (!t.track_id || typeof t.track_id !== "string") {
-      errors.push(`tracks[${i}].track_id missing`);
-      return;
-    }
-    if (!known.has(t.track_id)) {
-      errors.push(`tracks[${i}].track_id unknown: ${t.track_id}（固定七轨道不可替换/新增）`);
-    }
-    if (seen.has(t.track_id)) {
-      errors.push(`tracks[${i}].track_id duplicate: ${t.track_id}`);
-    }
-    seen.add(t.track_id);
-  });
-  return { valid: errors.length === 0, errors };
-}
-
-function validatePolicyForPublish(policy: any) {
-  const errors: string[] = [];
-  if (!policy || typeof policy !== "object") {
-    return { valid: false, errors: ["policy must be object"] };
-  }
-  const guardrails = policy.hard_guardrails;
-  if (guardrails != null) {
-    if (!Array.isArray(guardrails)) {
-      return { valid: false, errors: ["hard_guardrails must be array"] };
-    }
-    guardrails.forEach((g: any, i: number) => {
-      if (!g || typeof g !== "object" || Array.isArray(g)) {
-        errors.push(`hard_guardrails[${i}] must be object`);
-        return;
-      }
-      if (!g.rule_code || typeof g.rule_code !== "string") {
-        errors.push(`hard_guardrails[${i}].rule_code missing`);
-        return;
-      }
-      if (!PUBLISHABLE_RULE_CODES.includes(g.rule_code)) {
-        errors.push(`hard_guardrails[${i}].rule_code not publishable: ${g.rule_code}`);
-      }
-    });
-  }
-  const tc = validatePolicyTracks(policy);
-  return { valid: errors.length === 0 && tc.valid, errors: [...errors, ...tc.errors] };
-}
-
-function deepEqual(a: any, b: any): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-/**
- * 跨租户授权：admin 是否属于该门店。
- * 1) ClinicConfig.created_by_id === user.id（门店创建者即店长）；或
- * 2) ClinicConfig.manager_id 对应的 Staff.user_id === user.id。
- * 请求体 clinic_id 不得作为授权依据。
- */
-async function isAuthorizedForClinic(svc: any, user: any, clinic_id: string): Promise<boolean> {
-  if (!clinic_id || !user?.id) return false;
-  try {
-    const cfgs = await svc.entities.ClinicConfig.filter({ clinic_id });
-    if (!cfgs || cfgs.length === 0) return false;
-    // 1) 创建者
-    if (cfgs.some((c: any) => c.created_by_id === user.id)) return true;
-    // 2) manager_id → Staff.user_id
-    for (const c of cfgs) {
-      if (!c.manager_id) continue;
-      try {
-        const staff = await svc.entities.Staff.get(c.manager_id);
-        if (staff && staff.user_id === user.id) return true;
-      } catch {
-        // manager_id 可能不是 Staff.id，忽略
-      }
-    }
-  } catch {
-    return false;
-  }
-  return false;
-}
 
 Deno.serve(async (req) => {
   try {
@@ -155,67 +36,149 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { action, clinic_id } = body || {};
 
-    // ── publish：店长发布新版本（原子序：create → retire → config） ──────
+    // ── contract：返回共享契约（登录即可，无门店维度） ───────────────────
+    if (action === "contract") {
+      return Response.json({ ok: true, ...buildContract() });
+    }
+
+    // ── metadata：只读，返回版本与可发布规则（需授权） ──────────────────
+    if (action === "metadata") {
+      if (user.role !== "admin") {
+        return Response.json({ error: "仅店长可查看策略元数据" }, { status: 403 });
+      }
+      if (!clinic_id) return Response.json({ error: "clinic_id 必填" }, { status: 400 });
+      if (!(await isAuthorizedForClinic(svc, user, clinic_id))) {
+        return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
+      }
+      const meta = await computeMetadata(svc, clinic_id);
+      return Response.json({ ok: true, ...meta });
+    }
+
+    // ── publish：店长发布新版本（版本单调 + 幂等 + 补偿回滚） ────────────
     if (action === "publish") {
       if (user.role !== "admin") {
         return Response.json({ error: "仅店长可发布策略" }, { status: 403 });
       }
       if (!clinic_id) return Response.json({ error: "clinic_id 必填" }, { status: 400 });
-      // 跨租户校验：admin 必须属于该门店（不从请求体取信）
       if (!(await isAuthorizedForClinic(svc, user, clinic_id))) {
         return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
       }
-      const { policy_version, hard_guardrails, tracks, decision_rules } = body;
-      if (policy_version == null) {
-        return Response.json({ error: "policy_version 必填" }, { status: 400 });
+      const { hard_guardrails, tracks, decision_rules, policy_version, idempotency_key } = body;
+
+      // 版本单调：服务端计算 next_version
+      const meta = await computeMetadata(svc, clinic_id);
+      const nextV = meta.next_policy_version;
+      if (policy_version != null && Number(policy_version) !== nextV) {
+        return Response.json(
+          { ok: false, error: "版本冲突：必须等于服务端 next_version", next_version: nextV, provided: Number(policy_version) },
+          { status: 409 }
+        );
       }
+      const finalVersion = nextV;
+
+      // 幂等：相同 idempotency_key 已存在则直接返回既有 Policy
+      if (idempotency_key) {
+        const existing = await svc.entities.GuessPolicy.filter({
+          clinic_id,
+          publish_idempotency_key: idempotency_key,
+        });
+        if (existing && existing.length > 0) {
+          return Response.json({
+            ok: true,
+            idempotent: true,
+            policy_id: existing[0].id,
+            policy: existing[0],
+            next_version: nextV,
+          });
+        }
+      }
+
+      // 发布校验
       const migrated = migrateHardGuardrails(hard_guardrails || []);
       const candidate = { hard_guardrails: migrated, tracks, decision_rules };
       const { valid, errors } = validatePolicyForPublish(candidate);
       if (!valid) {
         return Response.json({ ok: false, errors, policy: null }, { status: 400 });
       }
+
       const now = new Date().toISOString();
-      // 原子序 1：先创建新版本（失败则旧 published 仍有效，安全）
-      const created = await svc.entities.GuessPolicy.create({
-        clinic_id,
-        policy_version,
-        status: "published",
-        hard_guardrails: migrated,
-        tracks: tracks || [],
-        decision_rules: decision_rules || {},
-        published_at: now,
-        published_by: user.id,
-      });
-      // 原子序 2：新版本已落库，再退役同店旧 published
-      const older = await svc.entities.GuessPolicy.filter({ clinic_id, status: "published" });
-      const retireWarnings: string[] = [];
-      for (const o of older) {
-        if (o.id === created.id) continue;
-        try {
-          await svc.entities.GuessPolicy.update(o.id, { status: "retired", retired_at: now });
-        } catch (e) {
-          retireWarnings.push(`retire ${o.id} failed: ${(e as Error).message}`);
-        }
+
+      // 步骤 1：创建暂存记录（draft，未发布）
+      let staging: any;
+      try {
+        staging = await svc.entities.GuessPolicy.create({
+          clinic_id,
+          policy_version: finalVersion,
+          status: "draft",
+          hard_guardrails: migrated,
+          tracks: tracks || [],
+          decision_rules: decision_rules || {},
+          publish_idempotency_key: idempotency_key || null,
+        });
+      } catch (e) {
+        return Response.json({ ok: false, error: "暂存创建失败", detail: (e as Error).message }, { status: 500 });
       }
-      // 原子序 3：更新 ClinicConfig.active_policy_version（失败外显为 warning，不静默）
-      const configWarnings: string[] = [];
+
+      // 步骤 2：快照旧 published + 原 active version
+      const older = await svc.entities.GuessPolicy.filter({ clinic_id, status: "published" });
+      const oldSnap = older.map((o: any) => ({ id: o.id, retired_at: o.retired_at }));
+      let cfgRec: any = null;
+      let originalActive: any = undefined;
       try {
         const cfgList = await svc.entities.ClinicConfig.filter({ clinic_id });
-        if (cfgList[0]) {
-          await svc.entities.ClinicConfig.update(cfgList[0].id, { active_policy_version: policy_version });
-        } else {
-          configWarnings.push("ClinicConfig 不存在，active_policy_version 未更新");
+        cfgRec = cfgList[0] || null;
+        originalActive = cfgRec?.active_policy_version ?? null;
+      } catch {
+        // 读取失败后续按无 config 处理
+      }
+
+      // 步骤 3：退役旧 published
+      try {
+        for (const o of older) {
+          await svc.entities.GuessPolicy.update(o.id, { status: "retired", retired_at: now });
         }
       } catch (e) {
-        configWarnings.push(`ClinicConfig 更新失败: ${(e as Error).message}`);
+        await safeDelete(svc, staging.id);
+        return Response.json({ ok: false, error: "退役旧版本失败，已回滚", detail: (e as Error).message }, { status: 500 });
       }
-      return Response.json({
-        ok: true,
-        policy_id: created.id,
-        policy: created,
-        warnings: [...retireWarnings, ...configWarnings],
-      });
+
+      // 步骤 4：更新 ClinicConfig.active_policy_version
+      if (!cfgRec) {
+        // 无 config 视为生命周期失败：回滚旧 published + 删除暂存
+        await restoreOlder(svc, oldSnap);
+        await safeDelete(svc, staging.id);
+        return Response.json({ ok: false, error: "ClinicConfig 不存在，已回滚" }, { status: 500 });
+      }
+      try {
+        await svc.entities.ClinicConfig.update(cfgRec.id, { active_policy_version: finalVersion });
+      } catch (e) {
+        await restoreOlder(svc, oldSnap);
+        await safeDelete(svc, staging.id);
+        return Response.json({ ok: false, error: "ClinicConfig 更新失败，已回滚", detail: (e as Error).message }, { status: 500 });
+      }
+
+      // 步骤 5：标记暂存为 published（最后一步，全部成功后）
+      try {
+        const published = await svc.entities.GuessPolicy.update(staging.id, {
+          status: "published",
+          published_at: now,
+          published_by: user.id,
+        });
+        return Response.json({
+          ok: true,
+          policy_id: published.id,
+          policy: published,
+          next_version: nextV,
+        });
+      } catch (e) {
+        // 关键失败：config 已更新但发布标记失败 → 回滚 config + 旧 published + 删除暂存
+        try {
+          await svc.entities.ClinicConfig.update(cfgRec.id, { active_policy_version: originalActive });
+        } catch {}
+        await restoreOlder(svc, oldSnap);
+        await safeDelete(svc, staging.id);
+        return Response.json({ ok: false, error: "发布标记失败，已回滚", detail: (e as Error).message }, { status: 500 });
+      }
     }
 
     // ── update：更新既有策略记录（不得绕过发布生命周期） ──────────────────
@@ -225,7 +188,6 @@ Deno.serve(async (req) => {
       }
       const { policy_id, hard_guardrails, tracks, decision_rules, status } = body;
       if (!policy_id) return Response.json({ error: "policy_id 必填" }, { status: 400 });
-      // 禁止经 update 改 status（绕过 publish 生命周期）
       if (status !== undefined) {
         return Response.json({ error: "update 禁止修改 status；状态流转仅经 publish 新版本" }, { status: 400 });
       }
@@ -235,7 +197,6 @@ Deno.serve(async (req) => {
       } catch {
         return Response.json({ error: "策略不存在" }, { status: 404 });
       }
-      // 跨租户校验：clinic_id 一律取自 DB 记录，不接受请求体覆盖
       if (!(await isAuthorizedForClinic(svc, user, rec.clinic_id))) {
         return Response.json({ error: "无权操作该门店（租户隔离）" }, { status: 403 });
       }
@@ -284,7 +245,7 @@ Deno.serve(async (req) => {
             await svc.entities.GuessPolicy.update(rec.id, { hard_guardrails: migratedGuardrails });
           }
           migrated++;
-        } catch (e) {
+        } catch {
           failed++;
           failed_record_ids.push(rec.id);
         }
@@ -292,8 +253,76 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, dry_run, scanned, migrated, skipped, failed, failed_record_ids });
     }
 
-    return Response.json({ error: "action 必须为 publish / update / migrate" }, { status: 400 });
+    return Response.json({ error: "action 必须为 metadata / contract / publish / update / migrate" }, { status: 400 });
   } catch (error) {
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }
 });
+
+// ── helpers ───────────────────────────────────────────────────────────
+
+async function computeMetadata(svc: any, clinic_id: string) {
+  const all = await svc.entities.GuessPolicy.filter({ clinic_id });
+  const versions = all.map((r: any) => Number(r.policy_version) || 0);
+  const maxV = versions.length ? Math.max(...versions) : 0;
+  let active: any = null;
+  try {
+    const cfgList = await svc.entities.ClinicConfig.filter({ clinic_id });
+    active = cfgList[0]?.active_policy_version ?? null;
+  } catch {
+    active = null;
+  }
+  return {
+    clinic_id,
+    active_policy_version: active,
+    max_policy_version: maxV || null,
+    next_policy_version: maxV + 1,
+    publishable_rule_codes: PUBLISHABLE_RULE_CODES,
+    known_rule_codes: KNOWN_RULE_CODES,
+    track_ids: TRACK_IDS,
+    contract_version: CONTRACT_VERSION,
+  };
+}
+
+async function isAuthorizedForClinic(svc: any, user: any, clinic_id: string): Promise<boolean> {
+  if (!clinic_id || !user?.id) return false;
+  try {
+    const cfgs = await svc.entities.ClinicConfig.filter({ clinic_id });
+    if (!cfgs || cfgs.length === 0) return false;
+    if (cfgs.some((c: any) => c.created_by_id === user.id)) return true;
+    for (const c of cfgs) {
+      if (!c.manager_id) continue;
+      try {
+        const staff = await svc.entities.Staff.get(c.manager_id);
+        if (staff && staff.user_id === user.id) return true;
+      } catch {
+        // manager_id 可能不是 Staff.id，忽略
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+async function restoreOlder(svc: any, oldSnap: { id: string; retired_at: any }[]) {
+  for (const o of oldSnap) {
+    try {
+      await svc.entities.GuessPolicy.update(o.id, { status: "published", retired_at: o.retired_at ?? null });
+    } catch {
+      // 尽力恢复
+    }
+  }
+}
+
+async function safeDelete(svc: any, id: string) {
+  try {
+    await svc.entities.GuessPolicy.delete(id);
+  } catch {
+    // 尽力清理暂存
+  }
+}
+
+function deepEqual(a: any, b: any): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
