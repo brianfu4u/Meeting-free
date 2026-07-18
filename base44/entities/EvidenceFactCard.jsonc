@@ -29,11 +29,11 @@
           },
           "source_region": {
             "type": "string",
-            "description": "\u6765\u6e90\u533a\u57df/\u5750\u6807\uff08\u56fe\u50cf\u533a\u57df\u6216\u6587\u672c\u5b9a\u4f4d\uff09"
+            "description": "\u6765\u6e90\u533a\u57df/\u5750\u6807"
           },
           "source_quote": {
             "type": "string",
-            "description": "\u6765\u6e90\u539f\u6587/\u5f15\u8ff0\uff08\u4e0e source_region \u4e8c\u9009\u4e00\u6216\u4e92\u8865\uff09"
+            "description": "\u6765\u6e90\u539f\u6587/\u5f15\u7528"
           },
           "extraction_quality": {
             "type": "string",
@@ -43,11 +43,11 @@
               "low",
               "uncertain"
             ],
-            "description": "\u5b57\u6bb5\u7ea7\u63d0\u53d6\u8d28\u91cf\uff0c\u4e0d\u5f97\u7528\u5355\u4e00\u603b\u4f53 confidence \u66ff\u4ee3"
+            "description": "\u5b57\u6bb5\u7ea7\u63d0\u53d6\u8d28\u91cf"
           },
           "extraction_method": {
             "type": "string",
-            "description": "\u63d0\u53d6\u65b9\u6cd5\uff08\u5982 ocr/voice_transcribe/llm_parse/manual\uff09"
+            "description": "\u63d0\u53d6\u65b9\u6cd5\uff08ocr/voice_transcribe/llm_parse/manual\uff09"
           }
         },
         "required": [
@@ -59,7 +59,7 @@
         ]
       },
       "default": [],
-      "description": "\u5b57\u6bb5\u7ea7\u6eaf\u6e90\u6570\u7ec4\uff1a\u6bcf\u4e2a\u5b57\u6bb5\u72ec\u7acb\u6807\u6ce8\u6765\u6e90\u4e0e\u8d28\u91cf"
+      "description": "\u5b57\u6bb5\u7ea7\u6eaf\u6e90\u6570\u7ec4"
     },
     "business_date": {
       "type": "string",
@@ -73,7 +73,7 @@
     "extracted_at": {
       "type": "string",
       "format": "date-time",
-      "description": "\u63d0\u53d6\u65f6\u95f4"
+      "description": "\u63d0\u53d6\u65f6\u95f4\uff08\u4ec5\u8bb0\u5f55\u89e3\u8bfb\u65f6\u523b\uff0c\u975e\u4e1a\u52a1\u65f6\u95f4\uff09"
     },
     "model_version": {
       "type": "string",
@@ -91,6 +91,43 @@
       "type": "boolean",
       "default": false,
       "description": "\u6e90 Artifact \u53d8\u66f4\u540e\u672c\u7f13\u5b58\u662f\u5426\u5931\u6548"
+    },
+    "explicit_workflow_id": {
+      "type": "string",
+      "description": "Phase 3\uff1a\u663e\u5f0f\u7ed1\u5b9a Workflow ID\uff08\u6765\u81ea Artifact.source_workflow_id\uff1bCandidateFinder explicit_id \u81ea\u52a8\u6302\u63a5\u4f9d\u636e\uff09"
+    },
+    "workflow_family_hint": {
+      "type": "string",
+      "description": "Phase 3\uff1aLLM \u63a8\u65ad\u7684\u5de5\u4f5c\u6d41\u4e1a\u52a1\u65cf\u63d0\u793a\uff08Clustering new_train \u5206\u7ec4\u4f9d\u636e\uff09"
+    },
+    "subject_type": {
+      "type": "string",
+      "description": "Phase 3\uff1a\u4e3b\u4f53\u7c7b\u578b\uff08patient/supplier/staff \u7b49\uff0csubject_conflict \u786c\u62a4\u680f + Clustering \u4e3b\u4f53\u5206\u7ec4\u4f9d\u636e\uff09"
+    },
+    "subject_fingerprint": {
+      "type": "object",
+      "description": "Phase 3\uff1a\u4e3b\u4f53\u6307\u7eb9\uff08\u5982 {name}\uff09\uff0csubject_conflict \u786c\u62a4\u680f\u6bd4\u5bf9\u4f9d\u636e",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "subject_quality": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "uncertain"
+      ],
+      "description": "Phase 3\uff1a\u4e3b\u4f53\u8bc6\u522b\u8d28\u91cf\uff08\u4ec5 subject_quality=high \u7684 fingerprint \u53c2\u4e0e subject_conflict \u5224\u5b9a\uff0c\u6765\u81ea Phase 2 guardrailValidator\uff09"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Phase 3\uff1a\u4e1a\u52a1\u53d1\u751f\u65f6\u95f4\uff08= artifact.captured_at \u515c\u5e95\uff0c\u7981\u6b62\u7528 extracted_at \u4f5c\u4e1a\u52a1\u65f6\u95f4\uff1bCandidateFinder \u65f6\u7a7a\u5339\u914d + time_impossible \u786c\u62a4\u680f\u4f9d\u636e\uff09"
     }
   },
   "required": [
