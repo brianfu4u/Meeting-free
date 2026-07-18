@@ -4,72 +4,86 @@
   "properties": {
     "clinic_id": {
       "type": "string",
-      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5"
+      "description": "门店唯一标识，严格 Tenant 逻辑隔离字段"
     },
     "business_date": {
       "type": "string",
       "format": "date",
-      "description": "\u4e1a\u52a1\u65e5\u671f"
+      "description": "业务日期"
     },
     "slot": {
       "type": "string",
-      "description": "\u8fd0\u884c\u65f6\u6bb5\uff0c\u5982 12:30/15:30/17:30"
+      "description": "运行时段，如 12:30/15:30/17:30"
     },
     "policy_version": {
       "type": "number",
-      "description": "\u672c\u6b21\u8fd0\u884c\u7684 GuessPolicy \u7248\u672c"
+      "description": "本次运行的 GuessPolicy 版本"
     },
     "cutoff_event_seq": {
       "type": "number",
-      "description": "\u672c\u6b21\u8fd0\u884c\u6c34\u4f4d\uff1a\u4ec5\u5904\u7406\u8be5\u5e8f\u53f7\u4ee5\u5185\u7684 Artifact\uff0c\u65b0\u4e8b\u4ef6\u8fdb\u5165\u4e0b\u4e00\u65f6\u6bb5"
+      "description": "本次运行水位：仅处理该序号以内的 Artifact，新事件进入下一时段"
     },
     "cutoff_ingested_at": {
       "type": "string",
       "format": "date-time",
-      "description": "\u8bb0\u5f55\u6c34\u4f4d\u65f6\u523b"
+      "description": "记录水位时刻"
     },
     "run_started_at": {
       "type": "string",
       "format": "date-time",
-      "description": "\u8fd0\u884c\u5f00\u59cb\u65f6\u95f4"
+      "description": "运行开始时间"
     },
     "run_finished_at": {
       "type": "string",
       "format": "date-time",
-      "description": "\u8fd0\u884c\u7ed3\u675f\u65f6\u95f4"
+      "description": "运行结束时间"
     },
     "status": {
       "type": "string",
-      "enum": [
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        "stale"
-      ],
+      "enum": ["pending", "running", "completed", "failed", "stale"],
       "default": "pending",
-      "description": "\u8fd0\u884c\u72b6\u6001"
+      "description": "运行状态"
     },
     "idempotency_key": {
       "type": "string",
-      "description": "\u8fd0\u884c\u5e42\u7b49\u952e = clinic_id+business_date+slot+policy_version+cutoff_event_seq"
+      "description": "运行幂等键 = clinic_id+business_date+slot+policy_version+cutoff_event_seq"
     },
     "proposals_generated": {
       "type": "number",
       "default": 0,
-      "description": "\u672c\u8f6e\u751f\u6210\u7684\u63d0\u6848\u6570"
+      "description": "本轮生成的提案数"
     },
     "artifact_ids_processed": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
+      "items": { "type": "string" },
       "default": [],
-      "description": "\u672c\u8f6e\u5904\u7406\u7684 Artifact ID \u5217\u8868"
+      "description": "本轮处理的 Artifact ID 列表"
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": ["manual", "scheduled"],
+      "default": "manual",
+      "description": "运行触发来源"
+    },
+    "prompt_version": {
+      "type": "string",
+      "description": "本轮编组使用的 Prompt 版本"
+    },
+    "model_version": {
+      "type": "string",
+      "description": "本轮编组使用的模型版本"
+    },
+    "contract_version": {
+      "type": "number",
+      "description": "Phase 3 编排契约版本"
+    },
+    "error_code": {
+      "type": "string",
+      "description": "安全、可枚举的失败代码，不含底层异常详情"
     },
     "error_message": {
       "type": "string",
-      "description": "\u5931\u8d25\u539f\u56e0"
+      "description": "面向调用方的安全失败摘要，不得存储 token/stack/原始异常"
     }
   },
   "required": [
