@@ -72,6 +72,14 @@ export type CompositionOps = {
   createRun: (descriptor: Record<string, unknown>) => Promise<Record<string, unknown>>;
   updateRun: (id: string, patch: Record<string, unknown>) => Promise<Record<string, unknown>>;
   getRun: (id: string) => Promise<Record<string, unknown> | null>;
+  listHypothesesByRun: (
+    clinicId: string,
+    runId: string
+  ) => Promise<Record<string, unknown>[]>;
+  listAttentionByRun: (
+    clinicId: string,
+    runId: string
+  ) => Promise<Record<string, unknown>[]>;
   listRuns: (
     clinicId: string,
     filters: { business_date?: string; limit: number }
