@@ -101,6 +101,7 @@ function normalizeHypothesis(h, { clinicId, policyVersion, assemblyRunId, cluste
   );
 
   return {
+    source_proposal_id: sourceProposalId,
     workflow_hypothesis_id: buildHypothesisId(sourceProposalId, idx),
     workflow_family: h.workflow_family || cluster?.workflow_family_hint || null,
     composition_type: h.composition_type || cluster?.composition_type || "orphan",
