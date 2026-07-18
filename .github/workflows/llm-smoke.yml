@@ -15,6 +15,5 @@ jobs:
       - name: Real LLM Assembly Smoke (hardened proxy)
         env:
           LLM_SMOKE_ENDPOINT: ${{ secrets.LLM_SMOKE_ENDPOINT }}
-          BASE44_TOKEN: ${{ secrets.BASE44_TOKEN }}
           LLM_SMOKE_KEY: ${{ secrets.LLM_SMOKE_KEY }}
         run: node src/lib/composition/llmSmokeCi.mjs
