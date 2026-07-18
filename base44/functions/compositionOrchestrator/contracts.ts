@@ -26,6 +26,7 @@ export type ServiceRequest = {
   prompt_version?: string | null;
   model_version?: string | null;
   limit?: number;
+  include_hypothesis_summary?: boolean;
 };
 
 export type ServiceResult = {
@@ -69,6 +70,19 @@ export type CompositionOps = {
     clinicId: string,
     idempotencyKey: string
   ) => Promise<Record<string, unknown> | null>;
+  newRunLockOwner: (userId: string, idempotencyKey: string) => string;
+  acquireRunLock: (
+    clinicId: string,
+    idempotencyKey: string,
+    owner: string,
+    now: string,
+    expiresAt: string
+  ) => Promise<{ acquired: boolean; reason?: string }>;
+  releaseRunLock: (
+    clinicId: string,
+    idempotencyKey: string,
+    owner: string
+  ) => Promise<void>;
   createRun: (descriptor: Record<string, unknown>) => Promise<Record<string, unknown>>;
   updateRun: (id: string, patch: Record<string, unknown>) => Promise<Record<string, unknown>>;
   getRun: (id: string) => Promise<Record<string, unknown> | null>;
@@ -84,6 +98,11 @@ export type CompositionOps = {
     clinicId: string,
     filters: { business_date?: string; limit: number }
   ) => Promise<Record<string, unknown>[]>;
+  listActiveHypothesisSummaries: (
+    clinicId: string,
+    runIds: string[],
+    statuses: string[]
+  ) => Promise<Record<string, { active_count: number; status_counts: Record<string, number> }>>;
 
   executePipeline: (
     request: ServiceRequest,
