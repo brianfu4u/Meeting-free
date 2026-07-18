@@ -34,7 +34,7 @@ describe("workflowAssembly — 编组目标输出", () => {
     expect(res).not.toHaveProperty("needs_manager_dispatch");
     expect(h.workflow_hypothesis_id).not.toBe("ignored");
     expect(h.source_proposal_id).toBe(res.source_proposal_id);
-    expect(h.source_proposal_id).toMatch(/^proposal-/);
+    expect(h.source_proposal_id).toBe("c1::art:a1,a2::pv1");
   });
 });
 
