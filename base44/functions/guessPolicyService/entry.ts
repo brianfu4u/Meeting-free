@@ -191,30 +191,43 @@ function makeRealOps(svc: any): any {
     markPublished: async (id: string, now: string, uid: string) =>
       svc.entities.GuessPolicy.update(id, { status: "published", published_at: now, published_by: uid }),
     deleteStaging: async (id: string) => svc.entities.GuessPolicy.delete(id),
-    acquireLock: async (cid: string, key: string) => {
+    // CAS 锁：owner-scoped。由 updateMany 返回的 updated===1 唯一判定成功（不重读字段比较）。
+    // 短租约 + 过期接管：过期锁用精确 owner+expires_at 值 CAS 接管，崩溃不锁死门店。
+    acquireLock: async (cid: string, owner: string, nowISO: string, expiresISO: string) => {
       try {
-        await svc.entities.ClinicConfig.updateMany(
-          { clinic_id: cid, publish_lock_request_id: null },
-          { $set: { publish_lock_request_id: key } }
+        const r1 = await svc.entities.ClinicConfig.updateMany(
+          { clinic_id: cid, publish_lock_owner_id: null },
+          { $set: { publish_lock_owner_id: owner, publish_lock_acquired_at: nowISO, publish_lock_expires_at: expiresISO } }
         );
+        if (r1?.updated === 1) return { acquired: true };
       } catch {
-        return { acquired: false };
+        /* fall through to takeover */
       }
       try {
         const l = await svc.entities.ClinicConfig.filter({ clinic_id: cid });
-        return { acquired: l[0]?.publish_lock_request_id === key };
+        const cfg = l[0];
+        if (cfg && cfg.publish_lock_owner_id && cfg.publish_lock_expires_at &&
+            new Date(cfg.publish_lock_expires_at).getTime() < Date.now()) {
+          const r2 = await svc.entities.ClinicConfig.updateMany(
+            { clinic_id: cid, publish_lock_owner_id: cfg.publish_lock_owner_id, publish_lock_expires_at: cfg.publish_lock_expires_at },
+            { $set: { publish_lock_owner_id: owner, publish_lock_acquired_at: nowISO, publish_lock_expires_at: expiresISO } }
+          );
+          if (r2?.updated === 1) return { acquired: true, reason: "expired_takeover" };
+        }
       } catch {
-        return { acquired: false };
+        /* ignore */
       }
+      return { acquired: false, reason: "lock_busy" };
     },
-    releaseLock: async (cid: string, key: string) => {
+    releaseLock: async (cid: string, owner: string) => {
       try {
-        await svc.entities.ClinicConfig.updateMany(
-          { clinic_id: cid, publish_lock_request_id: key },
-          { $set: { publish_lock_request_id: null } }
+        const r = await svc.entities.ClinicConfig.updateMany(
+          { clinic_id: cid, publish_lock_owner_id: owner },
+          { $set: { publish_lock_owner_id: null, publish_lock_acquired_at: null, publish_lock_expires_at: null } }
         );
-      } catch {
-        // 释放失败不阻断主流程；锁由持有者标识，下次发布 CAS 仍可识别
+        return { updated: r?.updated ?? 0 };
+      } catch (e) {
+        return { updated: 0, error: (e as Error).message };
       }
     },
   };
