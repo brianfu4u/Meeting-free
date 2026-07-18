@@ -255,14 +255,21 @@ async function run(
       validationIssues: pipeline.validationIssues || [],
     });
 
+    // Review visibility is independent from Guardrail ambiguity semantics:
+    // every persisted pending_review hypothesis must be visible to a manager.
+    // A unique best candidate is only a suggestion; it is never auto-selected,
+    // approved, dispatched, or committed.
     let attention_item: Record<string, unknown> | null = null;
-    if (dispatch.needsManagerDispatch) {
+    const reviewRequired = hypotheses.some((item) => item.status === "pending_review");
+    if (reviewRequired || dispatch.needsManagerDispatch) {
       const attentionDescriptor = ops.buildAttention({
         clinicId: actor.clinic_id,
         compositionRunId: persistedRun.id,
         artifactIds: pipeline.artifactIds || [],
         evidenceFactCardIds: pipeline.factCardIds || [],
         generatedAt: ops.now(),
+        selectedHypothesisId: dispatch.bestHypothesisId,
+        managerDispatchRequired: dispatch.needsManagerDispatch,
       });
       attention_item = await ops.createAttention(attentionDescriptor);
     }

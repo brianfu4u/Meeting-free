@@ -20,16 +20,25 @@ function makeOps(overrides = {}) {
     }),
     buildHypotheses: ({ clinicId, compositionRunId, hypotheses }) =>
       hypotheses.map((h) => ({ ...h, clinic_id: clinicId, composition_run_id: compositionRunId, status: "pending_review" })),
-    deriveDispatch: ({ validationIssues }) => ({
+    deriveDispatch: ({ guardrailResult = {}, validationIssues }) => ({
       needsManagerDispatch: validationIssues.length > 0,
-      bestHypothesisId: null,
+      bestHypothesisId:
+        validationIssues.length > 0 ? null : guardrailResult.bestHypothesisId || null,
     }),
-    buildAttention: ({ clinicId, compositionRunId, generatedAt }) => ({
+    buildAttention: ({
+      clinicId,
+      compositionRunId,
+      generatedAt,
+      selectedHypothesisId = null,
+      managerDispatchRequired = false,
+    }) => ({
       clinic_id: clinicId,
       composition_run_id: compositionRunId,
       title: "编组候选待审核",
       recommendation: "请店长审核编组候选",
       generated_at: generatedAt,
+      selected_hypothesis_id: selectedHypothesisId,
+      manager_dispatch_required: managerDispatchRequired,
     }),
     buildFailure: () => ({
       status: "failed",
@@ -134,16 +143,19 @@ describe("compositionOrchestrator run", () => {
     policy_version: 3,
     cutoff_event_seq: 42,
   };
-  it("persists run, hypotheses and completion without auto decision", async () => {
+  it("persists run and exposes every pending hypothesis for manual review", async () => {
     const ops = makeOps();
     const result = await createCompositionService(ops).handle(request, actor);
     expect(result.http_status).toBe(201);
     expect(result.run.status).toBe("completed");
     expect(result.hypotheses[0].status).toBe("pending_review");
-    expect(result.attention_item).toBeNull();
+    expect(result.attention_item.id).toBe("att-1");
+    expect(result.attention_item.selected_hypothesis_id).toBe("p1#h0");
+    expect(result.attention_item.manager_dispatch_required).toBe(false);
     expect(ops.createHypotheses).toHaveBeenCalledTimes(1);
+    expect(ops.createAttention).toHaveBeenCalledTimes(1);
   });
-  it("creates attention only when dispatch is required", async () => {
+  it("keeps ambiguous dispatch visible without preselecting a hypothesis", async () => {
     const ops = makeOps({
       executePipeline: vi.fn(async () => ({
         hypotheses: [{ source_proposal_id: "p1", workflow_hypothesis_id: "p1#h0", composition_type: "orphan" }],
@@ -155,6 +167,8 @@ describe("compositionOrchestrator run", () => {
     });
     const result = await createCompositionService(ops).handle(request, actor);
     expect(result.attention_item.id).toBe("att-1");
+    expect(result.attention_item.selected_hypothesis_id).toBeNull();
+    expect(result.attention_item.manager_dispatch_required).toBe(true);
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
   });
   it("serializes concurrent creation with a short lock and second lookup", async () => {

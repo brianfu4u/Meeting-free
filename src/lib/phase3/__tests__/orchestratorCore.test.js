@@ -134,13 +134,29 @@ describe("Phase 3 attention descriptor", () => {
       artifactIds: ["a1"],
       evidenceFactCardIds: ["f1"],
       generatedAt: "2026-07-18T10:00:00.000Z",
+      selectedHypothesisId: "proposal-1#h0",
+      managerDispatchRequired: false,
     });
     expect(result.attention_type).toBe("evidence_missing");
     expect(result.urgency).toBe("yellow");
     expect(result.title).toBeTruthy();
     expect(result.recommendation).toBeTruthy();
     expect(result.generated_at).toBeTruthy();
+    expect(result.selected_hypothesis_id).toBe("proposal-1#h0");
+    expect(result.reasoning).toMatch(/仍须店长人工确认/);
     expect(result).not.toHaveProperty("hypothesis_ids");
+  });
+
+  it("keeps ambiguous dispatch unselected and explicit", () => {
+    const result = buildAttentionDescriptor({
+      clinicId: "c1",
+      compositionRunId: "run-1",
+      generatedAt: "2026-07-18T10:00:00.000Z",
+      selectedHypothesisId: null,
+      managerDispatchRequired: true,
+    });
+    expect(result.selected_hypothesis_id).toBeNull();
+    expect(result.reasoning).toMatch(/必须由店长比较候选/);
   });
 });
 
