@@ -41,6 +41,9 @@ function makeOps(overrides = {}) {
     interpretArtifact: vi.fn(async () => ({ fields: [], subject_type: "patient" })),
     createFactCard: vi.fn(async (d) => ({ id: "fc-1", ...d })),
     findRunByIdempotency: vi.fn(async () => null),
+    newRunLockOwner: (userId, key) => `lock::${userId}::${key}`,
+    acquireRunLock: vi.fn(async () => ({ acquired: true })),
+    releaseRunLock: vi.fn(async () => undefined),
     createRun: vi.fn(async (d) => {
       const row = { id: "run-1", ...d };
       runs.push(row);
@@ -51,6 +54,9 @@ function makeOps(overrides = {}) {
     listHypothesesByRun: vi.fn(async () => [{ id: "h1", clinic_id: "c1" }]),
     listAttentionByRun: vi.fn(async () => [{ id: "att1", clinic_id: "c1" }]),
     listRuns: vi.fn(async () => [{ id: "run-1", clinic_id: "c1" }]),
+    listActiveHypothesisSummaries: vi.fn(async () => ({
+      "run-1": { active_count: 2, status_counts: { pending_review: 2 } },
+    })),
     executePipeline: vi.fn(async () => ({
       hypotheses: [{ source_proposal_id: "p1", workflow_hypothesis_id: "p1#h0", composition_type: "new_train" }],
       guardrailResult: { checked: [], ranked: [], needsManagerDispatch: false, bestHypothesisId: "p1#h0" },
@@ -151,6 +157,50 @@ describe("compositionOrchestrator run", () => {
     expect(result.attention_item.id).toBe("att-1");
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
   });
+  it("serializes concurrent creation with a short lock and second lookup", async () => {
+    const existing = { id: "run-other", clinic_id: "c1", status: "running" };
+    const find = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existing);
+    const ops = makeOps({ findRunByIdempotency: find });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.idempotent).toBe(true);
+    expect(result.run.id).toBe("run-other");
+    expect(ops.acquireRunLock).toHaveBeenCalledTimes(1);
+    expect(ops.releaseRunLock).toHaveBeenCalledTimes(1);
+    expect(ops.createRun).not.toHaveBeenCalled();
+  });
+  it("returns retryable conflict while another creator owns the lease", async () => {
+    const ops = makeOps({
+      acquireRunLock: vi.fn(async () => ({ acquired: false, reason: "lock_busy" })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "run_lock_busy",
+      retryable: true,
+    }));
+    expect(ops.createRun).not.toHaveBeenCalled();
+    expect(ops.executePipeline).not.toHaveBeenCalled();
+  });
+  it("releases the creation lock before executing the pipeline", async () => {
+    const order = [];
+    const ops = makeOps({
+      releaseRunLock: vi.fn(async () => { order.push("release"); }),
+      executePipeline: vi.fn(async () => {
+        order.push("pipeline");
+        return {
+          hypotheses: [],
+          guardrailResult: {},
+          validationIssues: [],
+          artifactIds: [],
+          factCardIds: [],
+        };
+      }),
+    });
+    await createCompositionService(ops).handle(request, actor);
+    expect(order).toEqual(["release", "pipeline"]);
+  });
   it("returns an existing run for the same idempotency key", async () => {
     const existing = { id: "run-existing", clinic_id: "c1", status: "completed" };
     const ops = makeOps({ findRunByIdempotency: vi.fn(async () => existing) });
@@ -194,6 +244,31 @@ describe("compositionOrchestrator query/listRuns", () => {
       actor
     );
     expect(result.http_status).toBe(403);
+  });
+  it("listRuns omits hypothesis aggregation by default", async () => {
+    const ops = makeOps();
+    const result = await createCompositionService(ops).handle(
+      { action: "listRuns", clinic_id: "c1" },
+      actor
+    );
+    expect(result.hypothesis_summary_included).toBe(false);
+    expect(ops.listActiveHypothesisSummaries).not.toHaveBeenCalled();
+    expect(result.runs[0]).not.toHaveProperty("hypothesis_summary");
+  });
+  it("listRuns opt-in aggregates active statuses only", async () => {
+    const ops = makeOps();
+    const result = await createCompositionService(ops).handle(
+      { action: "listRuns", clinic_id: "c1", include_hypothesis_summary: true },
+      actor
+    );
+    expect(result.hypothesis_summary_included).toBe(true);
+    expect(result.runs[0].hypothesis_summary.active_count).toBe(2);
+    expect(ops.listActiveHypothesisSummaries).toHaveBeenCalledWith(
+      "c1",
+      ["run-1"],
+      ["pending_review", "selected", "dispatched"]
+    );
+    expect(result.runs[0]).not.toHaveProperty("hypotheses");
   });
   it("listRuns caps limit at 100", async () => {
     const ops = makeOps();
