@@ -1,0 +1,90 @@
+{
+  "name": "GuessPolicy",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5"
+    },
+    "policy_version": {
+      "type": "number",
+      "description": "\u7b56\u7565\u7248\u672c\u53f7\uff0c\u5355\u8c03\u9012\u589e"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "reviewed",
+        "published",
+        "retired"
+      ],
+      "default": "draft",
+      "description": "\u751f\u547d\u5468\u671f\uff1a\u4ec5 published \u7248\u672c\u5bf9\u8fd0\u884c\u65f6\u53ef\u89c1"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "description": "\u63a8\u65ad\u8f68\u9053 ID\uff08\u4e03\u6761\u8f68\u9053\u4e4b\u4e00\uff09"
+          },
+          "name": {
+            "type": "string",
+            "description": "\u8f68\u9053\u4e2d\u6587\u540d"
+          },
+          "description": {
+            "type": "string",
+            "description": "\u8f68\u9053\u8bc4\u4f30\u8303\u56f4\u4e0e\u5224\u5b9a\u903b\u8f91"
+          },
+          "guardrails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "\u786c\u62a4\u680f\uff1a\u8fdd\u53cd\u5373\u5426\u51b3\u5047\u8bbe\uff0c\u4e0d\u5f97\u88ab\u603b\u5206\u62b5\u6d88"
+          }
+        },
+        "required": [
+          "track_id",
+          "name"
+        ]
+      },
+      "default": [],
+      "description": "\u4e03\u6761\u63a8\u65ad\u8f68\u9053\u914d\u7f6e\uff08\u63a8\u7406\u534f\u8bae\uff0c\u975e\u52a0\u6743\u6253\u5206\u6a21\u5757\uff09"
+    },
+    "decision_rules": {
+      "type": "object",
+      "description": "\u5047\u8bbe\u6bd4\u8f83\u89c4\u5219\uff1a\u89e3\u91ca\u6700\u591a\u788e\u7247/\u8fdd\u53cd\u6700\u5c11\u8fb9\u754c/\u9700\u8981\u6700\u5c11\u65e0\u4f9d\u636e\u5047\u8bbe"
+    },
+    "hard_guardrails": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u5168\u5c40\u786c\u62a4\u680f\u6e05\u5355"
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u53d1\u5e03\u65f6\u95f4"
+    },
+    "published_by": {
+      "type": "string",
+      "description": "\u53d1\u5e03\u4eba\uff08\u5e97\u957f user_id\uff09"
+    },
+    "retired_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u9000\u5f79\u65f6\u95f4"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "policy_version",
+    "status"
+  ]
+}

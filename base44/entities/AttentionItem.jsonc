@@ -4,7 +4,7 @@
   "properties": {
     "clinic_id": {
       "type": "string",
-      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5"
     },
     "session_id": {
       "type": "string",
@@ -53,7 +53,7 @@
         "type": "string"
       },
       "default": [],
-      "description": "\u652f\u6491\u672c\u5efa\u8bae\u7684AuditLog event_id\u5217\u8868"
+      "description": "\u652f\u6491\u672c\u5efa\u8bae\u7684AuditLog event_id\u5217\u8868\uff08\u4fdd\u7559\u517c\u5bb9\uff0c\u65b0\u589e\u5b57\u6bb5\u4ee5 audit_event_ids \u4e3a\u89c4\u8303\u540d\uff09"
     },
     "recommendation": {
       "type": "string",
@@ -96,6 +96,163 @@
       "type": "string",
       "format": "date-time",
       "description": "AttentionEngine\u751f\u6210\u672c\u5efa\u8bae\u7684\u65f6\u95f4"
+    },
+    "artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u652f\u6491\u672c\u63d0\u6848\u7684\u539f\u59cb Artifact ID \u5217\u8868"
+    },
+    "evidence_fact_card_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u652f\u6491\u672c\u63d0\u6848\u7684 EvidenceFactCard ID \u5217\u8868"
+    },
+    "audit_event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u652f\u6491\u672c\u63d0\u6848\u7684 AuditLog event_id \u5217\u8868\uff08\u89c4\u8303\u5b57\u6bb5\uff09"
+    },
+    "reasoning_tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "description": "\u63a8\u65ad\u8f68\u9053 ID"
+          },
+          "supporting_evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "\u652f\u6301\u8bc1\u636e ID \u5217\u8868"
+          },
+          "opposing_evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "\u53cd\u5bf9\u8bc1\u636e ID \u5217\u8868"
+          },
+          "information_gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "\u4fe1\u606f\u7f3a\u53e3\u5217\u8868"
+          }
+        },
+        "required": [
+          "track_id"
+        ]
+      },
+      "default": [],
+      "description": "\u4e03\u6761\u63a8\u65ad\u8f68\u9053\u8f93\u51fa\uff1a\u6bcf\u6761\u8f68\u9053\u72ec\u7acb\u6807\u6ce8\u652f\u6301/\u53cd\u5bf9\u8bc1\u636e\u4e0e\u4fe1\u606f\u7f3a\u53e3\uff08\u63a8\u7406\u534f\u8bae\uff0c\u975e\u52a0\u6743\u6253\u5206\uff09"
+    },
+    "unsupported_assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u672c\u5047\u8bbe\u4f9d\u8d56\u7684\u65e0\u4f9d\u636e\u5047\u8bbe\u6e05\u5355\uff08\u8d8a\u5c11\u8d8a\u4f18\uff09"
+    },
+    "alternative_hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "hypothesis_id": {
+            "type": "string",
+            "description": "\u5019\u9009\u5047\u8bbe ID"
+          },
+          "description": {
+            "type": "string",
+            "description": "\u5047\u8bbe\u63cf\u8ff0"
+          },
+          "fragments_explained": {
+            "type": "number",
+            "description": "\u8be5\u5047\u8bbe\u80fd\u89e3\u91ca\u7684\u788e\u7247\u6570"
+          },
+          "guardrail_violations": {
+            "type": "number",
+            "description": "\u8fdd\u53cd\u786c\u62a4\u680f\u6570"
+          },
+          "unsupported_assumptions_count": {
+            "type": "number",
+            "description": "\u65e0\u4f9d\u636e\u5047\u8bbe\u6570"
+          }
+        },
+        "required": [
+          "hypothesis_id",
+          "description"
+        ]
+      },
+      "default": [],
+      "description": "\u591a\u5019\u9009\u5047\u8bbe\uff1a\u4f9b\u5e97\u957f\u5728\u591a\u5019\u9009\u8fdb\u5165 Manager \u573a\u666f\u6bd4\u8f83"
+    },
+    "target_snapshot_id": {
+      "type": "string",
+      "description": "\u672c\u63d0\u6848\u6307\u5411\u7684 WorkflowSnapshot ID\uff08\u5ef6\u7eed/\u5173\u95ed/\u4ea4\u63a5\u573a\u666f\uff09"
+    },
+    "policy_version": {
+      "type": "number",
+      "description": "\u751f\u6210\u672c\u63d0\u6848\u65f6\u751f\u6548\u7684 GuessPolicy \u7248\u672c"
+    },
+    "model_version": {
+      "type": "string",
+      "description": "\u751f\u6210\u672c\u63d0\u6848\u4f7f\u7528\u7684 LLM \u6a21\u578b\u7248\u672c"
+    },
+    "prompt_version": {
+      "type": "string",
+      "description": "\u751f\u6210\u672c\u63d0\u6848\u4f7f\u7528\u7684 Prompt \u7248\u672c"
+    },
+    "terminal_signal_detected": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u662f\u5426\u68c0\u6d4b\u5230\u7ec8\u6b62\u4fe1\u53f7\uff08\u63d0\u6848\uff0cAI\u4e0d\u76f4\u63a5\u4fee\u6539\u72b6\u6001\uff09"
+    },
+    "proposed_workflow_status": {
+      "type": "string",
+      "description": "\u5efa\u8bae\u7684\u5de5\u4f5c\u6d41\u72b6\u6001\uff08\u5982 closed/handoff\uff0c\u4ec5\u63d0\u6848\uff09"
+    },
+    "proposed_handoff_department": {
+      "type": "string",
+      "description": "\u5efa\u8bae\u4ea4\u63a5\u76ee\u6807\u90e8\u95e8\uff08\u4ec5\u63d0\u6848\uff09"
+    },
+    "proposed_handoff_role": {
+      "type": "string",
+      "description": "\u5efa\u8bae\u4ea4\u63a5\u76ee\u6807\u5c97\u4f4d\uff08\u4ec5\u63d0\u6848\uff09"
+    },
+    "handoff_evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u4ea4\u63a5\u6240\u9700\u8bc1\u636e ID \u5217\u8868"
+    },
+    "source_proposal_id": {
+      "type": "string",
+      "description": "\u63d0\u6848\u5e42\u7b49\u952e = clinic_id+sorted_artifact_ids_hash+policy_version"
+    },
+    "shadow_mode_snapshot": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u6807\u8bb0\u672c\u63d0\u6848\u5904\u4e8e\u5f71\u5b50\u6a21\u5f0f\uff0c\u53ea\u8bfb\uff0c\u4e0d\u5f97\u76f4\u63a5\u843d\u5e93\u4e3a\u6838\u5fc3\u72b6\u6001"
     }
   },
   "required": [

@@ -1,0 +1,71 @@
+{
+  "name": "Artifact",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5\uff0c\u6765\u81ea\u670d\u52a1\u7aef\u8ba4\u8bc1\u4e0a\u4e0b\u6587"
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "file",
+        "voice",
+        "screenshot"
+      ],
+      "description": "\u539f\u59cb\u8bc1\u636e\u8f7d\u4f53\u7c7b\u578b\uff1a\u7167\u7247/\u6587\u4ef6/\u8bed\u97f3/\u622a\u56fe"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "\u8bc1\u636e\u6587\u4ef6 URL\uff08UploadFile \u4ea7\u51fa\uff09\uff0c\u5b58\u50a8 Key \u987b\u7ecf Tenant Scope \u547d\u540d"
+    },
+    "source_staff_id": {
+      "type": "string",
+      "description": "\u4e0a\u4f20\u5458\u5de5 Staff ID"
+    },
+    "source_session_id": {
+      "type": "string",
+      "description": "\u5173\u8054 PatientSession ID\uff08\u60a3\u8005\u76f8\u5173\u65f6\u5fc5\u586b\uff0c\u975e\u60a3\u8005\u53ef\u7a7a\uff09"
+    },
+    "source_event_id": {
+      "type": "string",
+      "description": "\u4ea7\u51fa\u672c\u788e\u7247\u7684 AuditLog event_id\uff08\u6eaf\u6e90\u94fe\u5165\u53e3\uff09"
+    },
+    "source_region": {
+      "type": "string",
+      "description": "\u6765\u6e90\u533a\u57df/\u90e8\u95e8\u804c\u80fd\u7f16\u7801\uff08\u5982 reception/optometry/medical\uff09"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u4e1a\u52a1\u65e5\u671f\uff08\u672c\u5730\u65f6\u533a\uff09\uff0c\u7528\u4e8e\u8de8\u65e5\u5f52\u6863\u4e0e\u4eca\u65e5\u8fc7\u6ee4"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u91c7\u96c6/\u4e0a\u4f20\u65f6\u95f4\u6233"
+    },
+    "ingestion_seq": {
+      "type": "number",
+      "description": "\u5165\u7ad9\u4e8b\u4ef6\u5e8f\u53f7\uff0c\u5bf9\u5e94\u5f53\u65f6\u6c34\u4f4d cutoff_event_seq"
+    },
+    "interpreted": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u662f\u5426\u5df2\u88ab Evidence Interpreter \u751f\u6210 EvidenceFactCard"
+    },
+    "evidence_fact_card_id": {
+      "type": "string",
+      "description": "\u751f\u6210\u7684 EvidenceFactCard ID\uff081:1 \u7f13\u5b58\uff09"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "artifact_type",
+    "file_url",
+    "source_staff_id",
+    "business_date",
+    "captured_at"
+  ]
+}

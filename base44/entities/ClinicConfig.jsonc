@@ -4,7 +4,7 @@
   "properties": {
     "clinic_id": {
       "type": "string",
-      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5\uff0c\u4e3b\u952e"
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5\uff0c\u4e3b\u952e"
     },
     "clinic_name": {
       "type": "string",
@@ -72,6 +72,32 @@
       "type": "boolean",
       "default": false,
       "description": "\u51b7\u542f\u52a8\u6570\u636e\u5f55\u5165\u662f\u5426\u5b8c\u6210"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "Asia/Tokyo",
+      "description": "\u95e8\u5e97\u4e1a\u52a1\u65f6\u533a\uff0c\u7528\u4e8e\u4e1a\u52a1\u65e5\u671f\u4e0e\u5b9a\u65f6\u8fd0\u884c\u8ba1\u7b97"
+    },
+    "schedule_times": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "12:30",
+        "15:30",
+        "17:30"
+      ],
+      "description": "CompositionRun \u5b9a\u65f6\u7f16\u7ec4\u65f6\u6bb5\u5217\u8868"
+    },
+    "shadow_mode": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u5f71\u5b50\u6a21\u5f0f\uff1a\u6240\u6709\u63d0\u6848\u53ea\u8bfb\uff0cAI\u4e0d\u5f97\u76f4\u63a5\u4fee\u6539\u6838\u5fc3\u72b6\u6001"
+    },
+    "active_policy_version": {
+      "type": "number",
+      "description": "\u5f53\u524d\u751f\u6548\u7684 GuessPolicy \u7248\u672c"
     }
   },
   "required": [
