@@ -5,6 +5,7 @@ import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { useClinicId } from "@/lib/ClinicContext";
 import PageShell from "@/components/PageShell";
 import { Settings, Loader, Save, CheckCircle2, ToggleLeft, ToggleRight, ShieldCheck, Building2 } from "lucide-react";
+import GuessPolicyPanel from "@/components/clinicSettings/GuessPolicyPanel";
 
 const ROLE_PERMISSIONS = [
   { role: "doctor", label: "医生", perms: ["就诊全流程", "开具处方", "证据提交", "查看患者档案"] },
@@ -189,6 +190,9 @@ function Inner() {
               </div>
             )}
           </div>
+
+          {/* GuessPolicy 发布（唯一后端入口） */}
+          <GuessPolicyPanel />
 
           {/* 角色操作权限矩阵 */}
           <div className="rounded-xl p-4" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
