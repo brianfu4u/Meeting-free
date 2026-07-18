@@ -255,3 +255,25 @@ describe("权限矩阵（决策 D）", () => {
     );
   });
 });
+
+
+describe("CompositionRun Phase 3 Batch 2 metadata", () => {
+  const schema = readEntity("CompositionRun");
+  it("declares trigger/model/prompt/contract/error metadata", () => {
+    for (const field of [
+      "trigger_type",
+      "prompt_version",
+      "model_version",
+      "contract_version",
+      "error_code",
+    ]) {
+      expect(schema.properties).toHaveProperty(field);
+    }
+  });
+  it("limits trigger_type to manual/scheduled", () => {
+    expect(schema.properties.trigger_type.enum).toEqual(["manual", "scheduled"]);
+  });
+  it("does not duplicate WorkflowHypothesis relationships", () => {
+    expect(schema.properties).not.toHaveProperty("hypothesis_ids");
+  });
+});
