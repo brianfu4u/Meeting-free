@@ -55,7 +55,7 @@ export async function assembleWorkflow({
     candidateWorkflows,
     compositionContext: { compositionType, workflow, snapshot },
     sopDigest,
-    policyTracks: guessPolicy.tracks?.length ? guessPolicy.tracks : REASONING_TRACKS,
+    policyTracks: guessPolicy.tracks,
   });
 
   const raw = await invokeLLM({

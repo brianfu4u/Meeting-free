@@ -52,8 +52,12 @@ export function validateHypotheses(hypotheses, context = {}) {
     bestHypothesisId = ranked[0].workflow_hypothesis_id;
   }
 
-  // Guardrail 是 needs_manager_dispatch 唯一来源：clustering validation_issues 也汇入
-  if (validationIssues.length > 0) needsManagerDispatch = true;
+  // R2.3 项4：Guardrail 是 needs_manager_dispatch 唯一来源；
+  // validationIssues 非空 → needsManagerDispatch=true 且 bestHypothesisId=null（不自动选定最佳）
+  if (validationIssues.length > 0) {
+    needsManagerDispatch = true;
+    bestHypothesisId = null;
+  }
 
   return {
     checked,
@@ -94,12 +98,18 @@ function independentChecks(h, { artifactById, workflowById, snapshotById, clinic
         blocks.push({ rule_code: "cross_tenant_workflow" });
       }
     }
+    // R2.3 项3：attach 必须携带 target_snapshot_id + version
+    if (!h.target_snapshot_id) {
+      blocks.push({ rule_code: "attach_without_snapshot" });
+    } else if (h.target_snapshot_version == null) {
+      blocks.push({ rule_code: "attach_without_snapshot_version" });
+    }
   }
   if (h.composition_type === "new_train" && h.target_workflow_id) {
     blocks.push({ rule_code: "new_train_with_target" });
   }
 
-  // Snapshot 存在性 / Tenant / snapshot_version
+  // Snapshot 存在性 / Tenant / workflow_id 一致 / snapshot_version（缺失或不一致均阻断为 stale_proposal）
   if (h.target_snapshot_id) {
     const snap = snapshotById.get(h.target_snapshot_id);
     if (!snap) {
@@ -108,8 +118,24 @@ function independentChecks(h, { artifactById, workflowById, snapshotById, clinic
       if (clinicId && snap.clinic_id && snap.clinic_id !== clinicId) {
         blocks.push({ rule_code: "cross_tenant_snapshot" });
       }
-      if (h.target_snapshot_version != null && snap.snapshot_version != null && h.target_snapshot_version !== snap.snapshot_version) {
-        blocks.push({ rule_code: "stale_proposal", expected: h.target_snapshot_version, actual: snap.snapshot_version });
+      // R2.3 项3：snapshot.workflow_id === target_workflow_id
+      if (h.target_workflow_id && snap.workflow_id && snap.workflow_id !== h.target_workflow_id) {
+        blocks.push({
+          rule_code: "snapshot_workflow_mismatch",
+          snapshot_workflow_id: snap.workflow_id,
+          target_workflow_id: h.target_workflow_id,
+        });
+      }
+      // R2.3 项3：实际版本缺失或不一致 → stale_proposal
+      if (
+        h.target_snapshot_version != null &&
+        (snap.snapshot_version == null || snap.snapshot_version !== h.target_snapshot_version)
+      ) {
+        blocks.push({
+          rule_code: "stale_proposal",
+          expected: h.target_snapshot_version,
+          actual: snap.snapshot_version ?? null,
+        });
       }
     }
   }

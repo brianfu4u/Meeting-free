@@ -66,3 +66,53 @@ describe("candidateFinder — 影子模式 LLM 不得自动挂接", () => {
     expect(res.method).toBe("candidate_only");
   });
 });
+
+describe("candidateFinder — 项1：强制 clinicId 与源 clinic 一致", () => {
+  it("deterministicCandidates 缺 clinicId 抛错", () => {
+    const artifact = { id: "a1", clinic_id: "c1", file_url: "u", captured_at: "2026-07-18T09:35:00Z" };
+    expect(() => deterministicCandidates({ artifact, workflows: baseWorkflows })).toThrow(/clinicId required/);
+  });
+  it("resolveWorkflowLink 缺 clinicId 抛错", async () => {
+    const artifact = { id: "a1", clinic_id: "c1", file_url: "u", captured_at: "2026-07-18T09:35:00Z" };
+    await expect(resolveWorkflowLink({ artifact, workflows: baseWorkflows, invokeLLM: vi.fn() })).rejects.toThrow(/clinicId required/);
+  });
+  it("源 clinic_id 与 scope 不一致抛错（artifact）", () => {
+    const artifact = { id: "a1", clinic_id: "c-evil", file_url: "u", captured_at: "2026-07-18T09:35:00Z" };
+    expect(() => deterministicCandidates({ artifact, workflows: baseWorkflows, clinicId: "c1" })).toThrow(/clinic_id 不一致/);
+  });
+  it("源 clinic_id 与 scope 不一致抛错（factCard）", () => {
+    const factCard = { id: "f1", clinic_id: "c-evil", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    expect(() => deterministicCandidates({ factCard, workflows: baseWorkflows, clinicId: "c1" })).toThrow(/clinic_id 不一致/);
+  });
+});
+
+describe("candidateFinder — 项2：LLM 候选白名单 ≤5 + invalid_candidate", () => {
+  it("LLM 仅收到 ≤5 白名单 workflow", async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `wf-${i}`, clinic_id: "c1", started_at: "2026-07-18T09:30:00Z", temporal_anchors: ["2026-07-18T09:35:00Z"],
+    }));
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-0", confidence: 0.9, reason_codes: [] }));
+    const res = await resolveWorkflowLink({ factCard, workflows: many, invokeLLM, clinicId: "c1" });
+    // 进入 LLM 前 spatiotemporal 截断到 5
+    const sentWorkflows = invokeLLM.mock.calls[0][0].prompt;
+    expect(sentWorkflows).toContain("白名单");
+    expect(res.candidates.length).toBeLessThanOrEqual(5);
+  });
+  it("LLM 返回白名单外 workflow_id → invalid_candidate，不加入候选", async () => {
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-ghost", confidence: 0.9, reason_codes: [] }));
+    const res = await resolveWorkflowLink({ factCard, workflows: baseWorkflows, invokeLLM, clinicId: "c1" });
+    expect(res.invalid_candidates.some((v) => v.type === "invalid_candidate" && v.workflow_id === "wf-ghost")).toBe(true);
+    expect(res.candidates.every((c) => c.workflow_id !== "wf-ghost")).toBe(true);
+    expect(res.linkedWorkflowId).toBeNull();
+  });
+  it("LLM 返回白名单内 workflow_id → 加入候选且仍不自动挂接", async () => {
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-1", confidence: 0.8, reason_codes: ["name_match"] }));
+    const res = await resolveWorkflowLink({ factCard, workflows: baseWorkflows, invokeLLM, clinicId: "c1" });
+    expect(res.candidates.some((c) => c.method === "llm" && c.workflow_id === "wf-1")).toBe(true);
+    expect(res.invalid_candidates).toHaveLength(0);
+    expect(res.linkedWorkflowId).toBeNull();
+  });
+});

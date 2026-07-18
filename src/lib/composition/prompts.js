@@ -89,9 +89,21 @@ export function buildOrphanClusterPrompt({ orphanCards }) {
 }
 
 export function buildAssemblyPrompt({ factCards, candidateWorkflows = [], compositionContext = {}, sopDigest, policyTracks }) {
-  const trackList = (policyTracks?.length ? policyTracks : REASONING_TRACKS)
-    .map((t) => `- ${t.track_id}（${t.name}）: ${t.description}`)
-    .join("\n");
+  // R2.3 项6：固定七轨道不允许被 GuessPolicy.tracks 替换；Policy 仅可对固定轨道追加 guardrails 提示。
+  const known = new Set(TRACK_IDS);
+  const policyHintsByTrack = new Map();
+  if (Array.isArray(policyTracks)) {
+    for (const t of policyTracks) {
+      if (t && t.track_id && known.has(t.track_id) && Array.isArray(t.guardrails) && t.guardrails.length) {
+        policyHintsByTrack.set(t.track_id, t.guardrails);
+      }
+    }
+  }
+  const trackList = REASONING_TRACKS.map((t) => {
+    const extra = policyHintsByTrack.get(t.track_id);
+    const base = `- ${t.track_id}（${t.name}）: ${t.description}`;
+    return extra && extra.length ? `${base}\n  追加规则: ${extra.join("; ")}` : base;
+  }).join("\n");
   return [
     "你是视光诊所工作流编组引擎。基于以下证据事实卡片与候选 Workflow，产出 1~3 个 Workflow 假设，供护栏校验与店长决策。",
     "约束：",

@@ -23,7 +23,7 @@ const ctx = (over = {}) => ({
     { id: "a3", clinic_id: "c1" },
   ],
   workflows: [{ id: "wf-1", clinic_id: "c1", started_at: "2026-07-18T09:00:00Z", open_loops: ["exam"] }],
-  snapshots: [{ id: "snap-1", clinic_id: "c1", snapshot_version: 3 }],
+  snapshots: [{ id: "snap-1", clinic_id: "c1", workflow_id: "wf-1", snapshot_version: 3 }],
   factCards: [
     { artifact_id: "a1", subject_quality: "high", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:10:00Z" },
     { artifact_id: "a2", subject_quality: "high", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:20:00Z" },
@@ -190,5 +190,39 @@ describe("guardrailValidator — 未使用轨道空数组不判违规", () => {
   it("全部轨道为空仍可通过", () => {
     const res = validateHypotheses([baseHyp({ reasoning_tracks: {} })], ctx());
     expect(res.checked[0].blocks).toEqual([]);
+  });
+});
+
+describe("guardrailValidator — 项3：attach 必须携带 snapshot + workflow_id 一致 + 版本缺失阻断", () => {
+  it("attach 缺 target_snapshot_id 阻断", () => {
+    const res = validateHypotheses([baseHyp({ target_snapshot_id: null, target_snapshot_version: null })], ctx());
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "attach_without_snapshot")).toBe(true);
+  });
+  it("attach 缺 target_snapshot_version 阻断", () => {
+    const res = validateHypotheses([baseHyp({ target_snapshot_version: null })], ctx());
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "attach_without_snapshot_version")).toBe(true);
+  });
+  it("snapshot.workflow_id !== target_workflow_id 阻断", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ snapshots: [{ id: "snap-1", clinic_id: "c1", workflow_id: "wf-other", snapshot_version: 3 }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "snapshot_workflow_mismatch")).toBe(true);
+  });
+  it("snapshot 实际版本缺失（null）阻断为 stale_proposal", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ snapshots: [{ id: "snap-1", clinic_id: "c1", workflow_id: "wf-1", snapshot_version: null }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "stale_proposal")).toBe(true);
+  });
+  it("attach 全部一致则通过", () => {
+    const res = validateHypotheses([baseHyp()], ctx());
+    expect(res.checked[0].blocked).toBe(false);
+    expect(res.bestHypothesisId).toBe("h1");
+  });
+});
+
+describe("guardrailValidator — 项4：validationIssues 非空 → bestHypothesisId=null", () => {
+  it("有明确最佳但 validationIssues 非空 → bestHypothesisId=null 且 needsManagerDispatch=true", () => {
+    const h1 = baseHyp({ workflow_hypothesis_id: "h1", ordered_artifact_ids: ["a1", "a2"] });
+    const h2 = baseHyp({ workflow_hypothesis_id: "h2", ordered_artifact_ids: ["a1", "a2", "a3"] });
+    const res = validateHypotheses([h1, h2], ctx({ validationIssues: [{ type: "orphan_cluster_overlap" }] }));
+    expect(res.needsManagerDispatch).toBe(true);
+    expect(res.bestHypothesisId).toBeNull();
   });
 });

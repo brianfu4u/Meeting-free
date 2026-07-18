@@ -1,10 +1,9 @@
 /**
- * Clinic OS V10 — Candidate Finder（修订版 R2.2）
+ * Clinic OS V10 — Candidate Finder（修订版 R2.3）
  *
- * R2.2：
- * - 通用时间契约：temporal_anchors / started_at / last_event_at（替代 arrival_time/node_scan_timestamps）；
- * - 强制 clinic_id 隔离：仅在同一门店内寻找候选；
- * - 限制候选数（MAX_CANDIDATES），避免候选爆炸；
+ * R2.3：
+ * - 强制 clinicId：缺失直接抛错；并校验 Artifact/FactCard 的 clinic_id 与当前 clinic 一致；
+ * - 进入 LLM Prompt 前候选缩到 ≤5；LLM 返回的 workflow_id 必须属于服务端候选白名单，否则记 invalid_candidate；
  * - 影子模式：LLM/时空候选一律不自动挂接。
  */
 
@@ -24,13 +23,31 @@ function collectWorkflowTimes(w) {
     .filter((t) => !Number.isNaN(t));
 }
 
+function assertClinicId(clinicId) {
+  if (!clinicId) {
+    throw new Error("CandidateFinder: clinicId required（租户隔离强制）");
+  }
+}
+
+function assertSourceClinicMatch(source, clinicId) {
+  if (!source) return;
+  const srcClinic = source.clinic_id;
+  if (srcClinic && srcClinic !== clinicId) {
+    throw new Error(
+      `CandidateFinder: source clinic_id 不一致（source=${srcClinic}, scope=${clinicId}）`
+    );
+  }
+}
+
 export function deterministicCandidates({ artifact, factCard, workflows, clinicId }) {
+  assertClinicId(clinicId);
   const source = artifact || factCard;
   if (!source) throw new Error("deterministicCandidates: source required");
+  assertSourceClinicMatch(source, clinicId);
   if (!Array.isArray(workflows)) return [];
 
-  // 强制 clinic_id 隔离
-  const scoped = clinicId ? workflows.filter((w) => w.clinic_id === clinicId) : workflows;
+  // 强制 clinic_id 隔离：仅在同一门店内寻找候选
+  const scoped = workflows.filter((w) => w.clinic_id === clinicId);
   const candidates = [];
 
   // 1. 明确 ID 匹配（确定性，可自动挂接）
@@ -60,7 +77,7 @@ export function deterministicCandidates({ artifact, factCard, workflows, clinicI
           });
         }
       }
-      // 限制候选数
+      // 进入 LLM 前先把候选缩到 ≤5
       if (candidates.length > MAX_CANDIDATES) candidates.length = MAX_CANDIDATES;
     }
   }
@@ -68,14 +85,22 @@ export function deterministicCandidates({ artifact, factCard, workflows, clinicI
   return candidates;
 }
 
-export async function llmCandidateMatch({ factCard, workflows, invokeLLM }) {
+/**
+ * LLM 候选匹配：仅在服务端候选白名单（≤5）内选择。
+ * 返回 { candidates, invalid }：若 LLM 返回的 workflow_id 不在白名单 → invalid_candidate。
+ */
+export async function llmCandidateMatch({ factCard, candidateWorkflows, invokeLLM }) {
   if (!invokeLLM) throw new Error("llmCandidateMatch: invokeLLM required");
-  if (!Array.isArray(workflows) || workflows.length === 0) return [];
+  if (!Array.isArray(candidateWorkflows) || candidateWorkflows.length === 0) {
+    return { candidates: [], invalid: [] };
+  }
+
+  const whitelist = candidateWorkflows.map((w) => w.id);
 
   const prompt = [
-    "你是视光诊所工作流归属判定器。判断证据事实卡片最可能归属哪个 Workflow。",
+    "你是视光诊所工作流归属判定器。在给定的候选 Workflow 白名单内选择最可能归属项。",
     "约束（影子模式）：仅输出候选建议（带信心度与理由），禁止直接修改系统状态；",
-    "confidence 仅记录，不决定自动挂接。",
+    "best_workflow_id 必须来自候选白名单，不得发明；confidence 仅记录，不决定自动挂接。",
     "",
     "证据主体:",
     JSON.stringify({
@@ -84,8 +109,8 @@ export async function llmCandidateMatch({ factCard, workflows, invokeLLM }) {
       fields: (factCard.fields || []).map((f) => ({ field_name: f.field_name, value: f.value })),
     }),
     "",
-    "候选 Workflow:",
-    JSON.stringify(workflows.map((w) => ({ id: w.id, workflow_family: w.workflow_family, subject_type: w.subject_type }))),
+    "候选 Workflow 白名单（≤5）:",
+    JSON.stringify(candidateWorkflows.map((w) => ({ id: w.id, workflow_family: w.workflow_family, subject_type: w.subject_type }))),
   ].join("\n");
 
   const result = await invokeLLM({
@@ -102,31 +127,72 @@ export async function llmCandidateMatch({ factCard, workflows, invokeLLM }) {
     model: "automatic",
   });
 
-  if (!result?.best_workflow_id) return [];
-  return [
-    {
-      workflow_id: result.best_workflow_id,
-      method: "llm",
-      score: Math.min(result.confidence ?? 0, 1),
-      confidence: result.confidence ?? null,
-      reason: (result.reason_codes || []).join("; ") || "LLM 候选（仅记录）",
-    },
-  ];
+  const returnedId = result?.best_workflow_id;
+  if (!returnedId) return { candidates: [], invalid: [] };
+
+  if (!whitelist.includes(returnedId)) {
+    return {
+      candidates: [],
+      invalid: [
+        { type: "invalid_candidate", workflow_id: returnedId, reason: "llm_returned_id_not_in_whitelist" },
+      ],
+    };
+  }
+
+  return {
+    candidates: [
+      {
+        workflow_id: returnedId,
+        method: "llm",
+        score: Math.min(result.confidence ?? 0, 1),
+        confidence: result.confidence ?? null,
+        reason: (result.reason_codes || []).join("; ") || "LLM 候选（仅记录）",
+      },
+    ],
+    invalid: [],
+  };
 }
 
 export async function resolveWorkflowLink({ artifact, factCard, workflows, invokeLLM, clinicId }) {
-  const scoped = clinicId ? (workflows || []).filter((w) => w.clinic_id === clinicId) : workflows || [];
+  assertClinicId(clinicId);
+  const source = artifact || factCard;
+  if (source) assertSourceClinicMatch(source, clinicId);
+
+  const scoped = (workflows || []).filter((w) => w.clinic_id === clinicId);
   const det = deterministicCandidates({ artifact, factCard, workflows: scoped, clinicId });
   const explicit = det.find((c) => c.method === "explicit_id");
   if (explicit) {
-    return { candidates: det, linkedWorkflowId: explicit.workflow_id, method: "explicit_id", needsManagerReview: false };
+    return {
+      candidates: det,
+      linkedWorkflowId: explicit.workflow_id,
+      method: "explicit_id",
+      needsManagerReview: false,
+      invalid_candidates: [],
+    };
   }
 
-  let candidates = det.filter((c) => c.method === "spatiotemporal");
-  if (invokeLLM && factCard) {
-    const llm = await llmCandidateMatch({ factCard, workflows: scoped, invokeLLM });
-    candidates = [...candidates, ...llm].slice(0, MAX_CANDIDATES);
+  // 时空候选进入 LLM 前已缩到 ≤5（deterministicCandidates 内部截断）
+  let candidates = det.filter((c) => c.method === "spatiotemporal").slice(0, MAX_CANDIDATES);
+  const invalid_candidates = [];
+
+  if (invokeLLM && factCard && candidates.length > 0) {
+    const whitelistWorkflows = scoped.filter((w) =>
+      candidates.some((c) => c.workflow_id === w.id)
+    );
+    const { candidates: llmCands, invalid } = await llmCandidateMatch({
+      factCard,
+      candidateWorkflows: whitelistWorkflows,
+      invokeLLM,
+    });
+    candidates = [...candidates, ...llmCands].slice(0, MAX_CANDIDATES);
+    invalid_candidates.push(...invalid);
   }
 
-  return { candidates, linkedWorkflowId: null, method: "candidate_only", needsManagerReview: true };
+  return {
+    candidates,
+    linkedWorkflowId: null,
+    method: "candidate_only",
+    needsManagerReview: true,
+    invalid_candidates,
+  };
 }
