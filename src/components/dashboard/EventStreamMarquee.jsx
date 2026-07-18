@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
 import { Radio, Loader } from "lucide-react";
+import { isToday } from "@/lib/clinicDate";
 
 const CLINIC_ID = "clinic-001";
 const CLOSED = new Set(["completed", "exception"]);
@@ -33,6 +34,7 @@ export default function EventStreamMarquee() {
 
   const items = (q.data || [])
     .filter((t) => !CLOSED.has(t.status))
+    .filter((t) => isToday(t.created_date))
     .sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
 
   if (q.isLoading) {
@@ -47,7 +49,7 @@ export default function EventStreamMarquee() {
     return (
       <div className="rounded-xl px-4 py-2 flex items-center gap-2" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
         <Radio size={13} style={{ color: "#16A34A" }} />
-        <span className="text-xs" style={{ color: theme.textSub }}>事件流已全部闭环 · 无待核销项</span>
+        <span className="text-xs" style={{ color: theme.textSub }}>今日无待核销事件</span>
       </div>
     );
   }

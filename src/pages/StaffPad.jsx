@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { useStaffSelf, ROLE_LABELS, STAFF_STATUS_LABELS, STAFF_STATUS_COLORS } from "@/lib/staffPad/useStaffSelf";
 import { useOperationalTasks } from "@/hooks/useClinicData";
+import { isToday } from "@/lib/clinicDate";
 import BindingScreen from "@/components/staffPad/BindingScreen";
 import ClockBar from "@/components/staffPad/ClockBar";
 import TaskList from "@/components/staffPad/TaskList";
@@ -56,19 +57,25 @@ function StaffPadInner() {
 
   if (!staff) return <BindingScreen user={user} onBound={refresh} />;
 
-  const myTasks = (tasksQ.data || []).filter(
+  // V10 今日焦点：todo 只展示当日任务；历史未完成单独入口可查看
+  const allUnfinished = (tasksQ.data || []).filter(
     (t) => t.assignee_staff_id === staff.id && !["completed", "exception"].includes(t.status)
   );
-  const priority = myTasks.filter((t) => t.priority === "P1" || t.priority === "P2");
-  const normal = myTasks.filter((t) => t.priority === "P3" || t.priority === "P4");
-  const activeTask = myTasks.find((t) => t.id === activeTaskId);
+  const todayTodo = allUnfinished.filter((t) => isToday(t.created_date));
+  const historyUnfinished = allUnfinished.filter((t) => !isToday(t.created_date));
+  const priority = todayTodo.filter((t) => t.priority === "P1" || t.priority === "P2");
+  const normal = todayTodo.filter((t) => t.priority === "P3" || t.priority === "P4");
+  const activeTask = (tasksQ.data || []).find((t) => t.id === activeTaskId);
   const history = (tasksQ.data || [])
     .filter((t) => t.assignee_staff_id === staff.id && ["completed", "exception"].includes(t.status))
     .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date));
+  const historyAll = [...history, ...historyUnfinished].sort(
+    (a, b) => new Date(b.updated_date || b.created_date) - new Date(a.updated_date || a.created_date)
+  );
   const toLocalDate = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const da = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${da}`; };
   const todayStr = toLocalDate(new Date());
   const minDateStr = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return toLocalDate(d); })();
-  const filteredHistory = history.filter((t) => {
+  const filteredHistory = historyAll.filter((t) => {
     if (!t.created_date) return false;
     const d = new Date(t.created_date);
     const inRange = d >= new Date(histRange.start + "T00:00:00") && d <= new Date(histRange.end + "T23:59:59");
@@ -99,7 +106,7 @@ function StaffPadInner() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold truncate" style={{ color: theme.text }}>
-            {view === "history" ? "历史记录 · 已核销" : view === "historyDetail" ? "历史详情" : view === "task" ? "任务详情" : `${staff.staff_name} · ${ROLE_LABELS[staff.role] || staff.role}`}
+            {view === "history" ? "历史记录" : view === "historyDetail" ? "历史详情" : view === "task" ? "任务详情" : `${staff.staff_name} · ${ROLE_LABELS[staff.role] || staff.role}`}
           </div>
           {view === "home" && (
             <div className="text-xs truncate" style={{ color: theme.textMuted }}>
@@ -121,9 +128,16 @@ function StaffPadInner() {
           <div className="flex-1 overflow-y-auto px-4 pb-28">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs font-bold" style={{ color: theme.textSub }}>工作清单</div>
-              <button onClick={() => setView("history")} className="text-[11px] px-2 py-1 rounded-lg flex items-center gap-1" style={{ color: "#4ade80", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.25)" }}>
-                历史 · {history.length}
-              </button>
+              <div className="flex items-center gap-2">
+                {historyUnfinished.length > 0 && (
+                  <button onClick={() => setView("history")} className="text-[11px] px-2 py-1 rounded-lg flex items-center gap-1" style={{ color: "#fbbf24", background: "rgba(217,119,6,0.12)", border: "1px solid rgba(217,119,6,0.25)" }}>
+                    历史未完成 · {historyUnfinished.length}
+                  </button>
+                )}
+                <button onClick={() => setView("history")} className="text-[11px] px-2 py-1 rounded-lg flex items-center gap-1" style={{ color: "#4ade80", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.25)" }}>
+                  历史 · {history.length}
+                </button>
+              </div>
             </div>
             <TaskList priority={priority} normal={normal}
               onSelect={(t) => { setActiveTaskId(t.id); setView("task"); }} />
@@ -148,7 +162,7 @@ function StaffPadInner() {
 
       {view === "history" && (
         <div className="flex-1 overflow-y-auto p-4 pb-28">
-          <div className="text-xs font-bold mb-2" style={{ color: theme.textSub }}>历史记录 · 已核销</div>
+          <div className="text-xs font-bold mb-2" style={{ color: theme.textSub }}>历史记录</div>
           <div className="space-y-2 mb-3">
             <div className="flex items-center gap-1.5">
               {["range", "day"].map((m) => (
