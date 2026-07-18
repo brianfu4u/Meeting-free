@@ -1,4 +1,4 @@
-// Base44 deployment trigger — 2026-07-19
+// Base44 deployment trigger — fix 189799a
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { createCompositionService } from "./service.ts";
 import type { ActorContext, CompositionOps, ServiceRequest } from "./contracts.ts";
