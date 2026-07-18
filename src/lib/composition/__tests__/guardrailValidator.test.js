@@ -1,76 +1,127 @@
 import { describe, it, expect } from "vitest";
-import { validateProposal } from "../guardrailValidator";
+import { validateHypotheses, compareHypotheses } from "../guardrailValidator";
 
-const goodTracks = ["T1", "T2", "T3", "T4", "T5", "T6", "T7"].map((id) => ({
-  track_id: id,
-  supporting_evidence: ["e1"],
-  opposing_evidence: [],
-  information_gaps: [],
-}));
-
-const baseGood = {
-  title: "验光卡滞预警",
-  urgency: "yellow",
-  attention_type: "wait_timeout",
-  recommendation: "建议调配验光师支援",
-  reasoning_tracks: goodTracks,
-  alternative_hypotheses: [
-    { hypothesis_id: "H1", description: "验光师不足", fragments_explained: 5, guardrail_violations: 0, unsupported_assumptions_count: 0 },
-  ],
+const baseHyp = (over = {}) => ({
+  workflow_hypothesis_id: "h1",
+  workflow_family: "patient_visit",
+  composition_type: "attach",
+  target_workflow_id: "wf-1",
+  ordered_artifact_ids: ["a1", "a2"],
+  reasoning_tracks: {},
   unsupported_assumptions: [],
-};
+  contradictions: [],
+  unexplained_artifact_ids: [],
+  ...over,
+});
 
-describe("guardrailValidator — 合法提案", () => {
-  it("齐全提案 valid 且选出最佳假设", () => {
-    const r = validateProposal(baseGood, { tracks: [], hard_guardrails: [], decision_rules: {} });
-    expect(r.valid).toBe(true);
-    expect(r.guardrail_violations).toBe(0);
-    expect(r.bestHypothesisId).toBe("H1");
+const ctx = (over = {}) => ({
+  artifacts: [
+    { id: "a1", clinic_id: "c1" },
+    { id: "a2", clinic_id: "c1" },
+    { id: "a3", clinic_id: "c1" },
+  ],
+  workflows: [{ id: "wf-1", open_loops: ["exam"] }],
+  clinicId: "c1",
+  ...over,
+});
+
+describe("guardrailValidator — 加权分数已彻底删除", () => {
+  it("返回结构不含 score 字段", () => {
+    const res = validateHypotheses([baseHyp()], ctx());
+    expect(res.ranked[0]).not.toHaveProperty("score");
+    expect(res.checked[0]).not.toHaveProperty("score");
+  });
+  it("compareHypotheses 仅做顺序比较，无权重乘法", () => {
+    const a = baseHyp({ ordered_artifact_ids: ["a1", "a2"], unsupported_assumptions: [], contradictions: [] });
+    const b = baseHyp({ ordered_artifact_ids: ["a1", "a2"], unsupported_assumptions: [], contradictions: [] });
+    expect(compareHypotheses(a, b)).toBe(0);
   });
 });
 
-describe("guardrailValidator — 违反检测", () => {
-  it("缺 title/recommendation 记违反", () => {
-    const bad = { ...baseGood, title: "", recommendation: "" };
-    const r = validateProposal(bad, {});
-    expect(r.violations).toContain("missing_recommendation_or_title");
+describe("guardrailValidator — 硬护栏独立阻断", () => {
+  it("跨租户 Artifact 被阻断", () => {
+    const res = validateHypotheses(
+      [baseHyp()],
+      ctx({ artifacts: [{ id: "a1", clinic_id: "c-evil" }, { id: "a2", clinic_id: "c1" }] })
+    );
+    expect(res.checked[0].blocked).toBe(true);
+    expect(res.allBlocked).toBe(true);
+    expect(res.needsManagerDispatch).toBe(true);
   });
-  it("无 reasoning_tracks 记违反", () => {
-    const bad = { ...baseGood, reasoning_tracks: [] };
-    const r = validateProposal(bad, {});
-    expect(r.violations).toContain("no_reasoning_tracks");
+
+  it("attach 目标 Workflow 不存在被阻断", () => {
+    const res = validateHypotheses(
+      [baseHyp({ target_workflow_id: "wf-ghost" })],
+      ctx({ workflows: [] })
+    );
+    expect(res.checked[0].blocked).toBe(true);
   });
-  it("轨道全空记违反", () => {
-    const bad = { ...baseGood, reasoning_tracks: [{ track_id: "T1", supporting_evidence: [], opposing_evidence: [], information_gaps: [] }] };
-    const r = validateProposal(bad, {});
-    expect(r.violations).toContain("track_T1_empty");
+
+  it("new_train 不得带 target_workflow_id", () => {
+    const res = validateHypotheses(
+      [baseHyp({ composition_type: "new_train", target_workflow_id: "wf-1" })],
+      ctx()
+    );
+    expect(res.checked[0].blocked).toBe(true);
   });
-  it("提议 closed 但无终止信号 → 全局护栏违反", () => {
-    const policy = { tracks: [], hard_guardrails: ["closed需终止信号"], decision_rules: {} };
-    const bad = { ...baseGood, proposed_workflow_status: "closed", terminal_signal_detected: false };
-    const r = validateProposal(bad, policy);
-    expect(r.violations).toContain("global_no_terminal_for_closure");
+
+  it("重复证据被阻断", () => {
+    const res = validateHypotheses(
+      [baseHyp()],
+      ctx({ committedArtifactIds: ["a1"] })
+    );
+    expect(res.checked[0].blocked).toBe(true);
   });
-  it("提议 handoff 但无交接证据 → 护栏违反", () => {
-    const policy = { tracks: [], hard_guardrails: ["handoff需证据"], decision_rules: {} };
-    const bad = { ...baseGood, proposed_handoff_department: "medical", handoff_evidence_ids: [] };
-    const r = validateProposal(bad, policy);
-    expect(r.violations).toContain("global_handoff_without_evidence");
+
+  it("不信任 LLM 自报：即使假设自带低 violations 数，仍按真实数据阻断", () => {
+    // 假设没有自报字段，仅真实跨租户 → 必须阻断
+    const h = baseHyp();
+    delete h.guardrail_violations;
+    const res = validateHypotheses(
+      [h],
+      ctx({ artifacts: [{ id: "a1", clinic_id: "c-evil" }, { id: "a2", clinic_id: "c1" }] })
+    );
+    expect(res.checked[0].blocked).toBe(true);
   });
 });
 
-describe("guardrailValidator — 假设打分", () => {
-  it("违反与无依据假设扣分排序", () => {
-    const proposal = {
-      ...baseGood,
-      alternative_hypotheses: [
-        { hypothesis_id: "H1", description: "A", fragments_explained: 6, guardrail_violations: 2, unsupported_assumptions_count: 1 },
-        { hypothesis_id: "H2", description: "B", fragments_explained: 4, guardrail_violations: 0, unsupported_assumptions_count: 0 },
-      ],
-    };
-    const policy = { tracks: [], hard_guardrails: [], decision_rules: { guardrail_violation_weight: 3, unsupported_assumption_weight: 1 } };
-    const r = validateProposal(proposal, policy);
-    // H1: 6 - 2*3 - 1 = -1; H2: 4 - 0 - 0 = 4 → H2 应排前
-    expect(r.bestHypothesisId).toBe("H2");
+describe("guardrailValidator — 顺序比较选择最佳假设", () => {
+  it("解释碎片多者优先", () => {
+    const h1 = baseHyp({ workflow_hypothesis_id: "h1", ordered_artifact_ids: ["a1", "a2"] });
+    const h2 = baseHyp({ workflow_hypothesis_id: "h2", ordered_artifact_ids: ["a1", "a2", "a3"] });
+    const res = validateHypotheses([h1, h2], ctx());
+    expect(res.bestHypothesisId).toBe("h2");
+    expect(res.needsManagerDispatch).toBe(false);
+  });
+
+  it("碎片数相同，无依据假设少者优先", () => {
+    const h1 = baseHyp({ workflow_hypothesis_id: "h1", unsupported_assumptions: ["guess"] });
+    const h2 = baseHyp({ workflow_hypothesis_id: "h2", unsupported_assumptions: [] });
+    const res = validateHypotheses([h1, h2], ctx());
+    expect(res.bestHypothesisId).toBe("h2");
+  });
+
+  it("前两项相同，矛盾少者优先", () => {
+    const h1 = baseHyp({ workflow_hypothesis_id: "h1", contradictions: ["c1", "c2"] });
+    const h2 = baseHyp({ workflow_hypothesis_id: "h2", contradictions: [] });
+    const res = validateHypotheses([h1, h2], ctx());
+    expect(res.bestHypothesisId).toBe("h2");
+  });
+});
+
+describe("guardrailValidator — 多候选无法区分进入经理判断", () => {
+  it("三项指标完全相同 → needsManagerDispatch", () => {
+    const h1 = baseHyp({ workflow_hypothesis_id: "h1" });
+    const h2 = baseHyp({ workflow_hypothesis_id: "h2" });
+    const res = validateHypotheses([h1, h2], ctx());
+    expect(res.needsManagerDispatch).toBe(true);
+  });
+});
+
+describe("guardrailValidator — 未使用轨道空数组不判违规", () => {
+  it("全部轨道为空仍可通过", () => {
+    const res = validateHypotheses([baseHyp({ reasoning_tracks: {} })], ctx());
+    expect(res.checked[0].blocked).toBe(false);
+    expect(res.checked[0].blocks).toEqual([]);
   });
 });

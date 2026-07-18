@@ -1,29 +1,47 @@
 /**
- * Clinic OS V10 — Composition 编组逻辑层 Prompt 版本与模板
+ * Clinic OS V10 — Composition 编组逻辑层 Prompt 版本与模板（修订版）
  *
- * 设计原则：Prompt 与逻辑分离，版本号随迭代单调递增，写入 EvidenceFactCard / AttentionItem
- * 的 prompt_version 字段，便于回溯与 A/B。
+ * 修订要点：
+ * - 七条推断轨道恢复为业务定义（subject_fingerprint 等），移除运营预警型轨道；
+ * - 移除 attention_type / urgency 等运营预警字段；
+ * - Assembly 输出回归编组目标：composition_type / workflow_family / ordered_artifact_ids / contradictions 等；
+ * - reasoning_tracks 改为以 track_id 为键的对象，每条轨道值为证据数组，未使用允许空数组。
  */
 
 export const PROMPT_VERSIONS = {
   EVIDENCE_INTERPRETER: "evidence-interp-v1",
   CANDIDATE_MATCH: "candidate-match-v1",
-  WORKFLOW_ASSEMBLY: "workflow-assembly-v1",
+  WORKFLOW_ASSEMBLY: "workflow-assembly-v2",
+  ORPHAN_CLUSTER: "orphan-cluster-v1",
 };
+
+/** 通用 Workflow 族（替代 PatientSession 硬编码） */
+export const WORKFLOW_FAMILIES = [
+  "patient_visit",
+  "procurement",
+  "human_resources",
+  "marketing",
+  "logistics",
+  "equipment_maintenance",
+];
+
+export const COMPOSITION_TYPES = ["attach", "new_train", "orphan"];
 
 /**
  * 七条推断轨道（推理协议，非加权打分）。
- * 编组 LLM 必须为每条轨道独立标注支持/反对证据与信息缺口。
+ * 编组 LLM 必须按这七条轨道独立输出证据线索；未使用轨道允许空数组，不得编造理由。
  */
 export const REASONING_TRACKS = [
-  { track_id: "T1", name: "患者旅程一致性", description: "证据是否与该 PatientSession 已完成节点连贯" },
-  { track_id: "T2", name: "时间窗口合理性", description: "事件发生时间是否落在业务线合理区间" },
-  { track_id: "T3", name: "证物来源归属", description: "Artifact 来源区域/员工是否与该 session 当前负责岗匹配" },
-  { track_id: "T4", name: "SOP 执行完整度", description: "SystemSpec 要求的 expected_evidence 是否齐备" },
-  { track_id: "T5", name: "瓶颈/卡滞信号", description: "是否存在节点超时、等待超时或资源风险" },
-  { track_id: "T6", name: "终止信号", description: "是否检出可收尾的业务闭环信号" },
-  { track_id: "T7", name: "交接必要性", description: "是否需要跨部门/岗位交接及交接目标" },
+  { track_id: "subject_fingerprint", name: "主体指纹线", description: "姓名片段、年龄、性别、眼别、医生、日期、病历号、检查号、处方参数等组合线索，判断多个碎片是否可能属于同一患者或业务对象；低可信 OCR 不得直接成为硬冲突" },
+  { track_id: "causal_chain", name: "临床/业务因果线", description: "请求/医嘱 → 执行动作 → 结果 → 复核/决策 → 下一步；非医疗流程同理（采购申请→审批→下单→收货→验收）" },
+  { track_id: "temporal_continuity", name: "时间连续线", description: "实际发生时间、上传时间、前后顺序、合理间隔、迟到乱序、跨日；时间可增强推断但不得单独确定身份" },
+  { track_id: "department_handoff", name: "部门接力线", description: "部门间交接方向（前台→验光→医生→特检→返回医生→收费/药房/配镜）；允许跳步、重复、分支、暂停、回流" },
+  { track_id: "actor_device_location", name: "人员/设备/地点连续线", description: "上传员工、执行医生、部门、设备、诊室、地点构成同一工作上下文" },
+  { track_id: "document_lineage", name: "文档血缘线", description: "资料中重复或延续的姓名片段、眼别、医生、检查类型、报告编号、时间、处方参数、医嘱关键词、关键测量值；必须说明具体重复线索" },
+  { track_id: "open_loop_closure", name: "开放环节闭合线", description: "新碎片能否闭合现有 Workflow 的开放环节（已开检查缺报告 / 已有报告缺复核 / 已有处方缺收费等）" },
 ];
+
+export const TRACK_IDS = REASONING_TRACKS.map((t) => t.track_id);
 
 export function buildInterpreterPrompt({ artifact, sopDigest, businessLine }) {
   return [
@@ -42,32 +60,66 @@ export function buildInterpreterPrompt({ artifact, sopDigest, businessLine }) {
   ].join("\n");
 }
 
-export function buildAssemblyPrompt({ factCards, snapshot, sopDigest, policyTracks }) {
-  const trackList = policyTracks
-    .map((t) => `- ${t.track_id} ${t.name}: ${t.description}`)
+export function buildOrphanClusterPrompt({ orphanCards }) {
+  return [
+    "你是视光诊所工作流编组引擎的「孤立碎片聚类」子工序。",
+    "以下多张 EvidenceFactCard 均未归属到任何已有 Workflow。请判断哪些碎片可能属于同一条新 Workflow（new_train）。",
+    "约束：",
+    "- 仅基于真实存在的线索推断，不得虚构身份或事件；",
+    "- 最多产出 3 个候选簇，每簇至少 2 张碎片；无法成簇的碎片放入 unclustered；",
+    "- confidence 仅记录用，不决定自动挂接；",
+    "- 输出严格符合 JSON Schema。",
+    "",
+    "孤立碎片（fact_card_id + 关键字段）:",
+    JSON.stringify(
+      orphanCards.map((c) => ({
+        fact_card_id: c.id,
+        artifact_id: c.artifact_id,
+        fields: (c.fields || []).map((f) => ({ field_name: f.field_name, value: f.value })),
+      })),
+      null,
+      0
+    ),
+  ].join("\n");
+}
+
+export function buildAssemblyPrompt({ factCards, candidateWorkflows = [], compositionContext = {}, sopDigest, policyTracks }) {
+  const trackList = (policyTracks?.length ? policyTracks : REASONING_TRACKS)
+    .map((t) => `- ${t.track_id}（${t.name}）: ${t.description}`)
     .join("\n");
   return [
-    "你是视光诊所工作流编组引擎。基于以下证据事实卡片与当前工作流快照，",
-    "产出一份「提案」（AttentionItem 草案），供店长三选一决策。约束：",
-    "- 仅提供建议，不直接修改系统状态；",
-    "- 必须为七条推断轨道分别标注支持证据/反对证据/信息缺口；",
-    "- 必须给出 ≥1 个候选假设，并标注其解释碎片数、护栏违反数、无依据假设数；",
-    "- 若提议 closed/handoff，需明确 terminal_signal_detected 与所需交接证据；",
-    "- recommendation ≤50 字；title ≤20 字。",
+    "你是视光诊所工作流编组引擎。基于以下证据事实卡片与候选 Workflow，产出 1~3 个 Workflow 假设，供护栏校验与店长决策。",
+    "约束：",
+    "- 仅提供建议，不直接修改系统状态（影子模式）；",
+    "- 必须为七条推断轨道分别输出证据线索；未使用轨道保持空数组，不得编造理由；",
+    "- 每个假设须标注 composition_type（attach=并入已有 Workflow / new_train=新建 Workflow / orphan=无法编组）；",
+    "- attach 须给出 target_workflow_id；new_train 的 target_workflow_id 必须为 null；",
+    "- ordered_artifact_ids 为该假设下碎片的合理先后顺序；",
+    "- 必须给出 unsupported_assumptions（无依据假设）与 contradictions（矛盾）；",
+    "- 不得为拼出完整流程而虚构 Event 或身份；",
+    "- 选择总准绳：解释最多真实碎片、违反最少边界、需要最少无依据假设。",
     "",
     "七条推断轨道：",
     trackList,
     "",
-    "当前快照摘要:",
-    snapshot?.llm_summary || "(无)",
-    `当前节点: ${snapshot?.current_node || "未知"}  累计耗时: ${snapshot?.total_elapsed_minutes ?? 0} 分钟`,
+    "编组上下文:",
+    `composition_type 提示: ${compositionContext.compositionType || "auto"}`,
+    compositionContext.workflow
+      ? `目标 Workflow: ${JSON.stringify({ id: compositionContext.workflow.id, workflow_family: compositionContext.workflow.workflow_family, open_loops: compositionContext.workflow.open_loops })}`
+      : "(无指定目标，可提议 new_train)",
+    "",
+    "候选 Workflow（仅限少量最相关）:",
+    JSON.stringify(
+      candidateWorkflows.map((w) => ({ id: w.id, workflow_family: w.workflow_family, subject_type: w.subject_type, open_loops: w.open_loops })),
+      null,
+      0
+    ),
     "",
     "证据事实卡片:",
     JSON.stringify(
       factCards.map((c) => ({
         artifact_id: c.artifact_id,
-        session_id: c.session_id,
-        fields: c.fields,
+        fields: (c.fields || []).map((f) => ({ field_name: f.field_name, value: f.value })),
       })),
       null,
       0
@@ -101,50 +153,56 @@ export const INTERPRETER_JSON_SCHEMA = {
   required: ["fields"],
 };
 
+export const ORPHAN_CLUSTER_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    clusters: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          fact_card_ids: { type: "array", items: { type: "string" } },
+          workflow_family_hint: { type: "string" },
+          confidence: { type: "number" },
+          reason: { type: "string" },
+        },
+        required: ["fact_card_ids"],
+      },
+    },
+    unclustered: { type: "array", items: { type: "string" } },
+  },
+  required: ["clusters"],
+};
+
 export const ASSEMBLY_JSON_SCHEMA = {
   type: "object",
   properties: {
-    title: { type: "string" },
-    urgency: { type: "string", enum: ["yellow", "red"] },
-    attention_type: {
-      type: "string",
-      enum: ["journey_gap", "evidence_missing", "contradiction", "resource_risk", "wait_timeout", "staff_unresponsive"],
-    },
-    recommendation: { type: "string" },
-    reasoning: { type: "string" },
-    reasoning_tracks: {
+    hypotheses: {
       type: "array",
+      minItems: 1,
       items: {
         type: "object",
         properties: {
-          track_id: { type: "string" },
-          supporting_evidence: { type: "array", items: { type: "string" } },
-          opposing_evidence: { type: "array", items: { type: "string" } },
-          information_gaps: { type: "array", items: { type: "string" } },
+          workflow_hypothesis_id: { type: "string" },
+          workflow_family: { type: "string", enum: WORKFLOW_FAMILIES },
+          composition_type: { type: "string", enum: COMPOSITION_TYPES },
+          target_workflow_id: { type: "string" },
+          ordered_artifact_ids: { type: "array", items: { type: "string" } },
+          reasoning_tracks: {
+            type: "object",
+            properties: Object.fromEntries(
+              TRACK_IDS.map((id) => [id, { type: "array", items: { type: "string" } }])
+            ),
+          },
+          unsupported_assumptions: { type: "array", items: { type: "string" } },
+          contradictions: { type: "array", items: { type: "string" } },
+          unexplained_artifact_ids: { type: "array", items: { type: "string" } },
         },
-        required: ["track_id"],
+        required: ["workflow_hypothesis_id", "workflow_family", "composition_type", "ordered_artifact_ids", "reasoning_tracks"],
       },
     },
-    alternative_hypotheses: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          hypothesis_id: { type: "string" },
-          description: { type: "string" },
-          fragments_explained: { type: "number" },
-          guardrail_violations: { type: "number" },
-          unsupported_assumptions_count: { type: "number" },
-        },
-        required: ["hypothesis_id", "description"],
-      },
-    },
-    terminal_signal_detected: { type: "boolean" },
-    proposed_workflow_status: { type: "string" },
-    proposed_handoff_department: { type: "string" },
-    proposed_handoff_role: { type: "string" },
-    handoff_evidence_ids: { type: "array", items: { type: "string" } },
-    unsupported_assumptions: { type: "array", items: { type: "string" } },
+    unexplained_artifact_ids: { type: "array", items: { type: "string" } },
+    needs_manager_dispatch: { type: "boolean" },
   },
-  required: ["title", "urgency", "attention_type", "recommendation", "reasoning_tracks", "alternative_hypotheses"],
+  required: ["hypotheses"],
 };

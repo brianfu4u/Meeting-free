@@ -1,64 +1,61 @@
 /**
- * Clinic OS V10 — Candidate Finder
+ * Clinic OS V10 — Candidate Finder（修订版）
  *
- * 职责：为一条 Artifact / EvidenceFactCard 寻找其归属的 PatientSession 候选。
- * 优先顺序（宪法）：明确ID匹配 → 确定性时空匹配 → LLM候选匹配 → 保留 unlinked。
+ * 修订要点：
+ * - 移除 PatientSession 硬编码，改为通用 Workflow 模型（workflow_id）；
+ * - 影子模式：LLM 输出一律不得自动挂接，confidence 仅记录；
+ * - 删除 llmThreshold 与 confidence≥0.5/0.7 自动 linked 逻辑；
+ * - 时间接近只产生候选，不自动选择第一个 Workflow。
  *
- * 输出：有序候选列表 [{ session_id, method, score, reason }]
- *   method: explicit_id | spatiotemporal | llm | unlinked
- *   score: 0..1，用于聚类排序
- *
- * 确定性阶段为纯函数；LLM 阶段异步，可注入 invokeLLM（无命中时才触发）。
+ * 优先顺序：明确ID匹配（可自动挂接） → 时空候选（仅候选） → LLM候选（仅记录） → unlinked。
  */
 
 import { PROMPT_VERSIONS } from "./prompts";
 
-const SPATIOTEMPORAL_WINDOW_MIN = 120; // 同 session 同区域 ±120 分钟视为时空命中
+const SPATIOTEMPORAL_WINDOW_MIN = 120;
 
 /**
- * 确定性候选匹配（explicit + spatiotemporal）。
- * 不触发 LLM，可独立单测。
+ * 确定性候选匹配（explicit + spatiotemporal）。不触发 LLM。
+ * 返回候选列表 [{ workflow_id, method, score, reason }]。
  */
-export function deterministicCandidates({ artifact, factCard, sessions, snapshots = [] }) {
+export function deterministicCandidates({ artifact, factCard, workflows }) {
   const source = artifact || factCard;
   if (!source) throw new Error("deterministicCandidates: source required");
-  if (!Array.isArray(sessions)) return [];
-
+  if (!Array.isArray(workflows)) return [];
   const candidates = [];
 
-  // 1. 明确 ID 匹配
-  const explicitId = artifact?.source_session_id || factCard?.session_id;
+  // 1. 明确 ID 匹配（显式绑定，确定性，可自动挂接）
+  const explicitId = artifact?.source_workflow_id || factCard?.workflow_id;
   if (explicitId) {
-    const hit = sessions.find((s) => s.id === explicitId);
+    const hit = workflows.find((w) => w.id === explicitId);
     if (hit) {
-      candidates.push({ session_id: hit.id, method: "explicit_id", score: 1.0, reason: "artifact 显式绑定 source_session_id" });
-      return candidates; // 明确命中即终止，不再时空匹配
+      candidates.push({ workflow_id: hit.id, method: "explicit_id", score: 1.0, reason: "显式绑定 source_workflow_id" });
+      return candidates; // 明确命中即终止
     }
   }
 
-  // 2. 确定性时空匹配
+  // 2. 时空匹配：仅产生候选，不自动挂接（时间接近不能单独确定身份）
   const capturedAt = artifact?.captured_at || factCard?.extracted_at;
-  const region = artifact?.source_region || factCard?.source_region;
   if (capturedAt) {
     const ts = new Date(capturedAt).getTime();
-    for (const s of sessions) {
-      const nodeTimes = s.node_scan_timestamps || {};
+    for (const w of workflows) {
+      const nodeTimes = w.node_scan_timestamps || {};
       const scanPoints = Object.values(nodeTimes)
         .filter(Boolean)
         .map((t) => new Date(t).getTime())
         .filter((t) => !Number.isNaN(t));
-      if (scanPoints.length === 0 && s.arrival_time) {
-        scanPoints.push(new Date(s.arrival_time).getTime());
+      if (scanPoints.length === 0 && w.arrival_time) {
+        scanPoints.push(new Date(w.arrival_time).getTime());
       }
       const within = scanPoints.some(
         (pt) => Math.abs(pt - ts) <= SPATIOTEMPORAL_WINDOW_MIN * 60 * 1000
       );
       if (within) {
         candidates.push({
-          session_id: s.id,
+          workflow_id: w.id,
           method: "spatiotemporal",
           score: 0.6,
-          reason: `±${SPATIOTEMPORAL_WINDOW_MIN}分钟内存在节点扫码记录`,
+          reason: `±${SPATIOTEMPORAL_WINDOW_MIN}分钟内存在节点记录（仅候选，不自动挂接）`,
         });
       }
     }
@@ -68,23 +65,23 @@ export function deterministicCandidates({ artifact, factCard, sessions, snapshot
 }
 
 /**
- * LLM 候选匹配：确定性阶段无命中时调用。
- * 传入候选 session 摘要列表与 factCard 字段，由 LLM 输出最可能归属及置信度。
+ * LLM 候选匹配：影子模式下仅记录候选，绝不决定挂接。
+ * confidence 写入候选对象供审计，但 linkedWorkflowId 永远不由 LLM 决定。
  */
-export async function llmCandidateMatch({ factCard, sessions, invokeLLM }) {
+export async function llmCandidateMatch({ factCard, workflows, invokeLLM }) {
   if (!invokeLLM) throw new Error("llmCandidateMatch: invokeLLM required");
-  if (!Array.isArray(sessions) || sessions.length === 0) return [];
+  if (!Array.isArray(workflows) || workflows.length === 0) return [];
 
   const prompt = [
-    "你是视光诊所患者旅程归属判定器。判断证据事实卡片最可能归属哪个 PatientSession。",
-    "约束：仅输出 link proposal（带信心度与理由），禁止直接修改系统状态；",
-    "若无足够依据，confidence 不得高于 0.5。",
+    "你是视光诊所工作流归属判定器。判断证据事实卡片最可能归属哪个 Workflow。",
+    "约束（影子模式）：仅输出候选建议（带信心度与理由），禁止直接修改系统状态；",
+    "confidence 仅记录，不决定自动挂接。",
     "",
     "证据字段:",
-    JSON.stringify(factCard.fields?.map((f) => ({ field_name: f.field_name, value: f.value })) || []),
+    JSON.stringify((factCard.fields || []).map((f) => ({ field_name: f.field_name, value: f.value }))),
     "",
-    "候选 Session:",
-    JSON.stringify(sessions.map((s) => ({ id: s.id, patient_name: s.patient_name, current_node: s.current_node }))),
+    "候选 Workflow:",
+    JSON.stringify(workflows.map((w) => ({ id: w.id, workflow_family: w.workflow_family, subject_type: w.subject_type }))),
   ].join("\n");
 
   const result = await invokeLLM({
@@ -92,53 +89,46 @@ export async function llmCandidateMatch({ factCard, sessions, invokeLLM }) {
     response_json_schema: {
       type: "object",
       properties: {
-        best_session_id: { type: "string" },
+        best_workflow_id: { type: "string" },
         confidence: { type: "number" },
         reason_codes: { type: "array", items: { type: "string" } },
       },
-      required: ["best_session_id", "confidence"],
+      required: ["best_workflow_id", "confidence"],
     },
     model: "automatic",
   });
 
-  if (!result?.best_session_id) return [];
+  if (!result?.best_workflow_id) return [];
   return [
     {
-      session_id: result.best_session_id,
+      workflow_id: result.best_workflow_id,
       method: "llm",
       score: Math.min(result.confidence ?? 0, 1),
-      reason: (result.reason_codes || []).join("; ") || "LLM 候选匹配",
+      confidence: result.confidence ?? null, // 仅记录
+      reason: (result.reason_codes || []).join("; ") || "LLM 候选（仅记录）",
     },
   ];
 }
 
 /**
- * 编排：确定性优先，无命中则 LLM，仍无则 unlinked。
- * 返回 { candidates, linkedSessionId, method, needsManagerReview }
+ * 影子模式编排。
+ * - explicit_id：可自动挂接（显式绑定，非推断）；
+ * - spatiotemporal / llm：一律仅候选，linkedWorkflowId=null，needsManagerReview=true。
+ * 不存在 llmThreshold 参数，confidence 永不决定挂接。
  */
-export async function resolveSessionLink({
-  artifact,
-  factCard,
-  sessions,
-  snapshots,
-  invokeLLM,
-  llmThreshold = 0.5,
-}) {
-  const det = deterministicCandidates({ artifact, factCard, sessions, snapshots });
-  if (det.length > 0) {
-    const top = det[0];
-    return { candidates: det, linkedSessionId: top.session_id, method: top.method, needsManagerReview: false };
+export async function resolveWorkflowLink({ artifact, factCard, workflows, invokeLLM }) {
+  const det = deterministicCandidates({ artifact, factCard, workflows });
+  const explicit = det.find((c) => c.method === "explicit_id");
+  if (explicit) {
+    return { candidates: det, linkedWorkflowId: explicit.workflow_id, method: "explicit_id", needsManagerReview: false };
   }
 
+  let candidates = det.filter((c) => c.method === "spatiotemporal");
   if (invokeLLM && factCard) {
-    const llm = await llmCandidateMatch({ factCard, sessions, invokeLLM });
-    if (llm.length > 0 && llm[0].score >= llmThreshold) {
-      return { candidates: llm, linkedSessionId: llm[0].session_id, method: "llm", needsManagerReview: llm[0].score < 0.7 };
-    }
-    if (llm.length > 0) {
-      return { candidates: llm, linkedSessionId: null, method: "unlinked", needsManagerReview: true };
-    }
+    const llm = await llmCandidateMatch({ factCard, workflows, invokeLLM });
+    candidates = [...candidates, ...llm];
   }
 
-  return { candidates: [], linkedSessionId: null, method: "unlinked", needsManagerReview: true };
+  // 影子模式：时空 / LLM 候选一律不自动挂接
+  return { candidates, linkedWorkflowId: null, method: "candidate_only", needsManagerReview: true };
 }
