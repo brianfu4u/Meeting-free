@@ -1,0 +1,128 @@
+{
+  "name": "WorkflowHypothesis",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "composition_run_id": {
+      "type": "string",
+      "description": "\u5f52\u5c5e CompositionRun ID\uff08\u53ef\u67e5\u8be2\u5173\u7cfb\u5bbf\u4e3b\uff1aCompositionRun \u4e0d\u53cd\u5411\u5b58 hypothesis_ids\uff0c\u907f\u514d\u53cc\u5199\uff09"
+    },
+    "source_proposal_id": {
+      "type": "string",
+      "description": "\u63d0\u6848\u5e42\u7b49\u952e = clinic_id+sorted_artifact_ids_hash+policy_version\uff08\u6765\u81ea Phase 2 tenantContext.computeProposalIdempotencyKey\uff09"
+    },
+    "workflow_hypothesis_id": {
+      "type": "string",
+      "description": "\u5047\u8bbe\u786e\u5b9a\u6027 ID = source_proposal_id + #h<idx>\uff08\u6765\u81ea Phase 2 workflowAssembly\uff0c\u91cd\u8bd5\u7a33\u5b9a\uff09"
+    },
+    "composition_type": {
+      "type": "string",
+      "enum": [
+        "attach",
+        "new_train",
+        "orphan"
+      ],
+      "description": "\u7f16\u7ec4\u7c7b\u578b"
+    },
+    "workflow_family": {
+      "type": "string",
+      "description": "\u5de5\u4f5c\u6d41\u4e1a\u52a1\u65cf\uff08\u6765\u81ea cluster.workflow_family_hint \u6216 attach \u76ee\u6807\uff09"
+    },
+    "target_workflow_id": {
+      "type": "string",
+      "description": "\u6302\u8f7d\u76ee\u6807 Workflow ID\uff08attach \u5fc5\u586b\uff0cnew_train/orphan \u53ef\u7a7a\uff09"
+    },
+    "target_snapshot_id": {
+      "type": "string",
+      "description": "\u6302\u8f7d\u76ee\u6807 WorkflowSnapshot ID\uff08attach \u5fc5\u586b\uff0cstale proposal \u6bd4\u5bf9\u4f9d\u636e\uff09"
+    },
+    "target_snapshot_version": {
+      "type": "number",
+      "description": "\u6302\u8f7d\u76ee\u6807\u5feb\u7167\u7248\u672c\uff08attach \u5fc5\u586b\uff0ccommit \u65f6 CAS \u6bd4\u5bf9 Workflow.current_snapshot_version\uff09"
+    },
+    "ordered_artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u6709\u5e8f Artifact ID \u5217\u8868\uff08Guardrail \u6821\u9a8c clinic_id/\u91cd\u590d/\u5df2\u63d0\u4ea4\uff09"
+    },
+    "reasoning_tracks": {
+      "type": "object",
+      "description": "\u4e03\u6761\u63a8\u65ad\u8f68\u9053\u8f93\u51fa\uff08\u5bf9\u8c61\uff0c\u952e\u4e3a track_id\uff0c\u503c\u4e3a\u8bc1\u636e/\u7f3a\u53e3\u6570\u7ec4\uff09\uff0c\u6765\u81ea Phase 2 workflowAssembly.normalizeHypothesis",
+      "additionalProperties": true
+    },
+    "unsupported_assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u65e0\u4f9d\u636e\u5047\u8bbe\u6e05\u5355\uff08\u8d8a\u5c11\u8d8a\u4f18\uff0c\u6392\u5e8f\u4f9d\u636e\uff09"
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u77db\u76fe\u6e05\u5355\uff08\u6392\u5e8f\u4f9d\u636e\uff09"
+    },
+    "unexplained_artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u672a\u80fd\u89e3\u91ca\u7684 Artifact ID\uff08fragmentsExplained \u6392\u5e8f\u4f9d\u636e\uff09"
+    },
+    "validation_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule_code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "default": [],
+      "description": "Guardrail \u963b\u65ad\u9879\u5217\u8868\uff08rule_code \u7ed3\u6784\u5316\uff0c\u6765\u81ea Phase 2 guardrailValidator\uff09"
+    },
+    "rank": {
+      "type": "number",
+      "description": "Guardrail \u6392\u540d\uff080 \u4e3a\u6700\u4f73\uff1b\u5e76\u5217\u6700\u4f73 \u2192 needsManagerDispatch\uff09"
+    },
+    "alternative_group": {
+      "type": "string",
+      "description": "\u4e92\u65a5\u5019\u9009\u7ec4\uff08\u6765\u81ea Phase 2 clustering.assignAlternativeGroups\uff09"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_review",
+        "selected",
+        "dispatched",
+        "committed",
+        "stale",
+        "rejected",
+        "ignored"
+      ],
+      "default": "pending_review",
+      "description": "\u5047\u8bbe\u72b6\u6001\u673a\uff1apending_review\u2192selected\u2192dispatched\u2192committed/stale\uff1brejected/ignored \u4e3a\u7ec8\u6001"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "composition_run_id",
+    "source_proposal_id",
+    "workflow_hypothesis_id",
+    "composition_type",
+    "status"
+  ]
+}
