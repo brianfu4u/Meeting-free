@@ -158,3 +158,27 @@ describe("policyUtils — 项5：publishGuessPolicy / updateGuessPolicy 迁移 +
     expect(res.policy).toBeTruthy();
   });
 });
+
+describe("policyUtils — R2.4：旧 Policy 迁移幂等（重复运行不重复修改）", () => {
+  it("migrateHardGuardrails 应用两次等于应用一次", () => {
+    const legacy = ["旧自然语言规则A", "旧规则B"];
+    const once = migrateHardGuardrails(legacy);
+    const twice = migrateHardGuardrails(once);
+    expect(twice).toEqual(once);
+    // 迁移后均为 legacy_text 结构化对象
+    expect(once.every((g) => g.rule_code === "legacy_text")).toBe(true);
+  });
+  it("已结构化（已知 rule_code）记录迁移后不变 → 幂等", () => {
+    const structured = [{ rule_code: "subject_conflict" }, { rule_code: "time_impossible", max_gap_minutes: 60 }];
+    const once = migrateHardGuardrails(structured);
+    expect(once).toEqual(structured);
+    const twice = migrateHardGuardrails(once);
+    expect(twice).toEqual(structured);
+  });
+  it("legacy_text 迁移结果再次迁移保持不变", () => {
+    const migrated = migrateHardGuardrails(["旧规则"]);
+    const again = migrateHardGuardrails(migrated);
+    expect(again).toEqual(migrated);
+    expect(again[0]).toEqual({ rule_code: "legacy_text", original: "旧规则" });
+  });
+});

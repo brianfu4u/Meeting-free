@@ -11,6 +11,10 @@
 import { KNOWN_RULE_CODES } from "./policyUtils";
 
 export function validateHypotheses(hypotheses, context = {}) {
+  // R2.4：Guardrail 自身必须要求 clinicId（租户隔离强制）
+  if (!context.clinicId) {
+    throw new Error("Guardrail: clinicId required（租户隔离强制）");
+  }
   const {
     artifacts = [],
     workflows = [],
@@ -78,7 +82,10 @@ function independentChecks(h, { artifactById, workflowById, snapshotById, clinic
     const a = artifactById.get(aid);
     if (!a) {
       blocks.push({ rule_code: "artifact_not_found", artifact_id: aid });
-    } else if (clinicId && a.clinic_id !== clinicId) {
+    } else if (!a.clinic_id) {
+      // R2.4：Artifact 缺 clinic_id 阻断
+      blocks.push({ rule_code: "missing_tenant_artifact", artifact_id: aid });
+    } else if (a.clinic_id !== clinicId) {
       blocks.push({ rule_code: "cross_tenant_artifact", artifact_id: aid });
     }
   }
@@ -94,7 +101,10 @@ function independentChecks(h, { artifactById, workflowById, snapshotById, clinic
       const wf = workflowById.get(h.target_workflow_id);
       if (!wf) {
         blocks.push({ rule_code: "target_workflow_not_found" });
-      } else if (clinicId && wf.clinic_id && wf.clinic_id !== clinicId) {
+      } else if (!wf.clinic_id) {
+        // R2.4：Workflow 缺 clinic_id 阻断
+        blocks.push({ rule_code: "missing_tenant_workflow" });
+      } else if (wf.clinic_id !== clinicId) {
         blocks.push({ rule_code: "cross_tenant_workflow" });
       }
     }
@@ -115,14 +125,17 @@ function independentChecks(h, { artifactById, workflowById, snapshotById, clinic
     if (!snap) {
       blocks.push({ rule_code: "target_snapshot_not_found" });
     } else {
-      if (clinicId && snap.clinic_id && snap.clinic_id !== clinicId) {
+      if (!snap.clinic_id) {
+        // R2.4：Snapshot 缺 clinic_id 阻断
+        blocks.push({ rule_code: "missing_tenant_snapshot" });
+      } else if (snap.clinic_id !== clinicId) {
         blocks.push({ rule_code: "cross_tenant_snapshot" });
       }
-      // R2.3 项3：snapshot.workflow_id === target_workflow_id
-      if (h.target_workflow_id && snap.workflow_id && snap.workflow_id !== h.target_workflow_id) {
+      // R2.4：snapshot.workflow_id 缺失或不等于 target_workflow_id 均阻断
+      if (h.target_workflow_id && snap.workflow_id !== h.target_workflow_id) {
         blocks.push({
           rule_code: "snapshot_workflow_mismatch",
-          snapshot_workflow_id: snap.workflow_id,
+          snapshot_workflow_id: snap.workflow_id ?? null,
           target_workflow_id: h.target_workflow_id,
         });
       }

@@ -24,7 +24,7 @@ describe("candidateFinder — clinic_id 隔离", () => {
   });
   it("resolveWorkflowLink 也强制 clinic_id 隔离", async () => {
     const mixed = [...baseWorkflows, { id: "wf-evil", clinic_id: "c-evil", started_at: "2026-07-18T09:35:00Z", temporal_anchors: ["2026-07-18T09:35:00Z"] }];
-    const factCard = { id: "f1", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
     const res = await resolveWorkflowLink({ factCard, workflows: mixed, invokeLLM: vi.fn(), clinicId: "c1" });
     expect(res.candidates.every((c) => c.workflow_id !== "wf-evil")).toBe(true);
   });
@@ -51,7 +51,7 @@ describe("candidateFinder — 时空匹配仅候选不挂接", () => {
   });
 
   it("禁止用 extracted_at 作为业务时间", () => {
-    const factCard = { id: "f1", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", extracted_at: "2026-07-18T20:00:00Z", fields: [] };
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", extracted_at: "2026-07-18T20:00:00Z", fields: [] };
     const cands = deterministicCandidates({ factCard, workflows: baseWorkflows, clinicId: "c1" });
     expect(cands.length).toBe(2);
   });
@@ -59,7 +59,7 @@ describe("candidateFinder — 时空匹配仅候选不挂接", () => {
 
 describe("candidateFinder — 影子模式 LLM 不得自动挂接", () => {
   it("LLM 高置信度仍仅候选", async () => {
-    const factCard = { id: "f1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
     const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-1", confidence: 0.95, reason_codes: ["name_match"] }));
     const res = await resolveWorkflowLink({ factCard, workflows: baseWorkflows, invokeLLM, clinicId: "c1" });
     expect(res.linkedWorkflowId).toBeNull();
@@ -107,12 +107,100 @@ describe("candidateFinder — 项2：LLM 候选白名单 ≤5 + invalid_candidat
     expect(res.candidates.every((c) => c.workflow_id !== "wf-ghost")).toBe(true);
     expect(res.linkedWorkflowId).toBeNull();
   });
-  it("LLM 返回白名单内 workflow_id → 加入候选且仍不自动挂接", async () => {
+  it("LLM 返回白名单内 workflow_id → 合并标注既有候选（不追加重复项）", async () => {
     const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
     const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-1", confidence: 0.8, reason_codes: ["name_match"] }));
     const res = await resolveWorkflowLink({ factCard, workflows: baseWorkflows, invokeLLM, clinicId: "c1" });
-    expect(res.candidates.some((c) => c.method === "llm" && c.workflow_id === "wf-1")).toBe(true);
+    // wf-1 仍是唯一条目（合并标注，非重复追加）
+    expect(res.candidates.filter((c) => c.workflow_id === "wf-1").length).toBe(1);
+    // 标注了 LLM 信息
+    const wf1 = res.candidates.find((c) => c.workflow_id === "wf-1");
+    expect((wf1.methods || []).includes("llm")).toBe(true);
     expect(res.invalid_candidates).toHaveLength(0);
     expect(res.linkedWorkflowId).toBeNull();
+  });
+});
+
+describe("candidateFinder — R2.4 项1：source clinic_id 缺失抛错", () => {
+  it("artifact 缺 clinic_id 抛错", () => {
+    const artifact = { id: "a1", file_url: "u", captured_at: "2026-07-18T09:35:00Z" };
+    expect(() => deterministicCandidates({ artifact, workflows: baseWorkflows, clinicId: "c1" })).toThrow(/clinic_id 缺失/);
+  });
+  it("factCard 缺 clinic_id 抛错", () => {
+    const factCard = { id: "f1", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    expect(() => deterministicCandidates({ factCard, workflows: baseWorkflows, clinicId: "c1" })).toThrow(/clinic_id 缺失/);
+  });
+  it("resolveWorkflowLink factCard 缺 clinic_id 抛错", async () => {
+    const factCard = { id: "f1", artifact_id: "a1", explicit_workflow_id: null, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    await expect(resolveWorkflowLink({ factCard, workflows: baseWorkflows, invokeLLM: vi.fn(), clinicId: "c1" })).rejects.toThrow(/clinic_id 缺失/);
+  });
+});
+
+describe("candidateFinder — R2.4：8 个时间候选按时间差稳定排序后只取前 5", () => {
+  it("按 min_delta_ms ASC 取距离最近的 5 个", () => {
+    // 8 个 workflow，各自时间锚点距 captured_at 的差递增
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `wf-${i}`,
+      clinic_id: "c1",
+      started_at: `2026-07-18T09:${(35 + i).toString().padStart(2, "0")}:00Z`, // 09:35..09:42
+      temporal_anchors: [`2026-07-18T09:${(35 + i).toString().padStart(2, "0")}:00Z`],
+    }));
+    const artifact = { id: "a1", clinic_id: "c1", file_url: "u", captured_at: "2026-07-18T09:35:00Z" };
+    const cands = deterministicCandidates({ artifact, workflows: many, clinicId: "c1" });
+    expect(cands.length).toBe(5);
+    // 距离最近在前：wf-0(0s) → wf-4(240s)
+    expect(cands.map((c) => c.workflow_id)).toEqual(["wf-0", "wf-1", "wf-2", "wf-3", "wf-4"]);
+    expect(cands[0].min_delta_ms).toBe(0);
+    // wf-5..wf-7 被排除
+    expect(cands.every((c) => !["wf-5", "wf-6", "wf-7"].includes(c.workflow_id))).toBe(true);
+  });
+  it("相同 min_delta_ms 时按 workflow_id ASC 稳定排序", () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `wf-${i}`,
+      clinic_id: "c1",
+      started_at: "2026-07-18T09:35:00Z",
+      temporal_anchors: ["2026-07-18T09:35:00Z"], // 全部 delta 0
+    }));
+    const artifact = { id: "a1", clinic_id: "c1", file_url: "u", captured_at: "2026-07-18T09:35:00Z" };
+    const cands = deterministicCandidates({ artifact, workflows: many, clinicId: "c1" });
+    expect(cands.map((c) => c.workflow_id)).toEqual(["wf-0", "wf-1", "wf-2", "wf-3", "wf-4"]);
+  });
+});
+
+describe("candidateFinder — R2.4：恰好 5 个候选时 LLM 选中项不丢弃且不重复", () => {
+  it("5 个候选时 LLM 选中其一 → 仍 5 个，无重复 ID", async () => {
+    const five = Array.from({ length: 5 }, (_, i) => ({
+      id: `wf-${i}`,
+      clinic_id: "c1",
+      workflow_family: "patient_visit",
+      subject_type: "patient",
+      started_at: "2026-07-18T09:30:00Z",
+      temporal_anchors: ["2026-07-18T09:35:00Z"],
+    }));
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    // LLM 选中 wf-2（已在 5 个候选内）
+    const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-2", confidence: 0.9, reason_codes: ["name_match"] }));
+    const res = await resolveWorkflowLink({ factCard, workflows: five, invokeLLM, clinicId: "c1" });
+    expect(res.candidates.length).toBe(5);
+    // 无重复 ID
+    const ids = res.candidates.map((c) => c.workflow_id);
+    expect(new Set(ids).size).toBe(5);
+    // wf-2 被标注 LLM
+    const wf2 = res.candidates.find((c) => c.workflow_id === "wf-2");
+    expect((wf2.methods || []).includes("llm")).toBe(true);
+    expect(res.linkedWorkflowId).toBeNull();
+  });
+  it("5 个候选 + LLM 返回白名单外 → invalid_candidate，候选仍 5 个", async () => {
+    const five = Array.from({ length: 5 }, (_, i) => ({
+      id: `wf-${i}`,
+      clinic_id: "c1",
+      started_at: "2026-07-18T09:30:00Z",
+      temporal_anchors: ["2026-07-18T09:35:00Z"],
+    }));
+    const factCard = { id: "f1", clinic_id: "c1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, occurred_at: "2026-07-18T09:35:00Z", fields: [] };
+    const invokeLLM = vi.fn(async () => ({ best_workflow_id: "wf-ghost", confidence: 0.9, reason_codes: [] }));
+    const res = await resolveWorkflowLink({ factCard, workflows: five, invokeLLM, clinicId: "c1" });
+    expect(res.candidates.length).toBe(5);
+    expect(res.invalid_candidates.some((v) => v.type === "invalid_candidate" && v.workflow_id === "wf-ghost")).toBe(true);
   });
 });

@@ -1,10 +1,12 @@
 /**
- * Clinic OS V10 — Candidate Finder（修订版 R2.3）
+ * Clinic OS V10 — Candidate Finder（修订版 R2.4）
  *
- * R2.3：
- * - 强制 clinicId：缺失直接抛错；并校验 Artifact/FactCard 的 clinic_id 与当前 clinic 一致；
- * - 进入 LLM Prompt 前候选缩到 ≤5；LLM 返回的 workflow_id 必须属于服务端候选白名单，否则记 invalid_candidate；
- * - 影子模式：LLM/时空候选一律不自动挂接。
+ * R2.4：
+ * - clinicId、Artifact/FactCard 的 clinic_id 必须存在且完全一致；缺失或不一致均抛错；
+ * - 时空候选按 min_delta_ms ASC, workflow_id ASC 稳定排序后取前 5（禁止按数据库原始顺序截断）；
+ * - LLM 返回白名单内 ID 时合并/标注既有候选，禁止追加重复项；
+ * - 已有 5 个候选时 LLM 选中项必须保留，不得被 slice 丢弃；
+ * - 白名单外 ID 输出 invalid_candidate，不加入候选或自动挂接。
  */
 
 import { PROMPT_VERSIONS } from "./prompts";
@@ -32,7 +34,10 @@ function assertClinicId(clinicId) {
 function assertSourceClinicMatch(source, clinicId) {
   if (!source) return;
   const srcClinic = source.clinic_id;
-  if (srcClinic && srcClinic !== clinicId) {
+  if (!srcClinic) {
+    throw new Error("CandidateFinder: source clinic_id 缺失（租户隔离强制）");
+  }
+  if (srcClinic !== clinicId) {
     throw new Error(
       `CandidateFinder: source clinic_id 不一致（source=${srcClinic}, scope=${clinicId}）`
     );
@@ -55,29 +60,43 @@ export function deterministicCandidates({ artifact, factCard, workflows, clinicI
   if (explicitId) {
     const hit = scoped.find((w) => w.id === explicitId);
     if (hit) {
-      candidates.push({ workflow_id: hit.id, method: "explicit_id", score: 1.0, reason: "显式绑定 explicit_workflow_id" });
+      candidates.push({
+        workflow_id: hit.id,
+        method: "explicit_id",
+        score: 1.0,
+        min_delta_ms: 0,
+        reason: "显式绑定 explicit_workflow_id",
+      });
       return candidates;
     }
   }
 
-  // 2. 时空匹配：通用时间锚点；仅候选，不自动挂接
+  // 2. 时空匹配：计算每个 Workflow 与所有时间锚点（temporal_anchors/started_at/last_event_at）的最小时间差
   const capturedAt = artifact?.captured_at || factCard?.occurred_at;
   if (capturedAt) {
     const ts = new Date(capturedAt).getTime();
     if (!Number.isNaN(ts)) {
+      const windowMs = SPATIOTEMPORAL_WINDOW_MIN * 60 * 1000;
       for (const w of scoped) {
         const times = collectWorkflowTimes(w);
-        const within = times.some((pt) => Math.abs(pt - ts) <= SPATIOTEMPORAL_WINDOW_MIN * 60 * 1000);
-        if (within) {
+        if (times.length === 0) continue;
+        const deltas = times.map((pt) => Math.abs(pt - ts));
+        const minDelta = Math.min(...deltas);
+        if (minDelta <= windowMs) {
           candidates.push({
             workflow_id: w.id,
             method: "spatiotemporal",
             score: 0.6,
-            reason: `±${SPATIOTEMPORAL_WINDOW_MIN}分钟内存在时间锚点（仅候选，不自动挂接）`,
+            min_delta_ms: minDelta,
+            reason: `最小时间差 ${Math.round(minDelta / 1000)}s（±${SPATIOTEMPORAL_WINDOW_MIN}分钟内，仅候选，不自动挂接）`,
           });
         }
       }
-      // 进入 LLM 前先把候选缩到 ≤5
+      // 稳定排序：min_delta_ms ASC, workflow_id ASC，取前 5
+      candidates.sort((a, b) => {
+        if (a.min_delta_ms !== b.min_delta_ms) return a.min_delta_ms - b.min_delta_ms;
+        return a.workflow_id < b.workflow_id ? -1 : a.workflow_id > b.workflow_id ? 1 : 0;
+      });
       if (candidates.length > MAX_CANDIDATES) candidates.length = MAX_CANDIDATES;
     }
   }
@@ -171,8 +190,8 @@ export async function resolveWorkflowLink({ artifact, factCard, workflows, invok
     };
   }
 
-  // 时空候选进入 LLM 前已缩到 ≤5（deterministicCandidates 内部截断）
-  let candidates = det.filter((c) => c.method === "spatiotemporal").slice(0, MAX_CANDIDATES);
+  // 时空候选已按 min_delta_ms 排序并截到 ≤5
+  const candidates = det.filter((c) => c.method === "spatiotemporal");
   const invalid_candidates = [];
 
   if (invokeLLM && factCard && candidates.length > 0) {
@@ -184,8 +203,24 @@ export async function resolveWorkflowLink({ artifact, factCard, workflows, invok
       candidateWorkflows: whitelistWorkflows,
       invokeLLM,
     });
-    candidates = [...candidates, ...llmCands].slice(0, MAX_CANDIDATES);
     invalid_candidates.push(...invalid);
+
+    // R2.4：合并/标注既有候选，禁止追加重复项；不得 slice 丢弃 LLM 选中项
+    const byId = new Map(candidates.map((c) => [c.workflow_id, c]));
+    for (const llm of llmCands) {
+      const existing = byId.get(llm.workflow_id);
+      if (existing) {
+        existing.llm = { confidence: llm.confidence ?? null, reason: llm.reason };
+        existing.methods = Array.from(
+          new Set([...(existing.methods || [existing.method]), "llm"])
+        );
+      } else {
+        // 白名单外的 LLM 结果已在 llmCandidateMatch 记为 invalid_candidate；
+        // 此分支理论上不可达（whitelist = candidates），但保留以防遗漏且不 slice 丢弃
+        byId.set(llm.workflow_id, llm);
+        candidates.push(llm);
+      }
+    }
   }
 
   return {

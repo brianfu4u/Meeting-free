@@ -226,3 +226,35 @@ describe("guardrailValidator — 项4：validationIssues 非空 → bestHypothes
     expect(res.bestHypothesisId).toBeNull();
   });
 });
+
+describe("guardrailValidator — R2.4：Guardrail 自身要求 clinicId", () => {
+  it("缺 clinicId 抛错", () => {
+    expect(() => validateHypotheses([baseHyp()], { artifacts: [], workflows: [], snapshots: [] })).toThrow(/clinicId required/);
+  });
+});
+
+describe("guardrailValidator — R2.4：Artifact/Workflow/Snapshot 缺 clinic_id 阻断", () => {
+  it("Artifact 缺 clinic_id → missing_tenant_artifact", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ artifacts: [{ id: "a1", clinic_id: "c1" }, { id: "a2" }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "missing_tenant_artifact" && b.artifact_id === "a2")).toBe(true);
+  });
+  it("Workflow 缺 clinic_id → missing_tenant_workflow", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ workflows: [{ id: "wf-1", started_at: "2026-07-18T09:00:00Z", open_loops: ["exam"] }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "missing_tenant_workflow")).toBe(true);
+  });
+  it("Snapshot 缺 clinic_id → missing_tenant_snapshot", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ snapshots: [{ id: "snap-1", workflow_id: "wf-1", snapshot_version: 3 }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "missing_tenant_snapshot")).toBe(true);
+  });
+});
+
+describe("guardrailValidator — R2.4：Snapshot 缺 workflow_id 阻断", () => {
+  it("snapshot.workflow_id 缺失 → snapshot_workflow_mismatch", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ snapshots: [{ id: "snap-1", clinic_id: "c1", snapshot_version: 3 }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "snapshot_workflow_mismatch")).toBe(true);
+  });
+  it("snapshot.workflow_id 不等于 target → snapshot_workflow_mismatch", () => {
+    const res = validateHypotheses([baseHyp()], ctx({ snapshots: [{ id: "snap-1", clinic_id: "c1", workflow_id: "wf-other", snapshot_version: 3 }] }));
+    expect(res.checked[0].blocks.some((b) => b.rule_code === "snapshot_workflow_mismatch")).toBe(true);
+  });
+});
