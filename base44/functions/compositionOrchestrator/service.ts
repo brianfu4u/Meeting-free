@@ -187,17 +187,59 @@ async function run(
 
     const key = descriptor.idempotency_key;
     if (!requiredString(key)) return response(500, { error_code: "idempotency_key_missing" });
-    const existing = await ops.findRunByIdempotency(actor.clinic_id, key);
-    if (existing) {
-      if (!tenantSafe(ops, actor.clinic_id, existing)) {
+
+    // Fast path for ordinary retries.
+    const initialExisting = await ops.findRunByIdempotency(actor.clinic_id, key);
+    if (initialExisting) {
+      if (!tenantSafe(ops, actor.clinic_id, initialExisting)) {
         return response(403, { error_code: "tenant_scope_violation" });
       }
-      return response(200, { idempotent: true, run: existing });
+      return response(200, { idempotent: true, run: initialExisting });
     }
 
-    persistedRun = await ops.createRun({ ...descriptor, status: "running", run_started_at: ops.now() });
-    if (!requiredString(persistedRun.id)) {
-      throw Object.assign(new Error("run_create_failed"), { code: "persistence_failed" });
+    // Concurrent retry protection: short CAS lease only surrounds recheck + create.
+    // Pipeline execution happens after release, so long LLM calls do not hold the clinic lock.
+    const owner = ops.newRunLockOwner(actor.user_id, key);
+    const lockNow = ops.now();
+    const expiresAt = new Date(
+      new Date(lockNow).getTime() + RUN_LOCK_LEASE_MS
+    ).toISOString();
+    const lock = await ops.acquireRunLock(
+      actor.clinic_id,
+      key,
+      owner,
+      lockNow,
+      expiresAt
+    );
+    if (!lock.acquired) {
+      return response(409, {
+        error_code: "run_lock_busy",
+        retryable: true,
+      });
+    }
+
+    try {
+      // Required second check: another request may have created the run
+      // between the fast-path lookup and our lock acquisition.
+      const lockedExisting = await ops.findRunByIdempotency(actor.clinic_id, key);
+      if (lockedExisting) {
+        if (!tenantSafe(ops, actor.clinic_id, lockedExisting)) {
+          return response(403, { error_code: "tenant_scope_violation" });
+        }
+        return response(200, { idempotent: true, run: lockedExisting });
+      }
+      persistedRun = await ops.createRun({
+        ...descriptor,
+        status: "running",
+        run_started_at: ops.now(),
+      });
+      if (!requiredString(persistedRun.id)) {
+        throw Object.assign(new Error("run_create_failed"), {
+          code: "persistence_failed",
+        });
+      }
+    } finally {
+      await ops.releaseRunLock(actor.clinic_id, key, owner).catch(() => undefined);
     }
 
     const pipeline = await ops.executePipeline(request, actor, persistedRun);
@@ -243,14 +285,18 @@ async function run(
   } catch (error) {
     const failure = ops.buildFailure(error);
     if (persistedRun && requiredString(persistedRun.id)) {
-      await ops.updateRun(String(persistedRun.id), {
-        ...failure,
-        run_finished_at: ops.now(),
-      }).catch(() => undefined);
+      await ops
+        .updateRun(String(persistedRun.id), {
+          ...failure,
+          run_finished_at: ops.now(),
+        })
+        .catch(() => undefined);
     }
     return response(500, {
       error_code:
-        typeof failure.error_code === "string" ? failure.error_code : "composition_failed",
+        typeof failure.error_code === "string"
+          ? failure.error_code
+          : "composition_failed",
       run_id: persistedRun?.id || null,
     });
   }
