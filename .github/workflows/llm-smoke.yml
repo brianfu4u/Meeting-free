@@ -3,10 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       base44_endpoint:
-        description: "Base44 guessPolicyService function URL"
-        required: true
-      base44_token:
-        description: "Base44 auth token (Bearer)"
+        description: "Base44 llmSmokeService function URL（InvokeLLM 代理）"
         required: true
 
 jobs:
@@ -22,5 +19,5 @@ jobs:
       - name: Real LLM Assembly Smoke (imports actual ASSEMBLY_JSON_SCHEMA)
         env:
           BASE44_ENDPOINT: ${{ github.event.inputs.base44_endpoint }}
-          BASE44_TOKEN: ${{ github.event.inputs.base44_token }}
+          BASE44_TOKEN: ${{ secrets.BASE44_TOKEN }}
         run: node src/lib/composition/llmSmokeCi.mjs
