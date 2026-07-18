@@ -4,21 +4,24 @@
  * 被后端 entry.ts（Deno，注入真实 Base44 SDK ops）与 vitest（Node，注入 mock ops）
  * 共同复用。所有副作用通过 PublishOps 注入；编排器本身只做纯逻辑 + 补偿。
  *
- * 并发模型（R3 阻断修复）：
- * - 真正原子互斥通过 ClinicConfig 单文档 CAS 锁（acquireLock/releaseLock）实现，
- *   不再依赖 created_date earliest 这种乐观启发。MongoDB 单文档 updateMany 原子，
- *   `{clinic_id, publish_lock_request_id: null} → $set:{publish_lock_request_id: key}`
- *   保证同 clinic 同时只有一个请求进入发布临界区。
- * - 幂等命中按 Policy 状态分类（classifyHit）：published=幂等成功 / draft·reviewed=
- *   publish_in_progress(409) / retired=idempotent_retired(409) / 多条=integrity_conflict(409)。
- * - post-create 去重仅作安全网，且不再把 rival draft 当作成功结果。
+ * 并发模型（R3→R4 加固）：
+ * - lock_owner_id（每请求 UUID，crypto.randomUUID）与业务 idempotency_key 严格分离；
+ *   idempotency_key 只用于发布幂等，绝不作为锁持有者标识。
+ * - CAS 锁基于 ClinicConfig 单文档 updateMany：过滤 publish_lock_owner_id=null
+ *   → $set owner/acquired_at/expires_at，由 updateMany 返回的 updated===1 唯一判定成功
+ *   （不通过"重读字段等于业务 key"判断持锁）。
+ * - 短租约（LOCK_LEASE_MS=30s）+ 过期接管：锁过期后新请求可用精确值 CAS 接管，
+ *   保证函数崩溃不会永久锁死门店。
+ * - releaseLock 用 clinic_id + lock_owner_id 条件释放，返回 updated；失败不静默，
+ *   成功发布但锁未被自己释放时在结果中输出 lock_release_warning（reconciliation）。
  *
- * 顺序：idempotency_key 必填 → 预查幂等（快路径，无锁）→ 获取 CAS 锁 →
- * 锁内重查幂等 → 计算 next_version → 版本校验 → 校验候选 → 创建暂存 →
- * post-create 去重（安全网）→ 退役旧 → 更新 config → 标记 published。
- * 任一步失败触发 compensate；补偿不完整则返回 compensation_failed。
+ * 顺序：idempotency_key 必填 → 预查幂等（快路径，无锁）→ 生成 lock_owner_id →
+ * 获取 CAS 锁 → 锁内重查幂等 → 计算 next_version → 版本校验 → 校验候选 →
+ * 创建暂存 → post-create 去重 → 退役旧 → 更新 config → 标记 published → 释放锁。
  */
 import { migrateHardGuardrails, validatePolicyForPublish } from "./contract.ts";
+
+export const LOCK_LEASE_MS = 30_000;
 
 export interface CompensationReport {
   attempted: boolean;
@@ -58,6 +61,9 @@ export interface PublishResult {
   errors?: string[];
   record_ids?: string[];
   compensation?: CompensationReport;
+  lock_owner_id?: string;
+  lock_release_status?: "released" | "lock_release_failed" | "lock_taken_over";
+  lock_release_warning?: string;
 }
 
 export interface PublishOps {
@@ -74,8 +80,15 @@ export interface PublishOps {
   restoreConfigActive(configId: string, originalActive: number | null): Promise<void>;
   markPublished(id: string, now: string, userId: string): Promise<any>;
   deleteStaging(id: string): Promise<void>;
-  acquireLock(clinic_id: string, key: string): Promise<{ acquired: boolean }>;
-  releaseLock(clinic_id: string, key: string): Promise<void>;
+  // CAS 锁：owner-scoped。acquireLock 由 updateMany 的 updated===1 判定成功。
+  acquireLock(
+    clinic_id: string,
+    lock_owner_id: string,
+    nowISO: string,
+    expiresISO: string
+  ): Promise<{ acquired: boolean; reason?: string }>;
+  // 释放锁：仅 clinic_id + lock_owner_id 条件；返回 updated（1=已释放，0=不再持有）。
+  releaseLock(clinic_id: string, lock_owner_id: string): Promise<{ updated: number; error?: string }>;
 }
 
 export interface PublishInput {
@@ -94,9 +107,12 @@ function ts(d: any): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
+function newLockOwner(): string {
+  return globalThis.crypto.randomUUID();
+}
+
 /**
  * 幂等命中分类：按记录状态返回明确结果，绝不把 draft/retired 当作当前发布成功。
- * 多条同 key → integrity_conflict，输出记录 ID，不静默选 earliest。
  */
 function classifyHit(records: any[]): PublishResult | null {
   if (!records || records.length === 0) return null;
@@ -137,43 +153,81 @@ export async function orchestratePublish(input: PublishInput, ops: PublishOps): 
     return { ok: false, status: "missing_idempotency_key", http_status: 400, error: "idempotency_key 必填" };
   }
 
-  // 2. 预查幂等（快路径，无锁）：已 published → 幂等成功；draft → 进行中；retired → 已退役
+  // 2. 预查幂等（快路径，无锁）
   const preExisting = await ops.findByIdempotencyKey(clinic_id, key);
   const preHit = classifyHit(preExisting);
   if (preHit) return preHit;
 
-  // 3. 获取 CAS 锁（ClinicConfig 单文档原子互斥）
-  const lock = await ops.acquireLock(clinic_id, key);
+  // 3. 生成 lock_owner_id（UUID，每请求唯一，与 idempotency_key 分离）
+  const lockOwner = newLockOwner();
+  const nowD = new Date();
+  const nowISO = nowD.toISOString();
+  const expiresISO = new Date(nowD.getTime() + LOCK_LEASE_MS).toISOString();
+
+  // 4. 获取 CAS 锁（updateMany updated===1 判定）
+  const lock = await ops.acquireLock(clinic_id, lockOwner, nowISO, expiresISO);
   if (!lock.acquired) {
     return {
       ok: false,
       status: "publish_lock_busy",
       http_status: 409,
-      error: "另一发布进行中，请重试（相同幂等键重试将命中幂等）",
+      error: "另一发布进行中或锁未释放，请重试（相同幂等键重试将命中幂等）",
+      lock_owner_id: lockOwner,
     };
   }
+
+  let result: PublishResult;
   try {
-    return await publishUnderLock(input, ops, key);
-  } finally {
-    await ops.releaseLock(clinic_id, key).catch(() => {});
+    result = await publishUnderLock(input, ops, key);
+  } catch (e: any) {
+    result = {
+      ok: false,
+      status: "publish_failed",
+      http_status: 500,
+      error: "publishUnderLock 异常：" + (e?.message || String(e)),
+      lock_owner_id: lockOwner,
+    };
   }
+
+  // 5. 释放锁（owner-scoped CAS）；失败不静默，输出 reconciliation
+  let releaseRes: { updated: number; error?: string };
+  try {
+    releaseRes = await ops.releaseLock(clinic_id, lockOwner);
+  } catch (e: any) {
+    releaseRes = { updated: 0, error: e?.message || String(e) };
+  }
+  if (releaseRes.updated === 1) {
+    if (result && typeof result === "object") result.lock_release_status = "released";
+  } else if (releaseRes.error) {
+    if (result && typeof result === "object") {
+      result.lock_release_status = "lock_release_failed";
+      result.lock_release_warning = `lock_release_failed: ${releaseRes.error}（锁将在租约过期后自动恢复）`;
+    }
+  } else {
+    // updated===0 且无异常：锁已不再属于本 owner（被租约过期接管）
+    if (result && typeof result === "object") {
+      result.lock_release_status = "lock_taken_over";
+      result.lock_release_warning = "lock_not_owned_at_release: 锁可能已被租约过期接管（publish 已成功，租约到期自动恢复）";
+    }
+  }
+  return result;
 }
 
 async function publishUnderLock(input: PublishInput, ops: PublishOps, key: string): Promise<PublishResult> {
   const { clinic_id, user_id } = input;
 
-  // 4. 锁内权威重查幂等（并发窗口内另一请求可能已完成）
+  // 6. 锁内权威重查幂等
   const existing = await ops.findByIdempotencyKey(clinic_id, key);
   const hit = classifyHit(existing);
   if (hit) return hit;
 
-  // 5. 计算 next_version（服务端单调，不信任前端）
+  // 7. 计算 next_version（服务端单调）
   const all = await ops.findAllPolicies(clinic_id);
   const versions = all.map((r: any) => Number(r.policy_version) || 0);
   const maxV = versions.length ? Math.max(...versions) : 0;
   const nextV = maxV + 1;
 
-  // 6. 版本校验
+  // 8. 版本校验
   if (input.policy_version != null && Number(input.policy_version) !== nextV) {
     return {
       ok: false,
@@ -185,7 +239,7 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
     };
   }
 
-  // 7. 候选校验（迁移 + 发布校验，逻辑来自 contract.ts 唯一源）
+  // 9. 候选校验
   const migrated = migrateHardGuardrails(input.hard_guardrails || []);
   const candidate = { hard_guardrails: migrated, tracks: input.tracks, decision_rules: input.decision_rules };
   const { valid, errors } = validatePolicyForPublish(candidate);
@@ -195,7 +249,7 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
 
   const now = new Date().toISOString();
 
-  // 8. 创建暂存（draft）
+  // 10. 创建暂存（draft）
   let staging: any;
   try {
     staging = await ops.createStaging({
@@ -211,7 +265,7 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
     return { ok: false, status: "publish_failed", http_status: 500, error: "暂存创建失败：" + e.message, next_version: nextV };
   }
 
-  // 9. post-create 去重（安全网；锁内本不应触发。命中 rival 按 classify 分类，draft 不当成功）
+  // 11. post-create 去重（安全网）
   try {
     const byKey = await ops.recheckByIdempotencyKey(clinic_id, key);
     const rivals = byKey.filter((r: any) => r.id !== staging.id && ts(r.created_date) < ts(staging.created_date));
@@ -242,13 +296,13 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
     return { ok: false, status: "publish_failed", http_status: 500, error: "版本去重检查失败：" + e.message, next_version: nextV };
   }
 
-  // 10. 快照旧 published + config active（供补偿恢复）
+  // 12. 快照旧 published + config active
   const oldPublished = await ops.findPublished(clinic_id);
   const oldSnap = oldPublished.map((o: any) => ({ id: o.id, retired_at: o.retired_at ?? null }));
   const cfg = await ops.findConfig(clinic_id);
   const originalActive = cfg?.active_policy_version ?? null;
 
-  // 11. 退役旧 published
+  // 13. 退役旧 published
   const retiredIds: string[] = [];
   for (let i = 0; i < oldPublished.length; i++) {
     const o = oldPublished[i];
@@ -270,7 +324,7 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
     }
   }
 
-  // 12. config 必须存在
+  // 14. config 必须存在
   if (!cfg) {
     const comp = await compensate(ops, {
       oldSnap,
@@ -285,7 +339,7 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
     return finishFailure(comp, "ClinicConfig 不存在", nextV);
   }
 
-  // 13. 更新 config.active_policy_version
+  // 15. 更新 config.active_policy_version
   try {
     await ops.updateConfigActive(cfg.id, nextV);
   } catch (e: any) {
@@ -302,7 +356,7 @@ async function publishUnderLock(input: PublishInput, ops: PublishOps, key: strin
     return finishFailure(comp, "ClinicConfig 更新失败：" + e.message, nextV);
   }
 
-  // 14. 标记暂存为 published（最后一步）
+  // 16. 标记暂存为 published
   let published: any;
   try {
     published = await ops.markPublished(staging.id, now, user_id);
@@ -357,7 +411,6 @@ async function compensate(
     reconciliation: [],
   };
 
-  // 恢复本次实际被退役的旧 published
   for (const id of args.retiredIdsAlready) {
     const snap = args.oldSnap.find((s) => s.id === id);
     try {
@@ -370,7 +423,6 @@ async function compensate(
     }
   }
 
-  // 恢复 config：仅当本次确实更新过 config。originalActive 可能为 null，必须显式恢复为 null。
   if (args.cfgId && args.configWasUpdated) {
     try {
       await ops.restoreConfigActive(args.cfgId, args.originalActive);
@@ -381,11 +433,9 @@ async function compensate(
       report.succeeded = false;
     }
   } else if (args.cfgId) {
-    // config 本次未被更新 → 仍处于正确状态，无需恢复
     report.config_restored = true;
   }
 
-  // 删除暂存
   try {
     await ops.deleteStaging(args.stagingId);
     report.staging_deleted = true;

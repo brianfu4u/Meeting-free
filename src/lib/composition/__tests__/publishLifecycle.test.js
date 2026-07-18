@@ -73,19 +73,35 @@ function makeOps(seed = {}) {
       if (injectSet.has("delete_staging")) throw new Error("injected delete_staging");
       state.policies = state.policies.filter((p) => p.id !== id);
     },
-    // CAS 锁：单文档原子获取（mock 同步实现，无 await 间隙 → 真实互斥）
-    acquireLock: async (cid, key) => {
+    // CAS 锁：owner-scoped（lock_owner_id 与 idempotency_key 分离）。mock 同步实现，无 await 间隙 → 真实互斥。
+    acquireLock: async (cid, owner, nowISO, expiresISO) => {
       if (!state.config) return { acquired: false };
-      if (state.config.publish_lock_request_id == null) {
-        state.config.publish_lock_request_id = key;
+      if (state.config.publish_lock_owner_id == null) {
+        state.config.publish_lock_owner_id = owner;
+        state.config.publish_lock_acquired_at = nowISO;
+        state.config.publish_lock_expires_at = expiresISO;
+        if (seed.onAcquireLock) seed.onAcquireLock(owner, null);
         return { acquired: true };
+      }
+      // 过期接管
+      if (state.config.publish_lock_expires_at && new Date(state.config.publish_lock_expires_at).getTime() < Date.now()) {
+        const prev = state.config.publish_lock_owner_id;
+        state.config.publish_lock_owner_id = owner;
+        state.config.publish_lock_acquired_at = nowISO;
+        state.config.publish_lock_expires_at = expiresISO;
+        if (seed.onAcquireLock) seed.onAcquireLock(owner, prev);
+        return { acquired: true, reason: "expired_takeover" };
       }
       return { acquired: false };
     },
-    releaseLock: async (cid, key) => {
-      if (state.config && state.config.publish_lock_request_id === key) {
-        state.config.publish_lock_request_id = null;
+    releaseLock: async (cid, owner) => {
+      if (state.config && state.config.publish_lock_owner_id === owner) {
+        state.config.publish_lock_owner_id = null;
+        state.config.publish_lock_acquired_at = null;
+        state.config.publish_lock_expires_at = null;
+        return { updated: 1 };
       }
+      return { updated: 0 };
     },
   };
 }
@@ -417,6 +433,73 @@ describe("publish — 真实并发集成测试（R3 阻断3：CAS 锁，非 crea
     const again = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
     expect(again.status).toBe("idempotent");
     expect(again.policy_id).toBe(first.policy_id);
+  });
+});
+
+describe("publish — R4 锁 owner/idempotency 分离与租约", () => {
+  it("相同 clinic + 相同 idempotency_key 并发：lock_owner_id 不同，只能一个获锁", async () => {
+    const owners = [];
+    const ops = makeOps({ config: cfg(), onAcquireLock: (o) => owners.push(o) });
+    const [a, b] = await Promise.all([
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+    ]);
+    const published = [a, b].filter((r) => r.status === "published");
+    const busy = [a, b].filter((r) => r.status === "publish_lock_busy");
+    expect(published.length).toBe(1);
+    expect(busy.length).toBe(1);
+    // 所有尝试的 lock_owner_id 唯一
+    expect(new Set(owners).size).toBe(owners.length);
+    // 锁持有者绝不等于业务 idempotency_key
+    for (const o of owners) expect(o).not.toBe("k1");
+    expect(typeof owners[0]).toBe("string");
+    expect(owners[0].length).toBe(36); // UUID 格式
+  });
+
+  it("第二个请求不因相同 idempotency_key 误判持锁（owner-scoped CAS，非 key 比较）", async () => {
+    const ops = makeOps({ config: cfg() });
+    const first = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(first.status).toBe("published");
+    expect(first.lock_release_status).toBe("released");
+    // 锁释放后 config 中 owner 为空（不残留 idempotency_key）
+    expect(ops.state.config.publish_lock_owner_id).toBeNull();
+  });
+
+  it("不同 key 并发仍只能一个进入临界区", async () => {
+    const ops = makeOps({ config: cfg() });
+    const [a, b] = await Promise.all([
+      orchestratePublish(input({ idempotency_key: "k1" }), ops),
+      orchestratePublish(input({ idempotency_key: "k2" }), ops),
+    ]);
+    const published = [a, b].filter((r) => r.status === "published");
+    expect(published.length).toBe(1);
+  });
+
+  it("过期锁可被原子接管（stale owner + 过期 expires → 新请求获锁并发布）", async () => {
+    const ops = makeOps({
+      config: cfg({
+        publish_lock_owner_id: "stale-owner-uuid",
+        publish_lock_acquired_at: "2020-01-01T00:00:00Z",
+        publish_lock_expires_at: "2020-01-01T00:00:10Z",
+      }),
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("published");
+    expect(r.lock_release_status).toBe("released");
+  });
+
+  it("release 时锁已被租约接管 → lock_release_warning，不静默", async () => {
+    const ops = makeOps({
+      config: cfg(),
+      onCreate: (state) => {
+        // 暂存创建后，模拟锁被另一请求经租约接管
+        state.config.publish_lock_owner_id = "other-owner-uuid";
+      },
+    });
+    const r = await orchestratePublish(input({ idempotency_key: "k1" }), ops);
+    expect(r.status).toBe("published");
+    expect(r.lock_release_status).toBe("lock_taken_over");
+    expect(typeof r.lock_release_warning).toBe("string");
   });
 });
 
