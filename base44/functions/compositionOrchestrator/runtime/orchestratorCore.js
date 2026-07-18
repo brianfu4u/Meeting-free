@@ -1,4 +1,4 @@
-// GENERATED_PHASE3_MIRROR source=src/lib/phase3/orchestratorCore.js blob=878e1b844d09f57dc5dd5376d8998f6e17e99cf2
+// GENERATED_PHASE3_MIRROR source=src/lib/phase3/orchestratorCore.js blob=c6403ac98dce71a441e999e3e7606ba4b9363685
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS Phase 3 — Composition Orchestrator Core
@@ -205,14 +205,14 @@ export function buildAttentionDescriptor({
   artifactIds = [],
   evidenceFactCardIds = [],
   generatedAt,
-  urgency = "medium",
+  urgency = "yellow",
 }) {
   requireString(clinicId, "clinicId");
   requireString(compositionRunId, "compositionRunId");
   requireString(generatedAt, "generatedAt");
   return {
     clinic_id: clinicId,
-    attention_type: "exception",
+    attention_type: "evidence_missing",
     urgency,
     title: "编组候选待审核",
     recommendation: "请店长审核编组候选",
