@@ -1,38 +1,39 @@
 /**
- * Clinic OS V10 — LLM Smoke CI 运行器（加固版）
+ * Clinic OS V10 — LLM Smoke CI 运行器（后端内部 smoke，GitHub 仅触发+查询结果）
  *
- * 真实 ASSEMBLY_JSON_SCHEMA 与 prompt 由 src/lib/composition 单一来源持有（runAssemblySmoke
- * 内部导入，禁止手工复制）。本运行器仅作为已鉴权触发器：通过 llmSmokeService 加固代理
- * 调用 InvokeLLM，携带 X-CI-Smoke-Key + 网关 Bearer token。
+ * Base44 不提供适用于 GitHub Actions 的官方服务凭证/PAT（工作区 API Key 仅限监控/审计，
+ * 不能用于函数调用）。后端函数为公开 HTTP 端点，内部用 asServiceRole 调用 InvokeLLM，
+ * 唯一鉴权为函数内自定义共享密钥（X-CI-Smoke-Key === Deno.env.LLM_SMOKE_KEY）。
  *
- * 环境变量（GitHub Secrets，不得作 workflow input）：
- * - LLM_SMOKE_ENDPOINT：llmSmokeService 函数 URL
- * - BASE44_TOKEN：Base44 网关鉴权 token
- * - LLM_SMOKE_KEY：与函数 Deno.env.LLM_SMOKE_KEY 一致的专用密钥
+ * 因此 GitHub Actions 仅作为触发器：用 LLM_SMOKE_KEY 调用 llmSmokeService 并读取结果，
+ * 不再需要任何 Bearer token。函数 endpoint 为公开 URL，内置默认值，可经 secret 覆盖。
+ *
+ * 环境变量（GitHub Secrets）：
+ * - LLM_SMOKE_KEY：与函数 Deno.env.LLM_SMOKE_KEY 一致的共享密钥（必填）
+ * - LLM_SMOKE_ENDPOINT（可选）：覆盖默认函数 endpoint URL
  */
 import { runAssemblySmoke } from "./assemblySmoke.mjs";
 
-const endpoint = process.env.LLM_SMOKE_ENDPOINT;
-const token = process.env.BASE44_TOKEN;
+const DEFAULT_ENDPOINT = "https://base44.app/api/apps/6a40a384e32bc30acde13c1d/functions/llmSmokeService";
+const endpoint = process.env.LLM_SMOKE_ENDPOINT || DEFAULT_ENDPOINT;
 const smokeKey = process.env.LLM_SMOKE_KEY;
 
-if (!endpoint || !token || !smokeKey) {
-  console.error("llmSmokeCi: LLM_SMOKE_ENDPOINT / BASE44_TOKEN / LLM_SMOKE_KEY 必填（GitHub Secrets）");
+if (!smokeKey) {
+  console.error("llmSmokeCi: LLM_SMOKE_KEY 必填（GitHub Secret）");
   process.exit(2);
 }
 
-const invokeLLM = async ({ prompt, response_json_schema, model }) => {
+const invokeLLM = async ({ prompt, response_json_schema }) => {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
       "X-CI-Smoke-Key": smokeKey,
     },
-    body: JSON.stringify({ prompt, response_json_schema, model }),
+    body: JSON.stringify({ prompt, response_json_schema }),
   });
   if (!res.ok) {
-    throw new Error(`llmSmokeCi: LLM 端点返回 ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(`llmSmokeCi: 函数返回 ${res.status}: ${(await res.text()).slice(0, 300)}`);
   }
   return res.json();
 };
