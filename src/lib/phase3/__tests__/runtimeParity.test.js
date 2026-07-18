@@ -54,3 +54,33 @@ describe("Phase 2 generated runtime mirror parity", () => {
       .toEqual(Object.keys(mirrors).sort());
   });
 });
+
+
+const phase3Mirrors = {
+  "src/lib/phase3/contract.js": {
+    mirror: "phase3Contract.js",
+    blob: "002c563456972105900401b7c46986709f60eb64",
+  },
+  "src/lib/phase3/orchestratorCore.js": {
+    mirror: "orchestratorCore.js",
+    blob: "c6403ac98dce71a441e999e3e7606ba4b9363685",
+  },
+};
+
+describe("Phase 3 generated runtime mirror parity", () => {
+  for (const [source, config] of Object.entries(phase3Mirrors)) {
+    it(`${config.mirror} is pinned to and matches ${source}`, () => {
+      const sourceContent = fs.readFileSync(path.join(root, source), "utf8");
+      expect(gitBlobSha(sourceContent)).toBe(config.blob);
+      const generated = fs.readFileSync(path.join(mirrorDir, config.mirror), "utf8");
+      const lines = generated.split("\n");
+      expect(lines[0]).toBe(
+        `// GENERATED_PHASE3_MIRROR source=${source} blob=${config.blob}`
+      );
+      const body = lines.slice(2).join("\n")
+        .replaceAll('from "./tenantContext.js";', 'from "../tenant/tenantContext";')
+        .replaceAll('from "./phase3Contract.js";', 'from "./contract";');
+      expect(body).toBe(sourceContent);
+    });
+  }
+});
