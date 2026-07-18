@@ -1,10 +1,6 @@
-name: LLM Smoke (manual)
+name: LLM Smoke
 on:
   workflow_dispatch:
-    inputs:
-      base44_endpoint:
-        description: "Base44 llmSmokeService function URL（InvokeLLM 代理）"
-        required: true
 
 jobs:
   smoke:
@@ -16,8 +12,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Real LLM Assembly Smoke (imports actual ASSEMBLY_JSON_SCHEMA)
+      - name: Real LLM Assembly Smoke (hardened proxy)
         env:
-          BASE44_ENDPOINT: ${{ github.event.inputs.base44_endpoint }}
+          LLM_SMOKE_ENDPOINT: ${{ secrets.LLM_SMOKE_ENDPOINT }}
           BASE44_TOKEN: ${{ secrets.BASE44_TOKEN }}
+          LLM_SMOKE_KEY: ${{ secrets.LLM_SMOKE_KEY }}
         run: node src/lib/composition/llmSmokeCi.mjs
