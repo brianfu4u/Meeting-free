@@ -277,3 +277,20 @@ describe("CompositionRun Phase 3 Batch 2 metadata", () => {
     expect(schema.properties).not.toHaveProperty("hypothesis_ids");
   });
 });
+
+
+describe("ClinicConfig CompositionRun CAS lease", () => {
+  const schema = readEntity("ClinicConfig");
+  it("uses a lock namespace separate from GuessPolicy publish", () => {
+    for (const field of [
+      "composition_run_lock_key",
+      "composition_run_lock_owner_id",
+      "composition_run_lock_acquired_at",
+      "composition_run_lock_expires_at",
+    ]) {
+      expect(schema.properties).toHaveProperty(field);
+    }
+    expect(schema.properties.composition_run_lock_owner_id)
+      .not.toEqual(schema.properties.publish_lock_owner_id);
+  });
+});
