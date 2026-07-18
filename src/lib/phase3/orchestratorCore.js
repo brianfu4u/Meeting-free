@@ -204,20 +204,29 @@ export function buildAttentionDescriptor({
   evidenceFactCardIds = [],
   generatedAt,
   urgency = "yellow",
+  selectedHypothesisId = null,
+  managerDispatchRequired = false,
 }) {
   requireString(clinicId, "clinicId");
   requireString(compositionRunId, "compositionRunId");
   requireString(generatedAt, "generatedAt");
+  const suggestedHypothesisId =
+    selectedHypothesisId == null
+      ? null
+      : requireString(selectedHypothesisId, "selectedHypothesisId");
   return {
     clinic_id: clinicId,
     attention_type: "evidence_missing",
     urgency,
     title: "编组候选待审核",
     recommendation: "请店长审核编组候选",
+    reasoning: managerDispatchRequired
+      ? "存在歧义或校验问题，必须由店长比较候选后决定"
+      : "存在唯一建议候选，但仍须店长人工确认；系统不会自动审批或提交",
     status: "open",
     generated_at: generatedAt,
     composition_run_id: compositionRunId,
-    selected_hypothesis_id: null,
+    selected_hypothesis_id: suggestedHypothesisId,
     artifact_ids: uniqueStrings(artifactIds),
     evidence_fact_card_ids: uniqueStrings(evidenceFactCardIds),
   };
