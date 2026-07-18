@@ -203,14 +203,14 @@ export function buildAttentionDescriptor({
   artifactIds = [],
   evidenceFactCardIds = [],
   generatedAt,
-  urgency = "medium",
+  urgency = "yellow",
 }) {
   requireString(clinicId, "clinicId");
   requireString(compositionRunId, "compositionRunId");
   requireString(generatedAt, "generatedAt");
   return {
     clinic_id: clinicId,
-    attention_type: "exception",
+    attention_type: "evidence_missing",
     urgency,
     title: "编组候选待审核",
     recommendation: "请店长审核编组候选",
