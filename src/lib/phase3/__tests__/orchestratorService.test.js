@@ -20,9 +20,10 @@ function makeOps(overrides = {}) {
     }),
     buildHypotheses: ({ clinicId, compositionRunId, hypotheses }) =>
       hypotheses.map((h) => ({ ...h, clinic_id: clinicId, composition_run_id: compositionRunId, status: "pending_review" })),
-    deriveDispatch: ({ validationIssues }) => ({
+    deriveDispatch: ({ guardrailResult = {}, validationIssues }) => ({
       needsManagerDispatch: validationIssues.length > 0,
-      bestHypothesisId: null,
+      bestHypothesisId:
+        validationIssues.length > 0 ? null : guardrailResult.bestHypothesisId || null,
     }),
     buildAttention: ({
       clinicId,
