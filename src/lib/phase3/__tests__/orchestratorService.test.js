@@ -7,9 +7,9 @@ function makeOps(overrides = {}) {
     authorize: ({ action, role, clinicId }) =>
       Boolean(
         clinicId &&
-        ["interpret", "run", "query", "listRuns", "review"].includes(action) &&
+        ["interpret", "run", "query", "listRuns", "review", "commit"].includes(action) &&
         ["staff", "admin"].includes(role) &&
-        (action !== "review" || role === "admin")
+        (!["review", "commit"].includes(action) || role === "admin")
       ),
     assertTenant: (clinicId, ...objects) =>
       objects.every((o) => o && typeof o === "object" && o.clinic_id === clinicId),
@@ -112,6 +112,31 @@ function makeOps(overrides = {}) {
       composition_run_id: "run-1",
       ...patch,
     })),
+    getWorkflow: vi.fn(async (id) => ({
+      id, clinic_id: "c1", status: "active",
+      current_snapshot_id: "snap3", current_snapshot_version: 3,
+    })),
+    getSnapshot: vi.fn(async (id) => ({
+      id, clinic_id: "c1", workflow_id: "wf1",
+      snapshot_version: 3, projection_version: 3,
+    })),
+    planAttachCommit: vi.fn(input => ({
+      manager_execution_idempotency_key: "exec::md1::p1",
+      intent_descriptor: {
+        clinic_id: input.clinicId,
+        target_workflow_id: "wf1",
+        selected_hypothesis_id: "h1",
+        attention_item_id: "att1",
+        manager_decision_id: "md1",
+      },
+      snapshot_descriptor: { snapshot_version: 4 },
+      workflow_cas_filter: {},
+    })),
+    executeCommitSaga: vi.fn(async () => ({
+      outcome: "committed",
+      idempotent: false,
+      intent: { id: "intent1", status: "committed" },
+    })),
     now: () => "2026-07-18T12:00:00.000Z",
     ...overrides,
   };
@@ -129,12 +154,14 @@ describe("compositionOrchestrator service authorization", () => {
     expect(result.http_status).toBe(403);
     expect(ops.listRuns).not.toHaveBeenCalled();
   });
-  it("rejects commit because it is not a Batch 2 action", async () => {
-    const result = await createCompositionService(makeOps()).handle(
-      { action: "commit", clinic_id: "c1" },
+  it("rejects staff commit before reading a hypothesis", async () => {
+    const ops = makeOps();
+    const result = await createCompositionService(ops).handle(
+      { action: "commit", clinic_id: "c1", workflow_hypothesis_id: "h1" },
       actor
     );
-    expect(result.http_status).toBe(400);
+    expect(result.http_status).toBe(403);
+    expect(ops.getHypothesisByKey).not.toHaveBeenCalled();
   });
 });
 
@@ -453,5 +480,160 @@ describe("compositionOrchestrator query/listRuns", () => {
     );
     expect(result.limit).toBe(100);
     expect(ops.listRuns).toHaveBeenCalledWith("c1", { business_date: undefined, limit: 100 });
+  });
+});
+
+
+describe("compositionOrchestrator attach commit", () => {
+  const admin = { user_id: "manager-1", role: "admin", clinic_id: "c1" };
+  const request = {
+    action: "commit",
+    clinic_id: "c1",
+    workflow_hypothesis_id: "h1",
+    attention_item_id: "att1",
+  };
+  const selectedHypothesis = {
+    id: "h-db-1",
+    clinic_id: "c1",
+    composition_run_id: "run-1",
+    source_proposal_id: "p1",
+    workflow_hypothesis_id: "h1",
+    composition_type: "attach",
+    status: "selected",
+    target_workflow_id: "wf1",
+    target_snapshot_id: "snap3",
+    target_snapshot_version: 3,
+  };
+  const approved = {
+    id: "md1",
+    clinic_id: "c1",
+    manager_id: "manager-1",
+    target_type: "hypothesis",
+    target_id: "h1",
+    decision: "approved",
+  };
+  const attention = {
+    id: "att1",
+    clinic_id: "c1",
+    composition_run_id: "run-1",
+    status: "executed",
+    selected_hypothesis_id: "h1",
+  };
+
+  function commitOps(overrides = {}) {
+    return makeOps({
+      getHypothesisByKey: vi.fn(async () => selectedHypothesis),
+      findManagerDecision: vi.fn(async () => approved),
+      listAttentionByRun: vi.fn(async () => [attention]),
+      ...overrides,
+    });
+  }
+
+  it("executes the serialized Saga for an approved selected attach", async () => {
+    const ops = commitOps();
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result.http_status).toBe(201);
+    expect(result.idempotent).toBe(false);
+    expect(ops.planAttachCommit).toHaveBeenCalledWith(expect.objectContaining({
+      clinicId: "c1",
+      managerDecision: approved,
+      attentionItem: attention,
+      hypothesis: selectedHypothesis,
+    }));
+    expect(ops.acquireRunLock).toHaveBeenCalledWith(
+      "c1",
+      "manager-commit::exec::md1::p1",
+      expect.any(String),
+      expect.any(String),
+      expect.any(String)
+    );
+    expect(ops.executeCommitSaga).toHaveBeenCalledTimes(1);
+    expect(ops.releaseRunLock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 200 for an idempotent committed replay", async () => {
+    const ops = commitOps({
+      executeCommitSaga: vi.fn(async () => ({
+        outcome: "committed", idempotent: true,
+        intent: { id: "intent1", status: "committed" },
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result.http_status).toBe(200);
+    expect(result.idempotent).toBe(true);
+  });
+
+  it("returns stale conflict without claiming commit", async () => {
+    const ops = commitOps({
+      executeCommitSaga: vi.fn(async () => ({
+        outcome: "stale", idempotent: false,
+        intent: { id: "intent1", status: "stale" },
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "stale_proposal",
+      idempotent: false,
+    }));
+  });
+
+  it("requires the prior human manager approval", async () => {
+    const ops = commitOps({ findManagerDecision: vi.fn(async () => null) });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "manager_approval_required",
+    }));
+    expect(ops.planAttachCommit).not.toHaveBeenCalled();
+  });
+
+  it("requires the selected attention projection", async () => {
+    const ops = commitOps({ listAttentionByRun: vi.fn(async () => []) });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "selected_attention_item_required",
+    }));
+  });
+
+  it("returns retryable conflict while another commit owns the lease", async () => {
+    const ops = commitOps({
+      acquireRunLock: vi.fn(async () => ({ acquired: false, reason: "lock_busy" })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "commit_lock_busy",
+      retryable: true,
+    }));
+    expect(ops.executeCommitSaga).not.toHaveBeenCalled();
+  });
+
+  it("maps planner pointer mismatch to stale_proposal", async () => {
+    const error = Object.assign(new Error("do not expose"), {
+      code: "stale_proposal_version_mismatch",
+    });
+    const ops = commitOps({
+      planAttachCommit: vi.fn(() => { throw error; }),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "stale_proposal",
+    }));
+    expect(JSON.stringify(result)).not.toContain("do not expose");
+  });
+
+  it("blocks cross-tenant workflow before planning", async () => {
+    const ops = commitOps({
+      getWorkflow: vi.fn(async () => ({
+        id: "wf1", clinic_id: "c2",
+        current_snapshot_id: "snap3", current_snapshot_version: 3,
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result.http_status).toBe(403);
+    expect(ops.planAttachCommit).not.toHaveBeenCalled();
   });
 });
