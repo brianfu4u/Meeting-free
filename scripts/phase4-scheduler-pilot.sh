@@ -46,7 +46,8 @@ rollback() {
   # Environment rollback MUST happen before any test-data cleanup.
   if [[ "$SECRETS_MAY_EXIST" -eq 1 ]]; then
     echo "Rolling back scheduler secrets before fixture cleanup..."
-    base44_cli secrets delete "$ENABLED_SECRET" "$ALLOWLIST_SECRET" || failed=1
+    base44_cli secrets delete "$ENABLED_SECRET" || failed=1
+    base44_cli secrets delete "$ALLOWLIST_SECRET" || failed=1
     SECRETS_MAY_EXIST=0
   fi
 
@@ -80,12 +81,31 @@ run_helper
 SECRETS_MAY_EXIST=1
 base44_cli secrets set   "$ENABLED_SECRET=true"   "$ALLOWLIST_SECRET=$PHASE4_TEST_CLINIC_ID"
 
-# Base44 automatically redeploys functions that reference changed secrets.
-sleep 10
-
+# Base44 automatically redeploys functions that reference changed secrets,
+# but propagation is asynchronous. Retry only scheduler_not_enabled; any other
+# failure stops immediately and the trap rolls back secrets before fixtures.
 export PHASE4_PILOT_MODE="scan"
 export PHASE4_SCAN_EXPECTATION="first"
-run_helper
+scheduler_ready=0
+for attempt in {1..18}; do
+  scan_output=""
+  if scan_output="$(run_helper 2>&1)"; then
+    printf '%s\n' "$scan_output"
+    scheduler_ready=1
+    break
+  fi
+  printf '%s\n' "$scan_output" >&2
+  if ! grep -q "scheduler_not_enabled" <<<"$scan_output"; then
+    echo "phase4_scheduler_pilot_failed: non-retryable first scan error" >&2
+    exit 1
+  fi
+  echo "Waiting for scheduler secret redeploy ($attempt/18)..." >&2
+  sleep 10
+done
+if [[ "$scheduler_ready" -ne 1 ]]; then
+  echo "phase4_scheduler_pilot_failed: scheduler secret redeploy timeout" >&2
+  exit 1
+fi
 
 export PHASE4_SCAN_EXPECTATION="replay"
 run_helper
