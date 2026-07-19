@@ -3,7 +3,8 @@
  * Pure types only: safe to bundle in the Base44 function directory.
  */
 
-export type CompositionAction = "interpret" | "run" | "query" | "listRuns";
+export type CompositionAction = "interpret" | "run" | "query" | "listRuns" | "review";
+export type ReviewDecision = "select" | "reject" | "ignore";
 export type ActorRole = "staff" | "admin";
 
 export type ActorContext = {
@@ -27,6 +28,9 @@ export type ServiceRequest = {
   model_version?: string | null;
   limit?: number;
   include_hypothesis_summary?: boolean;
+  workflow_hypothesis_id?: string;
+  review_decision?: ReviewDecision;
+  decision_note?: string | null;
 };
 
 export type ServiceResult = {
@@ -113,5 +117,25 @@ export type CompositionOps = {
     descriptors: Record<string, unknown>[]
   ) => Promise<Record<string, unknown>[]>;
   createAttention: (descriptor: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
+  getHypothesisByKey: (
+    clinicId: string,
+    workflowHypothesisId: string
+  ) => Promise<Record<string, unknown> | null>;
+  updateHypothesis: (
+    id: string,
+    patch: Record<string, unknown>
+  ) => Promise<Record<string, unknown>>;
+  findManagerDecision: (
+    clinicId: string,
+    workflowHypothesisId: string
+  ) => Promise<Record<string, unknown> | null>;
+  createManagerDecision: (
+    descriptor: Record<string, unknown>
+  ) => Promise<Record<string, unknown>>;
+  updateAttention: (
+    id: string,
+    patch: Record<string, unknown>
+  ) => Promise<Record<string, unknown>>;
   now: () => string;
 };
