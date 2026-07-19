@@ -1,4 +1,4 @@
-// Base44 deployment trigger — fix 189799a
+// Base44 deployment trigger — Phase 3 attach commit runtime
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { createCompositionService } from "./service.ts";
 import type { ActorContext, CompositionOps, ServiceRequest } from "./contracts.ts";
@@ -15,6 +15,10 @@ import {
   executeCompositionRuntime,
   interpretArtifactRuntime,
 } from "./runtimeAdapter.ts";
+import {
+  executeAttachCommitSagaRuntime,
+  planAttachCommitRuntime,
+} from "./runtime/commitRuntime.js";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -362,6 +366,70 @@ function makeOps(svc: any): CompositionOps {
       svc.entities.ManagerDecision.create(descriptor),
     updateAttention: (id, patch) =>
       svc.entities.AttentionItem.update(id, patch),
+
+    getWorkflow: async (id) => {
+      try {
+        return await svc.entities.Workflow.get(id);
+      } catch {
+        return null;
+      }
+    },
+    getSnapshot: async (id) => {
+      try {
+        return await svc.entities.WorkflowSnapshot.get(id);
+      } catch {
+        return null;
+      }
+    },
+    planAttachCommit: planAttachCommitRuntime,
+    executeCommitSaga: (plan, now) => {
+      const clinicId = String(plan?.intent_descriptor?.clinic_id || "");
+      return executeAttachCommitSagaRuntime({
+        plan,
+        now,
+        ops: {
+          findIntentByKey: async (key) => {
+            const rows = await svc.entities.WorkflowCommitIntent.filter({
+              clinic_id: clinicId,
+              manager_execution_idempotency_key: key,
+            });
+            return (rows || []).sort((x: any, y: any) =>
+              String(x.created_date || x.id).localeCompare(String(y.created_date || y.id))
+            )[0] || null;
+          },
+          createIntent: (descriptor) =>
+            svc.entities.WorkflowCommitIntent.create(descriptor),
+          updateIntent: (id, patch) =>
+            svc.entities.WorkflowCommitIntent.update(id, patch),
+          createSnapshot: (descriptor) =>
+            svc.entities.WorkflowSnapshot.create(descriptor),
+          getWorkflow: async (id) => {
+            try {
+              return await svc.entities.Workflow.get(id);
+            } catch {
+              return null;
+            }
+          },
+          casWorkflowPointer: (filter, patch) =>
+            svc.entities.Workflow.updateMany(filter, { $set: patch }),
+          updateHypothesis: async (workflowHypothesisId, patch) => {
+            const rows = await svc.entities.WorkflowHypothesis.filter({
+              clinic_id: clinicId,
+              workflow_hypothesis_id: workflowHypothesisId,
+            });
+            const row = rows?.[0];
+            if (!row?.id) throw Object.assign(new Error("hypothesis_not_found"), {
+              code: "projection_update_failed",
+            });
+            return svc.entities.WorkflowHypothesis.update(row.id, patch);
+          },
+          updateAttention: (id, patch) =>
+            svc.entities.AttentionItem.update(id, patch),
+          updateManagerDecision: (id, patch) =>
+            svc.entities.ManagerDecision.update(id, patch),
+        },
+      });
+    },
     now: () => new Date().toISOString(),
   };
 }
