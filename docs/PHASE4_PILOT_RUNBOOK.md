@@ -5,27 +5,77 @@ This runbook is an operator checklist. It does not authorize a clinic rollout.
 ## Current state
 
 - The platform automation remains inactive in source control.
-- No scheduler environment variables or clinic allowlist are configured.
+- Scheduler secrets are not left configured after an isolated pilot.
 - No clinic is approved by this document.
 - `clinic-001` requires a separate explicit approval naming that clinic.
 
-## Isolated E2E
+## Manual isolated E2E
 
-Use a new tenant id matching `phase4-it-<uuid>`. Record every created Entity id.
+Use `scripts/phase4-isolated-e2e.mjs` for the non-scheduler runtime path:
 
-1. Create only the minimum isolated ClinicConfig, Staff, published GuessPolicy,
+```bash
+cat scripts/phase4-isolated-e2e.mjs | npx base44@latest exec
+```
+
+It creates a randomized `phase4-it-<uuid>` tenant, verifies run/replay and
+the explicit human-review contract, then cleans its exact fixture ids.
+
+## Isolated scheduler pilot
+
+The only approved scheduler smoke target is a newly generated
+`phase4-it-scheduler-<uuid>` tenant. The wrapper refuses to run if either
+scheduler secret already exists, so it cannot overwrite a real deployment.
+
+Preflight:
+
+```bash
+git pull origin main
+npx base44@latest whoami
+npx base44@latest secrets list
+```
+
+Run once from the linked repository root:
+
+```bash
+bash scripts/phase4-scheduler-pilot.sh
+```
+
+The wrapper performs this fixed sequence:
+
+1. Generate one random test clinic id; `clinic-001` is hard-blocked.
+2. Create only the minimum ClinicConfig, Staff, published GuessPolicy,
    Artifact and EvidenceFactCard fixtures.
-2. Set the isolated clinic to `pilot` and enable its schedule.
-3. Configure the server environment gates with only the isolated clinic.
-4. Activate the automation or invoke its scheduled payload once.
-5. Verify one scheduled CompositionRun, idempotent replay with zero growth,
-   health timestamps and safe error codes.
-6. Verify WorkflowHypothesis remains pending manager review.
-7. Verify no ManagerDecision, WorkflowCommitIntent, WorkflowSnapshot or Workflow
-   is created by the scheduler.
-8. Roll back first: disable the clinic schedule and remove it from the allowlist.
-9. Delete only the recorded isolated fixture ids and verify all residual counts are zero.
-10. Perform read-only counts for `clinic-001`; never use it as the isolation target.
+3. Set `COMPOSITION_SCHEDULER_ENABLED=true` and set
+   `COMPOSITION_SCHEDULER_CLINICS` to that single random clinic.
+4. Invoke the scheduled payload once, then once more as an idempotent replay.
+5. Verify exactly one completed scheduled CompositionRun, pending hypotheses,
+   scheduler health, released lock and zero authoritative workflow side effects.
+6. Roll back the two secrets first. Base44 automatically redeploys functions
+   that reference changed secrets.
+7. Delete only exact ids discovered under the random test tenant and verify all
+   12 entity counts are zero.
+
+The EXIT/INT/TERM trap applies the same rollback order after a failure:
+**secrets first, fixture cleanup second**. Do not interrupt the Codespace until
+the rollback output is visible. If the terminal is lost, immediately run:
+
+```bash
+npx base44@latest secrets delete COMPOSITION_SCHEDULER_ENABLED COMPOSITION_SCHEDULER_CLINICS
+```
+
+Then rerun cleanup with the exact random clinic id shown by the pilot:
+
+```bash
+export PHASE4_TEST_CLINIC_ID='phase4-it-scheduler-<uuid>'
+export PHASE4_PILOT_MODE=cleanup
+cat scripts/phase4-scheduler-pilot.mjs | npx base44@latest exec
+```
+
+Finally, confirm the two scheduler secret names are absent:
+
+```bash
+npx base44@latest secrets list
+```
 
 ## Pilot activation order
 
