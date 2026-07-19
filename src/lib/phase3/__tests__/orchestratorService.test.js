@@ -112,6 +112,7 @@ function makeOps(overrides = {}) {
       composition_run_id: "run-1",
       ...patch,
     })),
+    findCommitIntentByKey: vi.fn(async () => null),
     getWorkflow: vi.fn(async (id) => ({
       id, clinic_id: "c1", status: "active",
       current_snapshot_id: "snap3", current_snapshot_version: 3,
@@ -551,16 +552,40 @@ describe("compositionOrchestrator attach commit", () => {
     expect(ops.releaseRunLock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns 200 for an idempotent committed replay", async () => {
+  it("returns 200 for a committed retry before re-planning", async () => {
+    const intent = {
+      id: "intent1", clinic_id: "c1",
+      manager_execution_idempotency_key: "exec::md1::p1", status: "committed",
+    };
     const ops = commitOps({
-      executeCommitSaga: vi.fn(async () => ({
-        outcome: "committed", idempotent: true,
-        intent: { id: "intent1", status: "committed" },
-      })),
+      getHypothesisByKey: vi.fn(async () => ({ ...selectedHypothesis, status: "committed" })),
+      findCommitIntentByKey: vi.fn(async () => intent),
     });
     const result = await createCompositionService(ops).handle(request, admin);
-    expect(result.http_status).toBe(200);
-    expect(result.idempotent).toBe(true);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 200, idempotent: true,
+      commit: expect.objectContaining({ outcome: "committed", intent }),
+    }));
+    expect(ops.planAttachCommit).not.toHaveBeenCalled();
+    expect(ops.acquireRunLock).not.toHaveBeenCalled();
+    expect(ops.executeCommitSaga).not.toHaveBeenCalled();
+  });
+
+  it("replays a terminal stale intent without re-planning", async () => {
+    const intent = {
+      id: "intent-stale", clinic_id: "c1",
+      manager_execution_idempotency_key: "exec::md1::p1", status: "stale",
+    };
+    const ops = commitOps({
+      getHypothesisByKey: vi.fn(async () => ({ ...selectedHypothesis, status: "stale" })),
+      findCommitIntentByKey: vi.fn(async () => intent),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409, error_code: "stale_proposal", idempotent: true,
+    }));
+    expect(ops.planAttachCommit).not.toHaveBeenCalled();
+    expect(ops.executeCommitSaga).not.toHaveBeenCalled();
   });
 
   it("returns stale conflict without claiming commit", async () => {

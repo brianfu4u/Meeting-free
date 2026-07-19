@@ -139,6 +139,10 @@ export type CompositionOps = {
     patch: Record<string, unknown>
   ) => Promise<Record<string, unknown>>;
 
+  findCommitIntentByKey: (
+    clinicId: string,
+    managerExecutionIdempotencyKey: string
+  ) => Promise<Record<string, unknown> | null>;
   getWorkflow: (id: string) => Promise<Record<string, unknown> | null>;
   getSnapshot: (id: string) => Promise<Record<string, unknown> | null>;
   planAttachCommit: (input: Record<string, unknown>) => Record<string, any>;
