@@ -1,9 +1,8 @@
-import type {
-  ActorContext,
-  CompositionOps,
-  ServiceRequest,
-  ServiceResult,
-} from "./contracts.ts";
+// Keep deploy-time types local: Base44 may misclassify cross-file `import type`
+type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
+type ServiceRequest = Record<string, any>;
+type ServiceResult = Record<string, any> & { ok: boolean; http_status: number };
+type CompositionOps = Record<string, any>;
 
 const ACTIONS = new Set(["interpret", "run", "query", "listRuns", "review", "commit"]);
 const REVIEW_TARGET = {
