@@ -1,4 +1,4 @@
-// Base44 deployment trigger — Phase 3 attach commit runtime
+// Base44 deployment trigger — Phase 3 attach commit runtime (redeploy e3d9a0b)
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { createCompositionService } from "./service.ts";
 import type { ActorContext, CompositionOps, ServiceRequest } from "./contracts.ts";
