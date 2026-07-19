@@ -36,13 +36,18 @@ describe("Phase 4 isolated scheduler pilot safety", () => {
 
   it("rolls back secrets before cleaning data on success and failure", () => {
     const rollbackStart = wrapper.indexOf("rollback() {");
-    const secretDelete = wrapper.indexOf('base44_cli secrets delete "$ENABLED_SECRET" "$ALLOWLIST_SECRET"', rollbackStart);
+    const enabledDelete = wrapper.indexOf('base44_cli secrets delete "$ENABLED_SECRET"', rollbackStart);
+    const allowlistDelete = wrapper.indexOf('base44_cli secrets delete "$ALLOWLIST_SECRET"', rollbackStart);
     const cleanupMode = wrapper.indexOf('export PHASE4_PILOT_MODE="cleanup"', rollbackStart);
     expect(rollbackStart).toBeGreaterThanOrEqual(0);
-    expect(secretDelete).toBeGreaterThan(rollbackStart);
-    expect(cleanupMode).toBeGreaterThan(secretDelete);
+    expect(enabledDelete).toBeGreaterThan(rollbackStart);
+    expect(allowlistDelete).toBeGreaterThan(enabledDelete);
+    expect(cleanupMode).toBeGreaterThan(allowlistDelete);
     expect(wrapper).toContain("trap on_exit EXIT INT TERM");
     expect(wrapper).toContain("rollback || status=1");
+    expect(wrapper).toContain('grep -q "scheduler_not_enabled"');
+    expect(wrapper).toContain("scheduler secret redeploy timeout");
+    expect(wrapper).toContain("non-retryable first scan error");
   });
 
   it("never invokes review or commit and asserts the human boundary", () => {
