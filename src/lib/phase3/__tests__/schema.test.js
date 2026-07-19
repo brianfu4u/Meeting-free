@@ -251,7 +251,7 @@ describe("权限矩阵（决策 D）", () => {
   });
   it("ACTION_PERMISSIONS 完整性", () => {
     expect(Object.keys(ACTION_PERMISSIONS).sort()).toEqual(
-      ["commit", "interpret", "listRuns", "query", "run"].sort()
+      ["commit", "interpret", "listRuns", "query", "review", "run"].sort()
     );
   });
 });
