@@ -9,6 +9,7 @@ import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel"
 import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
 import CompositionReviewPanel from "@/components/dashboard/CompositionReviewPanel";
+import CompositionPhotoCapture from "@/components/dashboard/CompositionPhotoCapture";
 import EventStreamMarquee from "@/components/dashboard/EventStreamMarquee";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
@@ -133,6 +134,11 @@ function DashboardInner() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
             <AttentionQueue />
             <WorkflowSnapshotPanel />
+          </div>
+
+          {/* Phase 5：手机拍照上传后只解释为证据碎片，不自动提交 */}
+          <div className="mb-4">
+            <CompositionPhotoCapture />
           </div>
 
           {/* Phase 3：只通过 compositionOrchestrator 完成审核与提交 */}
