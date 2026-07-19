@@ -203,6 +203,7 @@ export const ACTION_PERMISSIONS = {
   run: ["staff", "admin"],
   query: ["staff", "admin"],
   listRuns: ["staff", "admin"],
+  review: ["admin"], // 仅店长可做人工审核决定
   commit: ["admin"], // 仅店长
 };
 

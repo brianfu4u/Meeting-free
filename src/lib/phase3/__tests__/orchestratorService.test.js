@@ -5,8 +5,12 @@ function makeOps(overrides = {}) {
   const runs = [];
   return {
     authorize: ({ action, role, clinicId }) =>
-      Boolean(clinicId && ["interpret", "run", "query", "listRuns"].includes(action) &&
-        ["staff", "admin"].includes(role)),
+      Boolean(
+        clinicId &&
+        ["interpret", "run", "query", "listRuns", "review"].includes(action) &&
+        ["staff", "admin"].includes(role) &&
+        (action !== "review" || role === "admin")
+      ),
     assertTenant: (clinicId, ...objects) =>
       objects.every((o) => o && typeof o === "object" && o.clinic_id === clinicId),
     buildRun: (input) => ({
@@ -60,8 +64,19 @@ function makeOps(overrides = {}) {
     }),
     updateRun: vi.fn(async (id, patch) => ({ id, clinic_id: "c1", ...patch })),
     getRun: vi.fn(async (id) => ({ id, clinic_id: "c1", status: "completed" })),
-    listHypothesesByRun: vi.fn(async () => [{ id: "h1", clinic_id: "c1" }]),
-    listAttentionByRun: vi.fn(async () => [{ id: "att1", clinic_id: "c1" }]),
+    listHypothesesByRun: vi.fn(async () => [{
+      id: "h-db-1",
+      clinic_id: "c1",
+      composition_run_id: "run-1",
+      workflow_hypothesis_id: "h1",
+      status: "pending_review",
+    }]),
+    listAttentionByRun: vi.fn(async () => [{
+      id: "att1",
+      clinic_id: "c1",
+      composition_run_id: "run-1",
+      status: "open",
+    }]),
     listRuns: vi.fn(async () => [{ id: "run-1", clinic_id: "c1" }]),
     listActiveHypothesisSummaries: vi.fn(async () => ({
       "run-1": { active_count: 2, status_counts: { pending_review: 2 } },
@@ -75,6 +90,28 @@ function makeOps(overrides = {}) {
     })),
     createHypotheses: vi.fn(async (d) => d.map((x, i) => ({ id: `h-${i}`, ...x }))),
     createAttention: vi.fn(async (d) => ({ id: "att-1", ...d })),
+    getHypothesisByKey: vi.fn(async (clinicId, key) => ({
+      id: "h-db-1",
+      clinic_id: clinicId,
+      composition_run_id: "run-1",
+      workflow_hypothesis_id: key,
+      status: "pending_review",
+    })),
+    updateHypothesis: vi.fn(async (id, patch) => ({
+      id,
+      clinic_id: "c1",
+      composition_run_id: "run-1",
+      workflow_hypothesis_id: "h1",
+      ...patch,
+    })),
+    findManagerDecision: vi.fn(async () => null),
+    createManagerDecision: vi.fn(async (d) => ({ id: "md-1", ...d })),
+    updateAttention: vi.fn(async (id, patch) => ({
+      id,
+      clinic_id: "c1",
+      composition_run_id: "run-1",
+      ...patch,
+    })),
     now: () => "2026-07-18T12:00:00.000Z",
     ...overrides,
   };
@@ -236,6 +273,130 @@ describe("compositionOrchestrator run", () => {
       "run-1",
       expect.objectContaining({ status: "failed", error_code: "composition_failed" })
     );
+  });
+});
+
+describe("compositionOrchestrator manager review", () => {
+  const request = {
+    action: "review",
+    clinic_id: "c1",
+    workflow_hypothesis_id: "h1",
+    review_decision: "select",
+    decision_note: "店长确认该编组",
+  };
+  const admin = { user_id: "manager-1", role: "admin", clinic_id: "c1" };
+
+  it("rejects staff before reading a hypothesis", async () => {
+    const ops = makeOps();
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 403,
+      error_code: "action_not_allowed",
+    }));
+    expect(ops.getHypothesisByKey).not.toHaveBeenCalled();
+  });
+
+  it("records a human selection and projects selected/executed states", async () => {
+    const ops = makeOps();
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result.http_status).toBe(201);
+    expect(result.idempotent).toBe(false);
+    expect(result.manager_decision).toEqual(expect.objectContaining({
+      manager_id: "manager-1",
+      target_type: "hypothesis",
+      target_id: "h1",
+      decision: "approved",
+    }));
+    expect(result.hypothesis.status).toBe("selected");
+    expect(result.attention_items[0]).toEqual(expect.objectContaining({
+      status: "executed",
+      manager_action: "execute",
+      selected_hypothesis_id: "h1",
+    }));
+    expect(ops.createManagerDecision).toHaveBeenCalledTimes(1);
+    expect(ops.updateHypothesis).toHaveBeenCalledWith("h-db-1", { status: "selected" });
+  });
+
+  it("replays an existing matching decision without creating a duplicate", async () => {
+    const existing = {
+      id: "md-existing",
+      clinic_id: "c1",
+      manager_id: "manager-1",
+      target_type: "hypothesis",
+      target_id: "h1",
+      decision: "approved",
+      decided_at: "2026-07-18T11:00:00.000Z",
+    };
+    const ops = makeOps({
+      findManagerDecision: vi.fn(async () => existing),
+      getHypothesisByKey: vi.fn(async () => ({
+        id: "h-db-1",
+        clinic_id: "c1",
+        composition_run_id: "run-1",
+        workflow_hypothesis_id: "h1",
+        status: "selected",
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result.http_status).toBe(200);
+    expect(result.idempotent).toBe(true);
+    expect(ops.createManagerDecision).not.toHaveBeenCalled();
+    expect(ops.updateHypothesis).not.toHaveBeenCalled();
+  });
+
+  it("rejects a conflicting second decision", async () => {
+    const ops = makeOps({
+      findManagerDecision: vi.fn(async () => ({
+        id: "md-existing",
+        clinic_id: "c1",
+        target_id: "h1",
+        decision: "rejected",
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "hypothesis_already_reviewed",
+    }));
+    expect(ops.updateHypothesis).not.toHaveBeenCalled();
+  });
+
+  it("keeps attention open when rejecting one of several pending candidates", async () => {
+    const ops = makeOps({
+      listHypothesesByRun: vi.fn(async () => [
+        {
+          id: "h-db-1", clinic_id: "c1", composition_run_id: "run-1",
+          workflow_hypothesis_id: "h1", status: "pending_review",
+        },
+        {
+          id: "h-db-2", clinic_id: "c1", composition_run_id: "run-1",
+          workflow_hypothesis_id: "h2", status: "pending_review",
+        },
+      ]),
+    });
+    const result = await createCompositionService(ops).handle(
+      { ...request, review_decision: "reject" },
+      admin
+    );
+    expect(result.http_status).toBe(201);
+    expect(result.hypothesis.status).toBe("rejected");
+    expect(result.attention_items).toEqual([]);
+    expect(ops.updateAttention).not.toHaveBeenCalled();
+  });
+
+  it("blocks an injected cross-tenant hypothesis", async () => {
+    const ops = makeOps({
+      getHypothesisByKey: vi.fn(async () => ({
+        id: "h-db-1",
+        clinic_id: "c2",
+        composition_run_id: "run-1",
+        workflow_hypothesis_id: "h1",
+        status: "pending_review",
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result.http_status).toBe(403);
+    expect(ops.createManagerDecision).not.toHaveBeenCalled();
   });
 });
 

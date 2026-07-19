@@ -5,7 +5,12 @@ import type {
   ServiceResult,
 } from "./contracts.ts";
 
-const ACTIONS = new Set(["interpret", "run", "query", "listRuns"]);
+const ACTIONS = new Set(["interpret", "run", "query", "listRuns", "review"]);
+const REVIEW_TARGET = {
+  select: { hypothesisStatus: "selected", managerDecision: "approved" },
+  reject: { hypothesisStatus: "rejected", managerDecision: "rejected" },
+  ignore: { hypothesisStatus: "ignored", managerDecision: "ignored" },
+} as const;
 const ACTIVE_HYPOTHESIS_STATUSES = ["pending_review", "selected", "dispatched"];
 const RUN_LOCK_LEASE_MS = 30_000;
 
@@ -161,6 +166,152 @@ async function listRuns(
     hypothesis_summary_included: true,
     active_hypothesis_statuses: ACTIVE_HYPOTHESIS_STATUSES,
   });
+}
+
+async function review(
+  ops: CompositionOps,
+  request: ServiceRequest,
+  actor: ActorContext
+): Promise<ServiceResult> {
+  if (!requiredString(request.workflow_hypothesis_id)) {
+    return response(400, { error_code: "workflow_hypothesis_id_required" });
+  }
+  const target = REVIEW_TARGET[request.review_decision as keyof typeof REVIEW_TARGET];
+  if (!target) return response(400, { error_code: "review_decision_invalid" });
+  if (actor.user_id === "auto" || actor.user_id === "system") {
+    return response(403, { error_code: "human_manager_required" });
+  }
+
+  const hypothesis = await ops.getHypothesisByKey(
+    actor.clinic_id,
+    request.workflow_hypothesis_id
+  );
+  if (!hypothesis) return response(404, { error_code: "workflow_hypothesis_not_found" });
+  if (!tenantSafe(ops, actor.clinic_id, hypothesis)) {
+    return response(403, { error_code: "tenant_scope_violation" });
+  }
+
+  const projectDecision = async (
+    decision: Record<string, unknown>,
+    idempotent: boolean
+  ): Promise<ServiceResult> => {
+    if (!tenantSafe(ops, actor.clinic_id, decision)) {
+      return response(403, { error_code: "tenant_scope_violation" });
+    }
+    if (decision.decision !== target.managerDecision) {
+      return response(409, { error_code: "hypothesis_already_reviewed" });
+    }
+
+    let projectedHypothesis = hypothesis;
+    if (hypothesis.status === "pending_review") {
+      if (!requiredString(hypothesis.id)) {
+        return response(500, { error_code: "hypothesis_persistence_id_missing" });
+      }
+      projectedHypothesis = await ops.updateHypothesis(hypothesis.id, {
+        status: target.hypothesisStatus,
+      });
+    } else if (hypothesis.status !== target.hypothesisStatus) {
+      return response(409, { error_code: "hypothesis_state_conflict" });
+    }
+
+    const [attentionItems, relatedHypotheses] = await Promise.all([
+      ops.listAttentionByRun(actor.clinic_id, String(hypothesis.composition_run_id || "")),
+      ops.listHypothesesByRun(actor.clinic_id, String(hypothesis.composition_run_id || "")),
+    ]);
+    if (
+      !attentionItems.every((item) => tenantSafe(ops, actor.clinic_id, item)) ||
+      !relatedHypotheses.every((item) => tenantSafe(ops, actor.clinic_id, item))
+    ) {
+      return response(403, { error_code: "tenant_scope_violation" });
+    }
+
+    const otherPending = relatedHypotheses.some(
+      (item) =>
+        item.workflow_hypothesis_id !== request.workflow_hypothesis_id &&
+        item.status === "pending_review"
+    );
+    const decidedAt = String(decision.decided_at || ops.now());
+    const updatedAttention = [];
+    for (const item of attentionItems.filter((candidate) => candidate.status === "open")) {
+      if (!requiredString(item.id)) continue;
+      if (request.review_decision === "select") {
+        updatedAttention.push(await ops.updateAttention(item.id, {
+          status: "executed",
+          manager_action: "execute",
+          manager_note: request.decision_note || null,
+          decided_at: decidedAt,
+          selected_hypothesis_id: request.workflow_hypothesis_id,
+        }));
+      } else if (!otherPending) {
+        updatedAttention.push(await ops.updateAttention(item.id, {
+          status: "ignored",
+          manager_action: "ignore",
+          manager_note: request.decision_note || null,
+          decided_at: decidedAt,
+          selected_hypothesis_id: null,
+        }));
+      }
+    }
+
+    return response(idempotent ? 200 : 201, {
+      idempotent,
+      hypothesis: projectedHypothesis,
+      manager_decision: decision,
+      attention_items: updatedAttention,
+    });
+  };
+
+  const existing = await ops.findManagerDecision(
+    actor.clinic_id,
+    request.workflow_hypothesis_id
+  );
+  if (existing) return projectDecision(existing, true);
+
+  const lockKey = `manager-review::${request.workflow_hypothesis_id}`;
+  const owner = ops.newRunLockOwner(actor.user_id, lockKey);
+  const lockNow = ops.now();
+  const expiresAt = new Date(
+    new Date(lockNow).getTime() + RUN_LOCK_LEASE_MS
+  ).toISOString();
+  const lock = await ops.acquireRunLock(
+    actor.clinic_id,
+    lockKey,
+    owner,
+    lockNow,
+    expiresAt
+  );
+  if (!lock.acquired) {
+    return response(409, { error_code: "review_lock_busy", retryable: true });
+  }
+
+  let decision: Record<string, unknown>;
+  let idempotent = false;
+  try {
+    const lockedExisting = await ops.findManagerDecision(
+      actor.clinic_id,
+      request.workflow_hypothesis_id
+    );
+    if (lockedExisting) {
+      decision = lockedExisting;
+      idempotent = true;
+    } else {
+      decision = await ops.createManagerDecision({
+        clinic_id: actor.clinic_id,
+        manager_id: actor.user_id,
+        target_type: "hypothesis",
+        target_id: request.workflow_hypothesis_id,
+        decision: target.managerDecision,
+        decision_note:
+          typeof request.decision_note === "string"
+            ? request.decision_note.slice(0, 1000)
+            : null,
+        decided_at: ops.now(),
+      });
+    }
+  } finally {
+    await ops.releaseRunLock(actor.clinic_id, lockKey, owner).catch(() => undefined);
+  }
+  return projectDecision(decision, idempotent);
 }
 
 async function run(
@@ -319,6 +470,7 @@ export function createCompositionService(ops: CompositionOps) {
       if (request.action === "run") return run(ops, request, actor);
       if (request.action === "query") return query(ops, request, actor);
       if (request.action === "listRuns") return listRuns(ops, request, actor);
+      if (request.action === "review") return review(ops, request, actor);
       return response(400, { error_code: "action_invalid" });
     },
   };

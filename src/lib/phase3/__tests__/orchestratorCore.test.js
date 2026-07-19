@@ -30,6 +30,12 @@ describe("Phase 3 orchestratorCore authorization", () => {
     expect(authorizeAction({ action: "run", role: "staff", clinicId: "c1" })).toBe(true);
     expect(() => authorizeAction({ action: "commit", role: "staff", clinicId: "c1" })).toThrow();
   });
+  it("allows only admin to review", () => {
+    expect(authorizeAction({ action: "review", role: "admin", clinicId: "c1" })).toBe(true);
+    expect(() =>
+      authorizeAction({ action: "review", role: "staff", clinicId: "c1" })
+    ).toThrow();
+  });
   it("rejects missing clinic scope", () => {
     expect(() => authorizeAction({ action: "run", role: "staff" })).toThrow(/clinicId/);
   });

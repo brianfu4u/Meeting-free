@@ -60,7 +60,7 @@ describe("Phase 2 generated runtime mirror parity", () => {
 const phase3Mirrors = {
   "src/lib/phase3/contract.js": {
     mirror: "phase3Contract.js",
-    blob: "002c563456972105900401b7c46986709f60eb64",
+    blob: "d7cf563cd2fdf8da6e7bbb85dbbfb3df7eccca6b",
   },
   "src/lib/phase3/orchestratorCore.js": {
     mirror: "orchestratorCore.js",
