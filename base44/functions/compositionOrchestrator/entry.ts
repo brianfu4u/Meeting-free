@@ -370,6 +370,16 @@ function makeOps(svc: any): CompositionOps {
     updateAttention: (id, patch) =>
       svc.entities.AttentionItem.update(id, patch),
 
+    findCommitIntentByKey: async (clinicId, key) => {
+      const rows = await svc.entities.WorkflowCommitIntent.filter({
+        clinic_id: clinicId,
+        manager_execution_idempotency_key: key,
+      });
+      return (rows || []).sort((x: any, y: any) =>
+        String(x.created_date || x.id).localeCompare(String(y.created_date || y.id))
+      )[0] || null;
+    },
+
     getWorkflow: async (id) => {
       try {
         return await svc.entities.Workflow.get(id);
