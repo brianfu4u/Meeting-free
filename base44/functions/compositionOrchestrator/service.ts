@@ -5,7 +5,7 @@ import type {
   ServiceResult,
 } from "./contracts.ts";
 
-const ACTIONS = new Set(["interpret", "run", "query", "listRuns", "review"]);
+const ACTIONS = new Set(["interpret", "run", "query", "listRuns", "review", "commit"]);
 const REVIEW_TARGET = {
   select: { hypothesisStatus: "selected", managerDecision: "approved" },
   reject: { hypothesisStatus: "rejected", managerDecision: "rejected" },
@@ -314,6 +314,130 @@ async function review(
   return projectDecision(decision, idempotent);
 }
 
+async function commit(
+  ops: CompositionOps,
+  request: ServiceRequest,
+  actor: ActorContext
+): Promise<ServiceResult> {
+  if (!requiredString(request.workflow_hypothesis_id)) {
+    return response(400, { error_code: "workflow_hypothesis_id_required" });
+  }
+  if (actor.user_id === "auto" || actor.user_id === "system") {
+    return response(403, { error_code: "human_manager_required" });
+  }
+
+  const hypothesis = await ops.getHypothesisByKey(
+    actor.clinic_id,
+    request.workflow_hypothesis_id
+  );
+  if (!hypothesis) return response(404, { error_code: "workflow_hypothesis_not_found" });
+  if (!tenantSafe(ops, actor.clinic_id, hypothesis)) {
+    return response(403, { error_code: "tenant_scope_violation" });
+  }
+
+  const decision = await ops.findManagerDecision(
+    actor.clinic_id,
+    request.workflow_hypothesis_id
+  );
+  if (!decision) return response(409, { error_code: "manager_approval_required" });
+  if (!tenantSafe(ops, actor.clinic_id, decision)) {
+    return response(403, { error_code: "tenant_scope_violation" });
+  }
+
+  const attentionItems = await ops.listAttentionByRun(
+    actor.clinic_id,
+    String(hypothesis.composition_run_id || "")
+  );
+  if (!attentionItems.every((item) => tenantSafe(ops, actor.clinic_id, item))) {
+    return response(403, { error_code: "tenant_scope_violation" });
+  }
+  const attention = request.attention_item_id
+    ? attentionItems.find((item) => item.id === request.attention_item_id)
+    : attentionItems.find(
+        (item) => item.selected_hypothesis_id === request.workflow_hypothesis_id
+      );
+  if (!attention) return response(409, { error_code: "selected_attention_item_required" });
+
+  if (!requiredString(hypothesis.target_workflow_id)) {
+    return response(409, { error_code: "commit_target_workflow_required" });
+  }
+  if (!requiredString(hypothesis.target_snapshot_id)) {
+    return response(409, { error_code: "commit_target_snapshot_required" });
+  }
+  const [workflow, snapshot] = await Promise.all([
+    ops.getWorkflow(hypothesis.target_workflow_id),
+    ops.getSnapshot(hypothesis.target_snapshot_id),
+  ]);
+  if (!workflow) return response(404, { error_code: "workflow_not_found" });
+  if (!snapshot) return response(404, { error_code: "workflow_snapshot_not_found" });
+  if (
+    !tenantSafe(ops, actor.clinic_id, workflow) ||
+    !tenantSafe(ops, actor.clinic_id, snapshot)
+  ) {
+    return response(403, { error_code: "tenant_scope_violation" });
+  }
+
+  let plan: Record<string, any>;
+  try {
+    plan = ops.planAttachCommit({
+      clinicId: actor.clinic_id,
+      managerDecision: decision,
+      attentionItem: attention,
+      hypothesis,
+      workflow,
+      currentSnapshot: snapshot,
+      now: ops.now(),
+    });
+  } catch (error) {
+    const code = typeof (error as any)?.code === "string"
+      ? (error as any).code
+      : "commit_plan_invalid";
+    if (code.includes("cross_tenant") || code.includes("missing_tenant")) {
+      return response(403, { error_code: "tenant_scope_violation" });
+    }
+    if (
+      code.startsWith("stale_proposal") ||
+      code.includes("snapshot_mismatch") ||
+      code.includes("version_mismatch")
+    ) {
+      return response(409, { error_code: "stale_proposal" });
+    }
+    return response(409, { error_code: code });
+  }
+
+  const lockKey = `manager-commit::${plan.manager_execution_idempotency_key}`;
+  const owner = ops.newRunLockOwner(actor.user_id, lockKey);
+  const lockNow = ops.now();
+  const expiresAt = new Date(
+    new Date(lockNow).getTime() + RUN_LOCK_LEASE_MS
+  ).toISOString();
+  const lock = await ops.acquireRunLock(
+    actor.clinic_id, lockKey, owner, lockNow, expiresAt
+  );
+  if (!lock.acquired) {
+    return response(409, { error_code: "commit_lock_busy", retryable: true });
+  }
+
+  try {
+    const result = await ops.executeCommitSaga(plan, ops.now());
+    if (result.outcome === "stale") {
+      return response(409, {
+        error_code: "stale_proposal",
+        idempotent: result.idempotent === true,
+        commit: result,
+      });
+    }
+    return response(result.idempotent === true ? 200 : 201, {
+      idempotent: result.idempotent === true,
+      commit: result,
+    });
+  } catch {
+    return response(500, { error_code: "commit_saga_failed" });
+  } finally {
+    await ops.releaseRunLock(actor.clinic_id, lockKey, owner).catch(() => undefined);
+  }
+}
+
 async function run(
   ops: CompositionOps,
   request: ServiceRequest,
@@ -471,6 +595,7 @@ export function createCompositionService(ops: CompositionOps) {
       if (request.action === "query") return query(ops, request, actor);
       if (request.action === "listRuns") return listRuns(ops, request, actor);
       if (request.action === "review") return review(ops, request, actor);
+      if (request.action === "commit") return commit(ops, request, actor);
       return response(400, { error_code: "action_invalid" });
     },
   };
