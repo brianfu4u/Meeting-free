@@ -21,6 +21,14 @@ function requiredString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function managerExecutionIdempotencyKey(
+  decision: Record<string, unknown>,
+  hypothesis: Record<string, unknown>
+): string | null {
+  if (!requiredString(decision.id) || !requiredString(hypothesis.source_proposal_id)) return null;
+  return `exec::${decision.id}::${hypothesis.source_proposal_id}`;
+}
+
 function tenantSafe(ops: CompositionOps, clinicId: string, ...objects: unknown[]): boolean {
   try {
     return ops.assertTenant(clinicId, ...objects) === true;
@@ -341,6 +349,31 @@ async function commit(
   if (!decision) return response(409, { error_code: "manager_approval_required" });
   if (!tenantSafe(ops, actor.clinic_id, decision)) {
     return response(403, { error_code: "tenant_scope_violation" });
+  }
+
+  // A terminal CommitIntent is authoritative for retries. Check it before
+  // re-planning because the first commit projects hypothesis.status=committed.
+  const replayKey = managerExecutionIdempotencyKey(decision, hypothesis);
+  if (replayKey) {
+    const existingIntent = await ops.findCommitIntentByKey(actor.clinic_id, replayKey);
+    if (existingIntent) {
+      if (!tenantSafe(ops, actor.clinic_id, existingIntent)) {
+        return response(403, { error_code: "tenant_scope_violation" });
+      }
+      if (existingIntent.status === "committed") {
+        return response(200, {
+          idempotent: true,
+          commit: { outcome: "committed", idempotent: true, intent: existingIntent },
+        });
+      }
+      if (existingIntent.status === "stale") {
+        return response(409, {
+          error_code: "stale_proposal",
+          idempotent: true,
+          commit: { outcome: "stale", idempotent: true, intent: existingIntent },
+        });
+      }
+    }
   }
 
   const attentionItems = await ops.listAttentionByRun(
