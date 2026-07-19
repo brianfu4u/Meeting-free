@@ -81,34 +81,41 @@ run_helper
 SECRETS_MAY_EXIST=1
 base44_cli secrets set   "$ENABLED_SECRET=true"   "$ALLOWLIST_SECRET=$PHASE4_TEST_CLINIC_ID"
 
-# Base44 automatically redeploys functions that reference changed secrets,
-# but propagation is asynchronous. Retry only scheduler_not_enabled; any other
-# failure stops immediately and the trap rolls back secrets before fixtures.
-export PHASE4_PILOT_MODE="scan"
-export PHASE4_SCAN_EXPECTATION="first"
-scheduler_ready=0
-for attempt in {1..18}; do
-  scan_output=""
-  if scan_output="$(run_helper 2>&1)"; then
-    printf '%s\n' "$scan_output"
-    scheduler_ready=1
-    break
-  fi
-  printf '%s\n' "$scan_output" >&2
-  if ! grep -q "scheduler_not_enabled" <<<"$scan_output"; then
-    echo "phase4_scheduler_pilot_failed: non-retryable first scan error" >&2
-    exit 1
-  fi
-  echo "Waiting for scheduler secret redeploy ($attempt/18)..." >&2
-  sleep 10
-done
-if [[ "$scheduler_ready" -ne 1 ]]; then
-  echo "phase4_scheduler_pilot_failed: scheduler secret redeploy timeout" >&2
-  exit 1
-fi
+# Base44 rolls out changed secrets asynchronously across function instances.
+# Both the first scan and its idempotent replay may briefly hit an old instance.
+# Retry only scheduler_not_enabled; every other failure stops immediately.
+run_scan_with_redeploy_wait() {
+  local expectation="$1"
+  local scan_ready=0
+  local scan_output=""
 
-export PHASE4_SCAN_EXPECTATION="replay"
-run_helper
+  export PHASE4_PILOT_MODE="scan"
+  export PHASE4_SCAN_EXPECTATION="$expectation"
+
+  for attempt in {1..18}; do
+    scan_output=""
+    if scan_output="$(run_helper 2>&1)"; then
+      printf '%s\n' "$scan_output"
+      scan_ready=1
+      break
+    fi
+    printf '%s\n' "$scan_output" >&2
+    if ! grep -q "scheduler_not_enabled" <<<"$scan_output"; then
+      echo "phase4_scheduler_pilot_failed: non-retryable $expectation scan error" >&2
+      return 1
+    fi
+    echo "Waiting for scheduler secret redeploy before $expectation scan ($attempt/18)..." >&2
+    sleep 10
+  done
+
+  if [[ "$scan_ready" -ne 1 ]]; then
+    echo "phase4_scheduler_pilot_failed: scheduler secret redeploy timeout before $expectation scan" >&2
+    return 1
+  fi
+}
+
+run_scan_with_redeploy_wait "first"
+run_scan_with_redeploy_wait "replay"
 
 export PHASE4_PILOT_MODE="verify"
 unset PHASE4_SCAN_EXPECTATION
