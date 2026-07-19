@@ -8,6 +8,7 @@ import AttentionQueue from "@/components/dashboard/AttentionQueue";
 import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
 import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
+import CompositionReviewPanel from "@/components/dashboard/CompositionReviewPanel";
 import EventStreamMarquee from "@/components/dashboard/EventStreamMarquee";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
@@ -132,6 +133,11 @@ function DashboardInner() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
             <AttentionQueue />
             <WorkflowSnapshotPanel />
+          </div>
+
+          {/* Phase 3：只通过 compositionOrchestrator 完成审核与提交 */}
+          <div className="mb-4">
+            <CompositionReviewPanel />
           </div>
 
           {/* 工作流闭环视图 — 全宽，店长闭环决策入口 */}
