@@ -27,8 +27,9 @@ describe("Phase 4 isolated scheduler pilot safety", () => {
 
   it("uses a single-clinic allowlist and performs first plus replay scans", () => {
     expect(wrapper).toContain('"$ALLOWLIST_SECRET=$PHASE4_TEST_CLINIC_ID"');
-    expect(wrapper).toContain('PHASE4_SCAN_EXPECTATION="first"');
-    expect(wrapper).toContain('PHASE4_SCAN_EXPECTATION="replay"');
+    expect(wrapper).toContain('run_scan_with_redeploy_wait "first"');
+    expect(wrapper).toContain('run_scan_with_redeploy_wait "replay"');
+    expect(wrapper).toContain('export PHASE4_SCAN_EXPECTATION="$expectation"');
     expect(helper).toContain('args: { mode: "scheduled_scan" }');
     expect(helper).toContain('assert(result?.scanned === 1, "allowlist_not_single_clinic")');
     expect(helper).toContain('assert(item?.idempotent === (scanExpectation === "replay")');
@@ -46,8 +47,8 @@ describe("Phase 4 isolated scheduler pilot safety", () => {
     expect(wrapper).toContain("trap on_exit EXIT INT TERM");
     expect(wrapper).toContain("rollback || status=1");
     expect(wrapper).toContain('grep -q "scheduler_not_enabled"');
-    expect(wrapper).toContain("scheduler secret redeploy timeout");
-    expect(wrapper).toContain("non-retryable first scan error");
+    expect(wrapper).toContain("scheduler secret redeploy timeout before $expectation scan");
+    expect(wrapper).toContain("non-retryable $expectation scan error");
   });
 
   it("never invokes review or commit and asserts the human boundary", () => {
