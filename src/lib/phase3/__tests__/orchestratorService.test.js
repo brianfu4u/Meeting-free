@@ -324,6 +324,21 @@ describe("compositionOrchestrator manager review", () => {
     expect(ops.getHypothesisByKey).not.toHaveBeenCalled();
   });
 
+  it("returns a retryable conflict while another manager owns the review lease", async () => {
+    const ops = makeOps({
+      acquireRunLock: vi.fn(async () => ({ acquired: false, reason: "lock_busy" })),
+    });
+    const result = await createCompositionService(ops).handle(request, admin);
+    expect(result).toEqual(expect.objectContaining({
+      http_status: 409,
+      error_code: "review_lock_busy",
+      retryable: true,
+    }));
+    expect(ops.createManagerDecision).not.toHaveBeenCalled();
+    expect(ops.updateHypothesis).not.toHaveBeenCalled();
+    expect(ops.updateAttention).not.toHaveBeenCalled();
+  });
+
   it("records a human selection and projects selected/executed states", async () => {
     const ops = makeOps();
     const result = await createCompositionService(ops).handle(request, admin);
