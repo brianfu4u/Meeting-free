@@ -31,10 +31,11 @@ describe("compositionOrchestrator deployable entry contract", () => {
     expect(entry).toContain("takeover?.updated === 1");
   });
 
-  it("does not expose commit or write authoritative workflow decisions", () => {
+  it("allows audited human review but no authoritative workflow commit", () => {
+    expect(entry).toContain("svc.entities.ManagerDecision.create");
+    expect(entry).toContain("svc.entities.WorkflowHypothesis.update");
     expect(entry).not.toContain('action === "commit"');
     expect(entry).not.toContain("WorkflowCommitIntent.create");
-    expect(entry).not.toContain("ManagerDecision.create");
     expect(entry).not.toContain("WorkflowSnapshot.create");
     expect(entry).not.toContain("Workflow.update(");
   });
