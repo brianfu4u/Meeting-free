@@ -23,6 +23,14 @@ const mirror = fs.readFileSync(
   path.join(root, "base44/functions/compositionOrchestrator/runtime/schedulerCore.js"),
   "utf8"
 );
+const healthCanonical = fs.readFileSync(
+  path.join(root, "src/lib/phase4/schedulerHealth.js"),
+  "utf8"
+);
+const healthMirror = fs.readFileSync(
+  path.join(root, "base44/functions/compositionOrchestrator/runtime/schedulerHealth.js"),
+  "utf8"
+);
 
 describe("Phase 4 scheduler deployment contract", () => {
   it("ships the automation inactive", () => {
@@ -54,5 +62,15 @@ describe("Phase 4 scheduler deployment contract", () => {
       .replace(/^\/\/ GENERATED_PHASE4_MIRROR.*\n/, "")
       .replace(/^\/\/ Keep behavior identical.*\n/, "");
     expect(stripped).toBe(canonical);
+  });
+  
+  it("keeps scheduler health mirror identical and stores only safe errors", () => {
+    const stripped = healthMirror
+      .replace(/^\/\/ GENERATED_PHASE4_MIRROR.*\n/, "")
+      .replace(/^\/\/ Keep behavior identical.*\n/, "");
+    expect(stripped).toBe(healthCanonical);
+    expect(entry).toContain("buildSchedulerHealthPatch");
+    expect(entry).toContain("sanitizeSchedulerErrorCode");
+    expect(entry).not.toContain("error_message:");
   });
 });
