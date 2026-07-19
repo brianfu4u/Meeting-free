@@ -217,6 +217,16 @@ describe("compositionOrchestrator run", () => {
     expect(result.attention_item.id).toBe("att-1");
     expect(result.attention_item.selected_hypothesis_id).toBe("p1#h0");
     expect(result.attention_item.manager_dispatch_required).toBe(false);
+    expect(result.dispatch).toEqual({
+      needsManagerDispatch: false,
+      bestHypothesisId: "p1#h0",
+    });
+    expect(result.review).toEqual({
+      required: true,
+      reason: "human_review_required",
+      suggestedHypothesisId: "p1#h0",
+      autoCommitAllowed: false,
+    });
     expect(ops.createHypotheses).toHaveBeenCalledTimes(1);
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
   });
@@ -234,6 +244,16 @@ describe("compositionOrchestrator run", () => {
     expect(result.attention_item.id).toBe("att-1");
     expect(result.attention_item.selected_hypothesis_id).toBeNull();
     expect(result.attention_item.manager_dispatch_required).toBe(true);
+    expect(result.dispatch).toEqual({
+      needsManagerDispatch: true,
+      bestHypothesisId: null,
+    });
+    expect(result.review).toEqual({
+      required: true,
+      reason: "guardrail_dispatch_required",
+      suggestedHypothesisId: null,
+      autoCommitAllowed: false,
+    });
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
   });
   it("serializes concurrent creation with a short lock and second lookup", async () => {
