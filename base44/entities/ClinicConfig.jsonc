@@ -113,6 +113,27 @@
       "format": "date-time",
       "description": "\u9501\u8fc7\u671f\u65f6\u523b\uff08ISO\uff09\uff1a\u8fc7\u671f\u540e\u53ef\u88ab\u539f\u5b50\u63a5\u7ba1\uff08CAS \u8fc7\u6ee4\u539f owner+expires_at \u7cbe\u786e\u503c\uff09\uff0c\u4fdd\u8bc1\u51fd\u6570\u5d29\u6e83\u4e0d\u4f1a\u6c38\u4e45\u9501\u6b7b\u95e8\u5e97\u3002"
     },
+    "composition_rollout_status": {
+      "type": "string",
+      "enum": ["disabled", "shadow", "pilot", "active"],
+      "default": "disabled",
+      "description": "Phase 4 per-clinic rollout state. State changes require an explicit operator action; inference cannot change it."
+    },
+    "composition_schedule_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Explicit kill switch for scheduled CompositionRun creation. Defaults false and is independent from activation_status."
+    },
+    "composition_schedule_grace_minutes": {
+      "type": "number",
+      "default": 10,
+      "description": "Maximum scheduler delay accepted for a configured slot (1-30 minutes)."
+    },
+    "composition_last_scheduled_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last scheduler attempt timestamp for operations visibility; not used as the idempotency authority."
+    },
     "composition_run_lock_key": {
       "type": "string",
       "description": "CompositionRun \u521b\u5efa\u9501\u5bf9\u5e94\u7684 idempotency_key\uff1b\u4e0e Policy \u53d1\u5e03\u9501\u9694\u79bb\u3002"
