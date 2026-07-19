@@ -24,6 +24,16 @@ describe("Phase 4 isolated E2E script safety", () => {
     expect(source).not.toMatch(/action:\s*["']commit["']/);
   });
 
+  it("asserts the explicit human review response contract", () => {
+    expect(source).toContain('first?.review?.required === true');
+    expect(source).toContain('first?.review?.reason === "human_review_required"');
+    expect(source).toContain('first?.review?.suggestedHypothesisId');
+    expect(source).toContain('first?.review?.autoCommitAllowed === false');
+    expect(source).toContain('first?.dispatch?.needsManagerDispatch === false');
+    expect(source).toContain('first.review.suggestedHypothesisId === first.dispatch?.bestHypothesisId');
+    expect(source).toContain("report.assertions.explicit_review_contract = true");
+  });
+
   it("cleans only exact ids and verifies zero residue", () => {
     expect(source).toContain("exactIds.get(entityName).add(String(record.id))");
     expect(source).toContain("base44.entities[entityName].delete(id)");

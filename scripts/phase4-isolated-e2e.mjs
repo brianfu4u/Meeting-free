@@ -203,6 +203,15 @@ try {
   assert(first?.ok === true, "first_run_not_ok");
   assert(first?.run?.id, "first_run_id_missing");
   assert(first?.run?.status === "completed", "first_run_not_completed");
+  assert(first?.review?.required === true, "review_not_required");
+  assert(first?.review?.reason === "human_review_required", "review_reason_unexpected");
+  assert(first?.review?.suggestedHypothesisId, "review_suggested_hypothesis_missing");
+  assert(first?.review?.autoCommitAllowed === false, "review_auto_commit_allowed");
+  assert(first?.dispatch?.needsManagerDispatch === false, "guardrail_dispatch_unexpected");
+  assert(
+    first.review.suggestedHypothesisId === first.dispatch?.bestHypothesisId,
+    "review_dispatch_hypothesis_mismatch",
+  );
 
   const firstCounts = await counts();
   const replay = unwrap(await base44.functions.invoke("compositionOrchestrator", request));
@@ -228,6 +237,7 @@ try {
   report.assertions.run_completed = true;
   report.assertions.idempotent_replay = true;
   report.assertions.human_review_boundary = true;
+  report.assertions.explicit_review_contract = true;
   report.before_cleanup = replayCounts;
 } catch (error) {
   report.error = String(error?.message ?? error).replace(/[\r\n]+/g, " ").slice(0, 300);
