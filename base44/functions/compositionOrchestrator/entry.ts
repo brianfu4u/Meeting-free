@@ -1,7 +1,10 @@
-// Base44 deployment trigger — Phase 3 attach commit runtime (redeploy e3d9a0b)
+// Base44 deployment trigger — Base44 local type compatibility
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { createCompositionService } from "./service.ts";
-import type { ActorContext, CompositionOps, ServiceRequest } from "./contracts.ts";
+// Base44's deploy parser can misclassify cross-file `import type` as a runtime import.
+type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
+type ServiceRequest = Record<string, any> & { clinic_id?: string };
+type CompositionOps = Record<string, any>;
 import {
   buildAttentionDescriptor,
   buildHypothesisDescriptors,
