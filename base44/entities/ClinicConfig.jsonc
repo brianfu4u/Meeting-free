@@ -134,6 +134,34 @@
       "format": "date-time",
       "description": "Last scheduler attempt timestamp for operations visibility; not used as the idempotency authority."
     },
+    "composition_last_schedule_status": {
+      "type": "string",
+      "enum": ["never", "skipped", "success", "idempotent", "failed"],
+      "default": "never",
+      "description": "Safe scheduler outcome for operations visibility. Does not authorize review or commit."
+    },
+    "composition_last_schedule_error_code": {
+      "type": "string",
+      "description": "Allowlisted operational error code only; raw exception messages are never stored."
+    },
+    "composition_last_schedule_run_id": {
+      "type": "string",
+      "description": "Most recent scheduled CompositionRun id, when a run was created or replayed."
+    },
+    "composition_last_schedule_slot": {
+      "type": "string",
+      "description": "Most recent due schedule slot in clinic local HH:mm."
+    },
+    "composition_last_schedule_success_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the most recent successful or idempotently replayed scheduled run."
+    },
+    "composition_last_schedule_failure_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the most recent failed scheduled run."
+    },
     "composition_run_lock_key": {
       "type": "string",
       "description": "CompositionRun \u521b\u5efa\u9501\u5bf9\u5e94\u7684 idempotency_key\uff1b\u4e0e Policy \u53d1\u5e03\u9501\u9694\u79bb\u3002"
