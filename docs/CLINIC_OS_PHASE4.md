@@ -118,3 +118,17 @@ Batch 4 is split into two independently authorized stages.
   rollback evidence, and read-only production integrity checks.
 - Freeze Phase 4 only after CI, deployment, isolated cleanup and pilot rollback
   evidence are all recorded.
+
+
+## Review and dispatch response semantics
+
+The composition run response exposes two deliberately separate decisions:
+
+- `review.required` is the authoritative human-review boundary. It is true
+  whenever a persisted hypothesis is `pending_review`, including a unique
+  best suggestion. `review.autoCommitAllowed` is always false.
+- `dispatch.needsManagerDispatch` describes Guardrail escalation caused by
+  ambiguity, validation issues, or all candidates being blocked. It does not
+  mean that a false value permits automatic approval or commit.
+- `review.suggestedHypothesisId` may identify a unique recommendation, but it
+  remains a suggestion until a human manager performs the review action.

@@ -567,8 +567,18 @@ async function run(
     // A unique best candidate is only a suggestion; it is never auto-selected,
     // approved, dispatched, or committed.
     let attention_item: Record<string, unknown> | null = null;
-    const reviewRequired = hypotheses.some((item) => item.status === "pending_review");
-    if (reviewRequired || dispatch.needsManagerDispatch) {
+    const pendingReviewExists = hypotheses.some((item) => item.status === "pending_review");
+    const review = {
+      required: pendingReviewExists || dispatch.needsManagerDispatch,
+      reason: dispatch.needsManagerDispatch
+        ? "guardrail_dispatch_required"
+        : pendingReviewExists
+          ? "human_review_required"
+          : "not_required",
+      suggestedHypothesisId: dispatch.bestHypothesisId || null,
+      autoCommitAllowed: false,
+    };
+    if (review.required) {
       const attentionDescriptor = ops.buildAttention({
         clinicId: actor.clinic_id,
         compositionRunId: persistedRun.id,
@@ -594,6 +604,7 @@ async function run(
       run: completed,
       hypotheses,
       attention_item,
+      review,
       dispatch,
     });
   } catch (error) {
