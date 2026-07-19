@@ -1,4 +1,4 @@
-// GENERATED_PHASE3_MIRROR source=src/lib/phase3/contract.js blob=002c563456972105900401b7c46986709f60eb64
+// GENERATED_PHASE3_MIRROR source=src/lib/phase3/contract.js blob=d7cf563cd2fdf8da6e7bbb85dbbfb3df7eccca6b
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS Phase 3 — 契约与状态机（纯逻辑，前后端通用，不依赖 base44 SDK）
@@ -205,6 +205,7 @@ export const ACTION_PERMISSIONS = {
   run: ["staff", "admin"],
   query: ["staff", "admin"],
   listRuns: ["staff", "admin"],
+  review: ["admin"], // 仅店长可做人工审核决定
   commit: ["admin"], // 仅店长
 };
 
