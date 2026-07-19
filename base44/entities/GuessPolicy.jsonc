@@ -62,10 +62,7 @@
     "hard_guardrails": {
       "type": "array",
       "items": {
-        "type": [
-          "object",
-          "string"
-        ],
+        "type": "object",
         "properties": {
           "rule_code": {
             "type": "string",
