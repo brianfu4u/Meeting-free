@@ -73,3 +73,22 @@ It remains fail-closed even if the automation is manually invoked:
 
 Neither environment variable is configured by source control. Production or
 pilot activation requires a separate explicit operator action.
+
+
+## B3 operations health
+
+Batch 3 adds read-only operational visibility without activating the scheduler.
+
+- ClinicConfig stores only allowlisted scheduler outcome codes, the latest run/slot,
+  and separate success/failure timestamps. Raw provider or exception messages are
+  never persisted.
+- Each allowlisted clinic is isolated during a scheduled scan; one clinic failure
+  cannot abort the remaining bounded scan.
+- Expired CompositionRun leases are surfaced as stale locks. Active leases are
+  reported as busy and are never force-released by the UI.
+- The manager review surface shows rollout state, recent success/failure, lag,
+  safe error code, and fixed retry guidance.
+- The health panel is read-only. It cannot create ManagerDecision, call review,
+  or call commit.
+- Scheduler automation remains inactive and source control does not configure
+  either environment gate or any clinic allowlist.
