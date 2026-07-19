@@ -3,7 +3,7 @@
  * Pure types only: safe to bundle in the Base44 function directory.
  */
 
-export type CompositionAction = "interpret" | "run" | "query" | "listRuns" | "review";
+export type CompositionAction = "interpret" | "run" | "query" | "listRuns" | "review" | "commit";
 export type ReviewDecision = "select" | "reject" | "ignore";
 export type ActorRole = "staff" | "admin";
 
@@ -31,6 +31,7 @@ export type ServiceRequest = {
   workflow_hypothesis_id?: string;
   review_decision?: ReviewDecision;
   decision_note?: string | null;
+  attention_item_id?: string;
 };
 
 export type ServiceResult = {
@@ -136,6 +137,14 @@ export type CompositionOps = {
   updateAttention: (
     id: string,
     patch: Record<string, unknown>
+  ) => Promise<Record<string, unknown>>;
+
+  getWorkflow: (id: string) => Promise<Record<string, unknown> | null>;
+  getSnapshot: (id: string) => Promise<Record<string, unknown> | null>;
+  planAttachCommit: (input: Record<string, unknown>) => Record<string, any>;
+  executeCommitSaga: (
+    plan: Record<string, any>,
+    now: string
   ) => Promise<Record<string, unknown>>;
   now: () => string;
 };
