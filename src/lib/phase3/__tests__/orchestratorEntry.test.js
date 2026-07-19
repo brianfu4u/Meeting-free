@@ -9,6 +9,10 @@ const entry = fs.readFileSync(
   path.join(root, "base44/functions/compositionOrchestrator/entry.ts"),
   "utf8"
 );
+const service = fs.readFileSync(
+  path.join(root, "base44/functions/compositionOrchestrator/service.ts"),
+  "utf8"
+);
 
 describe("compositionOrchestrator deployable entry contract", () => {
   it("derives identity and clinic membership on the server", () => {
@@ -16,6 +20,12 @@ describe("compositionOrchestrator deployable entry contract", () => {
     expect(entry).toContain("svc.entities.Staff.filter");
     expect(entry).toContain("user_id: user.id");
     expect(entry).toContain("actor.clinic_id");
+  });
+
+  it("keeps deploy-time types local for Base44 parser compatibility", () => {
+    expect(entry).not.toContain('from "./contracts.ts"');
+    expect(service).not.toContain('from "./contracts.ts"');
+    expect(service).toContain('"review", "commit"');
   });
 
   it("uses the parity-checked runtime adapter", () => {
