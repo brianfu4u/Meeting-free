@@ -92,3 +92,29 @@ Batch 3 adds read-only operational visibility without activating the scheduler.
   or call commit.
 - Scheduler automation remains inactive and source control does not configure
   either environment gate or any clinic allowlist.
+
+
+## B4 pilot readiness
+
+Batch 4 is split into two independently authorized stages.
+
+### Stage A — delivered by source control
+
+- Pure preflight evaluates every environment, tenant, policy, timezone, slot and
+  stale-lock gate before a clinic can be called ready.
+- `clinic-001` has an additional explicit approval gate and is not implicitly
+  approved by an environment allowlist.
+- Rollback changes only `composition_schedule_enabled=false` and
+  `composition_rollout_status=disabled`; historical evidence is retained.
+- The isolated E2E and pilot operator sequence is documented in
+  `docs/PHASE4_PILOT_RUNBOOK.md`.
+- The scheduler remains inactive and no environment values are committed.
+
+### Stage B — pending owner authorization
+
+- Run one isolated `phase4-it-<uuid>` E2E with recorded-id cleanup.
+- Name exactly one pilot clinic id in writing.
+- Capture pre/post counts, one scheduled slot, idempotent replay, health status,
+  rollback evidence, and read-only production integrity checks.
+- Freeze Phase 4 only after CI, deployment, isolated cleanup and pilot rollback
+  evidence are all recorded.
