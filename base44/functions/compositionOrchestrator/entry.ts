@@ -1,6 +1,10 @@
 // Base44 deployment trigger — commit replay 7f39bdf
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { createCompositionService } from "./service.ts";
+import {
+  buildScheduledRunRequest,
+  selectScheduledSlot,
+} from "./runtime/schedulerCore.js";
 // Base44's deploy parser can misclassify cross-file `import type` as a runtime import.
 type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
 type ServiceRequest = Record<string, any> & { clinic_id?: string };
@@ -30,12 +34,22 @@ Deno.serve(async (req) => {
 
   try {
     const base44 = createClientFromRequest(req);
+    const body = (await req.json().catch(() => ({}))) as ServiceRequest & {
+      args?: { mode?: string };
+    };
+
+    // Phase 4 automation path. Server-side environment gates and a fixed
+    // clinic allowlist are required before any service-role read or write.
+    if (body?.args?.mode === "scheduled_scan") {
+      const result = await handleScheduledScan(base44.asServiceRole);
+      return Response.json(result, { status: result.http_status });
+    }
+
     const user = await base44.auth.me();
     if (!user) {
       return Response.json({ ok: false, error_code: "unauthenticated" }, { status: 401 });
     }
 
-    const body = (await req.json().catch(() => ({}))) as ServiceRequest;
     const clinicId = typeof body.clinic_id === "string" ? body.clinic_id : "";
     const actor = await resolveActor(base44.asServiceRole, user, clinicId);
     if (!actor) {
@@ -55,6 +69,82 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+async function handleScheduledScan(svc: any) {
+  const enabled = Deno.env.get("COMPOSITION_SCHEDULER_ENABLED") === "true";
+  const allowlist = [
+    ...new Set(
+      (Deno.env.get("COMPOSITION_SCHEDULER_CLINICS") || "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    ),
+  ].slice(0, 10);
+
+  // Fail closed before touching any entity.
+  if (!enabled || allowlist.length === 0) {
+    return {
+      ok: true,
+      http_status: 200,
+      mode: "scheduled_scan",
+      scheduler_enabled: false,
+      scanned: 0,
+      processed: 0,
+      results: [],
+    };
+  }
+
+  const now = new Date();
+  const results = [];
+  for (const clinicId of allowlist) {
+    const rows = await svc.entities.ClinicConfig.filter({ clinic_id: clinicId });
+    const config = rows?.[0] || null;
+    const due = selectScheduledSlot({ config, now });
+    if (!due.eligible) {
+      results.push({ clinic_id: clinicId, status: "skipped", reason: due.reason });
+      continue;
+    }
+
+    const artifacts = await svc.entities.Artifact.filter({
+      clinic_id: clinicId,
+      business_date: due.businessDate,
+    });
+    const prepared = buildScheduledRunRequest({ config, due, artifacts });
+    if (!prepared.ok) {
+      results.push({ clinic_id: clinicId, status: "skipped", reason: prepared.reason });
+      continue;
+    }
+
+    const actor: ActorContext = {
+      user_id: "phase4-scheduler",
+      clinic_id: clinicId,
+      role: "admin",
+    };
+    const outcome = await createCompositionService(makeOps(svc)).handle(prepared.request, actor);
+    await svc.entities.ClinicConfig.update(String(config.id), {
+      composition_last_scheduled_at: now.toISOString(),
+    });
+    results.push({
+      clinic_id: clinicId,
+      slot: due.slot,
+      status: outcome.ok ? "processed" : "failed",
+      http_status: outcome.http_status,
+      idempotent: outcome.idempotent === true,
+      run_id: outcome.run?.id || outcome.run_id || null,
+      error_code: outcome.error_code || null,
+    });
+  }
+
+  return {
+    ok: true,
+    http_status: 200,
+    mode: "scheduled_scan",
+    scheduler_enabled: true,
+    scanned: allowlist.length,
+    processed: results.filter((item) => item.status === "processed").length,
+    results,
+  };
+}
 
 async function resolveActor(svc: any, user: any, clinicId: string): Promise<ActorContext | null> {
   if (!clinicId || !user?.id) return null;

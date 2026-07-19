@@ -1,0 +1,17 @@
+{
+  "name": "compositionOrchestrator",
+  "entry": "entry.ts",
+  "automations": [
+    {
+      "type": "scheduled",
+      "name": "phase4_composition_scan",
+      "description": "Polls explicitly allowlisted clinics for due composition slots.",
+      "function_args": { "mode": "scheduled_scan" },
+      "is_active": false,
+      "schedule_mode": "recurring",
+      "schedule_type": "simple",
+      "repeat_unit": "minutes",
+      "repeat_interval": 5
+    }
+  ]
+}

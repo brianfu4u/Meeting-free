@@ -50,3 +50,26 @@ State changes are configuration changes, not inference results.
 - New fields default to disabled.
 - Invalid timezone/slot/policy configuration cannot become eligible.
 - No entity writes, scheduler calls, or production rollout during B1.
+
+
+## B2 implementation
+
+The scheduled scan is configured in
+`base44/functions/compositionOrchestrator/function.jsonc` at a five-minute
+interval, but ships with `is_active: false`.
+
+It remains fail-closed even if the automation is manually invoked:
+
+1. `COMPOSITION_SCHEDULER_ENABLED` must equal `true`.
+2. `COMPOSITION_SCHEDULER_CLINICS` must contain an explicit comma-separated
+   clinic allowlist (maximum 10).
+3. Each allowlisted ClinicConfig must independently be active, have
+   `composition_schedule_enabled=true`, a non-disabled rollout status, a
+   valid timezone/schedule/grace window, and a published policy version.
+4. A due slot with no artifact watermark is skipped.
+5. The generated request is always `action=run` and
+   `trigger_type=scheduled`; review and commit remain human-only.
+6. CompositionRun idempotency remains the authority for retry safety.
+
+Neither environment variable is configured by source control. Production or
+pilot activation requires a separate explicit operator action.
