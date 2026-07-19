@@ -20,21 +20,35 @@ describe("Phase 5 photo capture shadow boundary", () => {
     expect(localBusinessDate(new Date(2026, 6, 20, 1, 2, 3))).toBe("2026-07-20");
   });
 
-  it("uploads, creates one Artifact and invokes interpret only", async () => {
+  it("uploads and invokes backend capturePhoto only", async () => {
     const calls = [];
     const base44 = {
-      auth: { me: vi.fn(async () => ({ id: "u1" })) },
-      integrations: { Core: { UploadFile: vi.fn(async () => ({ file_url: "https://files.test/capture.jpg" })) } },
-      entities: {
-        Staff: { filter: vi.fn(async () => [{ id: "staff1" }]) },
-        Artifact: { create: vi.fn(async (value) => ({ id: "a1", ...value })) },
+      integrations: {
+        Core: {
+          UploadFile: vi.fn(async () => ({
+            file_url: "https://files.test/capture.jpg",
+          })),
+        },
       },
       functions: {
         invoke: vi.fn(async (name, payload) => {
           calls.push({ name, payload });
-          return { data: { ok: true, fact_card: { id: "f1", artifact_id: "a1" } } };
+          return {
+            data: {
+              ok: true,
+              shadow_only: true,
+              artifact: { id: "a1" },
+              fact_card: { id: "f1", artifact_id: "a1" },
+            },
+          };
         }),
       },
+      // Any direct entity access is a test failure: attribution belongs server-side.
+      entities: new Proxy({}, {
+        get() {
+          throw new Error("client_entity_access_forbidden");
+        },
+      }),
     };
 
     const result = await captureAndInterpretPhoto({
@@ -42,23 +56,36 @@ describe("Phase 5 photo capture shadow boundary", () => {
       clinicId: "clinic-test",
       file: image(),
       sourceRegion: "reception",
-      now: new Date("2026-07-20T01:02:03.000Z"),
     });
 
     expect(result.shadowOnly).toBe(true);
     expect(result.interpreted).toBe(true);
-    expect(base44.entities.Artifact.create).toHaveBeenCalledTimes(1);
     expect(calls).toEqual([{
       name: "compositionOrchestrator",
-      payload: { action: "interpret", clinic_id: "clinic-test", artifact_id: "a1" },
+      payload: {
+        action: "capturePhoto",
+        clinic_id: "clinic-test",
+        file_url: "https://files.test/capture.jpg",
+        source_region: "reception",
+      },
     }]);
     expect(JSON.stringify(calls)).not.toMatch(/"action":"(run|review|commit)"/);
   });
 
-  it("refuses capture without a tenant Staff binding", async () => {
+  it("surfaces backend tenant/staff refusal", async () => {
     const base44 = {
-      auth: { me: vi.fn(async () => ({ id: "u1" })) },
-      entities: { Staff: { filter: vi.fn(async () => []) } },
+      integrations: {
+        Core: {
+          UploadFile: vi.fn(async () => ({
+            file_url: "https://files.test/capture.jpg",
+          })),
+        },
+      },
+      functions: {
+        invoke: vi.fn(async () => ({
+          data: { ok: false, error_code: "staff_context_required" },
+        })),
+      },
     };
     await expect(captureAndInterpretPhoto({
       base44,
