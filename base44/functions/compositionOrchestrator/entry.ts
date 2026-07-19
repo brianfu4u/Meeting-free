@@ -338,6 +338,30 @@ function makeOps(svc: any): CompositionOps {
       return created;
     },
     createAttention: (descriptor) => svc.entities.AttentionItem.create(descriptor),
+
+    getHypothesisByKey: async (clinicId, workflowHypothesisId) => {
+      const rows = await svc.entities.WorkflowHypothesis.filter({
+        clinic_id: clinicId,
+        workflow_hypothesis_id: workflowHypothesisId,
+      });
+      return rows?.[0] || null;
+    },
+    updateHypothesis: (id, patch) =>
+      svc.entities.WorkflowHypothesis.update(id, patch),
+    findManagerDecision: async (clinicId, workflowHypothesisId) => {
+      const rows = await svc.entities.ManagerDecision.filter({
+        clinic_id: clinicId,
+        target_type: "hypothesis",
+        target_id: workflowHypothesisId,
+      });
+      return (rows || []).sort((x: any, y: any) =>
+        String(x.created_date || x.id).localeCompare(String(y.created_date || y.id))
+      )[0] || null;
+    },
+    createManagerDecision: (descriptor) =>
+      svc.entities.ManagerDecision.create(descriptor),
+    updateAttention: (id, patch) =>
+      svc.entities.AttentionItem.update(id, patch),
     now: () => new Date().toISOString(),
   };
 }
