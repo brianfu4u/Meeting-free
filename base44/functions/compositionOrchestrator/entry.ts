@@ -5,6 +5,10 @@ import {
   buildScheduledRunRequest,
   selectScheduledSlot,
 } from "./runtime/schedulerCore.js";
+import {
+  buildSchedulerHealthPatch,
+  sanitizeSchedulerErrorCode,
+} from "./runtime/schedulerHealth.js";
 // Base44's deploy parser can misclassify cross-file `import type` as a runtime import.
 type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
 type ServiceRequest = Record<string, any> & { clinic_id?: string };
@@ -97,42 +101,89 @@ async function handleScheduledScan(svc: any) {
   const now = new Date();
   const results = [];
   for (const clinicId of allowlist) {
-    const rows = await svc.entities.ClinicConfig.filter({ clinic_id: clinicId });
-    const config = rows?.[0] || null;
-    const due = selectScheduledSlot({ config, now });
-    if (!due.eligible) {
-      results.push({ clinic_id: clinicId, status: "skipped", reason: due.reason });
-      continue;
-    }
+    let config: any = null;
+    try {
+      const rows = await svc.entities.ClinicConfig.filter({ clinic_id: clinicId });
+      config = rows?.[0] || null;
+      const due = selectScheduledSlot({ config, now });
+      if (!due.eligible) {
+        results.push({
+          clinic_id: clinicId,
+          status: "skipped",
+          reason: sanitizeSchedulerErrorCode(due.reason),
+        });
+        continue;
+      }
 
-    const artifacts = await svc.entities.Artifact.filter({
-      clinic_id: clinicId,
-      business_date: due.businessDate,
-    });
-    const prepared = buildScheduledRunRequest({ config, due, artifacts });
-    if (!prepared.ok) {
-      results.push({ clinic_id: clinicId, status: "skipped", reason: prepared.reason });
-      continue;
-    }
+      const artifacts = await svc.entities.Artifact.filter({
+        clinic_id: clinicId,
+        business_date: due.businessDate,
+      });
+      const prepared = buildScheduledRunRequest({ config, due, artifacts });
+      if (!prepared.ok) {
+        await persistSchedulerHealth(
+          svc,
+          config,
+          buildSchedulerHealthPatch({
+            now,
+            status: "skipped",
+            reason: prepared.reason,
+            slot: due.slot,
+          })
+        );
+        results.push({
+          clinic_id: clinicId,
+          slot: due.slot,
+          status: "skipped",
+          reason: sanitizeSchedulerErrorCode(prepared.reason),
+        });
+        continue;
+      }
 
-    const actor: ActorContext = {
-      user_id: "phase4-scheduler",
-      clinic_id: clinicId,
-      role: "admin",
-    };
-    const outcome = await createCompositionService(makeOps(svc)).handle(prepared.request, actor);
-    await svc.entities.ClinicConfig.update(String(config.id), {
-      composition_last_scheduled_at: now.toISOString(),
-    });
-    results.push({
-      clinic_id: clinicId,
-      slot: due.slot,
-      status: outcome.ok ? "processed" : "failed",
-      http_status: outcome.http_status,
-      idempotent: outcome.idempotent === true,
-      run_id: outcome.run?.id || outcome.run_id || null,
-      error_code: outcome.error_code || null,
-    });
+      const actor: ActorContext = {
+        user_id: "phase4-scheduler",
+        clinic_id: clinicId,
+        role: "admin",
+      };
+      const outcome = await createCompositionService(makeOps(svc)).handle(
+        prepared.request,
+        actor
+      );
+      await persistSchedulerHealth(
+        svc,
+        config,
+        buildSchedulerHealthPatch({ now, outcome, slot: due.slot })
+      );
+      results.push({
+        clinic_id: clinicId,
+        slot: due.slot,
+        status: outcome.ok ? "processed" : "failed",
+        http_status: outcome.http_status,
+        idempotent: outcome.idempotent === true,
+        run_id: outcome.run?.id || outcome.run_id || null,
+        error_code: outcome.ok
+          ? null
+          : sanitizeSchedulerErrorCode(outcome.error_code),
+      });
+    } catch {
+      if (config?.id) {
+        await persistSchedulerHealth(
+          svc,
+          config,
+          buildSchedulerHealthPatch({
+            now,
+            status: "failed",
+            reason: "scheduler_failed",
+          })
+        );
+      }
+      results.push({
+        clinic_id: clinicId,
+        status: "failed",
+        http_status: 500,
+        error_code: "scheduler_failed",
+      });
+    }
   }
 
   return {
@@ -144,6 +195,16 @@ async function handleScheduledScan(svc: any) {
     processed: results.filter((item) => item.status === "processed").length,
     results,
   };
+}
+
+async function persistSchedulerHealth(svc: any, config: any, patch: any) {
+  if (!config?.id) return false;
+  try {
+    await svc.entities.ClinicConfig.update(String(config.id), patch);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function resolveActor(svc: any, user: any, clinicId: string): Promise<ActorContext | null> {
