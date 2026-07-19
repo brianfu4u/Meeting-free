@@ -1,4 +1,4 @@
-// Base44 deployment trigger — Base44 local type compatibility
+// Base44 deployment trigger — commit replay 7f39bdf
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { createCompositionService } from "./service.ts";
 // Base44's deploy parser can misclassify cross-file `import type` as a runtime import.
