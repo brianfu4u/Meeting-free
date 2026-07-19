@@ -10,7 +10,7 @@ import {
   sanitizeSchedulerErrorCode,
 } from "./runtime/schedulerHealth.js";
 // Base44's deploy parser can misclassify cross-file `import type` as a runtime import.
-type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
+type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin"; staff_id?: string };
 type ServiceRequest = Record<string, any> & { clinic_id?: string };
 type CompositionOps = Record<string, any>;
 import {
@@ -30,6 +30,7 @@ import {
   executeAttachCommitSagaRuntime,
   planAttachCommitRuntime,
 } from "./runtime/commitRuntime.js";
+import { buildPhotoArtifactDescriptor } from "./photoCapture.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -64,6 +65,40 @@ Deno.serve(async (req) => {
     }
 
     const ops = makeOps(base44.asServiceRole);
+
+    // Phase 5: the browser may upload bytes, but only this authenticated,
+    // tenant-resolved backend may create the Artifact attribution record.
+    if (body.action === "capturePhoto") {
+      let descriptor: Record<string, unknown>;
+      try {
+        descriptor = buildPhotoArtifactDescriptor({
+          clinicId,
+          staffId: actor.staff_id,
+          fileUrl: body.file_url,
+          sourceRegion: body.source_region,
+          now: new Date(),
+        });
+      } catch (error) {
+        return Response.json(
+          { ok: false, error_code: (error as any)?.code || "photo_capture_invalid" },
+          { status: 400 }
+        );
+      }
+      const artifact = await base44.asServiceRole.entities.Artifact.create(descriptor);
+      const interpreted = await createCompositionService(ops).handle(
+        {
+          action: "interpret",
+          clinic_id: clinicId,
+          artifact_id: String(artifact.id),
+        },
+        actor
+      );
+      return Response.json(
+        { ...interpreted, artifact, shadow_only: true },
+        { status: interpreted.http_status }
+      );
+    }
+
     const result = await createCompositionService(ops).handle(body, actor);
     return Response.json(result, { status: result.http_status });
   } catch {
@@ -223,6 +258,7 @@ async function resolveActor(svc: any, user: any, clinicId: string): Promise<Acto
       user_id: user.id,
       clinic_id: clinicId,
       role: config.manager_id === staff.id ? "admin" : "staff",
+      staff_id: String(staff.id),
     };
   }
 
