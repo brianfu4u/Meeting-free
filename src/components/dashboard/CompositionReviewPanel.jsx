@@ -18,6 +18,7 @@ import {
   invokeComposition,
   reasoningTrackEntries,
 } from "@/lib/phase3/compositionClient";
+import CompositionSchedulerHealth from "./CompositionSchedulerHealth";
 
 const C = {
   card: "#1E293B", border: "#334155", text: "#F1F5F9", sub: "#94A3B8",
@@ -210,6 +211,8 @@ export default function CompositionReviewPanel() {
           {notice.text}
         </div>
       )}
+
+      <CompositionSchedulerHealth />
 
       <div className="grid gap-3 p-3 lg:grid-cols-[230px_1fr]">
         <div className="max-h-[520px] space-y-2 overflow-y-auto">
