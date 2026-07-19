@@ -1,9 +1,9 @@
 /**
- * Phase 5 photo-capture boundary.
+ * Phase 5 photo-capture client boundary.
  *
- * This flow uploads one image, persists one tenant-scoped Artifact, then asks
- * compositionOrchestrator to interpret it. It never runs assembly, reviews a
- * hypothesis, commits a proposal, or mutates Workflow authority entities.
+ * The browser uploads image bytes, then asks the authenticated backend to
+ * create and interpret the tenant/staff-scoped Artifact. It never creates
+ * entities directly and never invokes run, review, or commit.
  */
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -32,57 +32,34 @@ export async function captureAndInterpretPhoto({
   clinicId,
   file,
   sourceRegion,
-  now = new Date(),
 }) {
   if (!base44) throw new Error("base44_client_required");
   if (!clinicId) throw new Error("clinic_id_required");
   if (!sourceRegion) throw new Error("source_region_required");
   validateCaptureFile(file);
 
-  const user = await base44.auth.me();
-  if (!user?.id) throw new Error("unauthenticated");
-
-  const staffRows = await base44.entities.Staff.filter({
-    clinic_id: clinicId,
-    user_id: user.id,
-  });
-  const staff = staffRows?.[0] || null;
-  if (!staff?.id) throw new Error("staff_context_required");
-
   const upload = unwrap(await base44.integrations.Core.UploadFile({ file }));
   const fileUrl = upload?.file_url;
   if (!fileUrl) throw new Error("upload_file_url_missing");
 
-  const capturedAt = now.toISOString();
-  const artifact = await base44.entities.Artifact.create({
+  const captured = unwrap(await base44.functions.invoke("compositionOrchestrator", {
+    action: "capturePhoto",
     clinic_id: clinicId,
-    artifact_type: "image",
     file_url: fileUrl,
-    source_staff_id: String(staff.id),
     source_region: sourceRegion,
-    business_date: localBusinessDate(now),
-    captured_at: capturedAt,
-    ingestion_seq: now.getTime(),
-    interpreted: false,
-  });
+  }));
 
-  try {
-    const interpreted = unwrap(await base44.functions.invoke("compositionOrchestrator", {
-      action: "interpret",
-      clinic_id: clinicId,
-      artifact_id: String(artifact.id),
-    }));
-    return {
-      artifact,
-      factCard: interpreted?.fact_card || interpreted?.factCard || null,
-      interpreted: interpreted?.ok === true,
-      shadowOnly: true,
-    };
-  } catch (error) {
-    // Keep the uploaded Artifact as an auditable pending fragment. A later
-    // scheduler/manual retry may interpret it; never delete evidence silently.
-    throw Object.assign(new Error(
-      error?.response?.data?.error_code || error?.message || "photo_interpret_failed"
-    ), { artifact });
+  if (captured?.ok !== true) {
+    throw Object.assign(
+      new Error(captured?.error_code || "photo_interpret_failed"),
+      { artifact: captured?.artifact || null }
+    );
   }
+
+  return {
+    artifact: captured.artifact,
+    factCard: captured.fact_card || captured.factCard || null,
+    interpreted: Boolean(captured.fact_card || captured.factCard),
+    shadowOnly: captured.shadow_only === true,
+  };
 }
