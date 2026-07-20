@@ -136,6 +136,22 @@ export function computeIngestionKey(clinicId, clientRequestId) {
   return `${clinicId}::${clientRequestId}`;
 }
 
+/**
+ * Allocate a finite server-side ingestion waterline.
+ *
+ * `ingestion_seq` is a cutoff marker, not an entity id. It only needs to be
+ * non-decreasing inside a function isolate; database idempotency remains the
+ * responsibility of `ingestion_key` and CompositionRun.idempotency_key.
+ */
+export function computeIngestionSeq(nowMs = Date.now(), previousSeq = 0) {
+  const ms = Number(nowMs);
+  const previous = Number(previousSeq);
+  if (!Number.isFinite(ms) || ms < 0) throw new Error("invalid_ingestion_clock");
+  const base = Math.trunc(ms) * 1000;
+  const prior = Number.isFinite(previous) && previous >= 0 ? Math.trunc(previous) : 0;
+  return Math.max(base, prior + 1);
+}
+
 export function isTestClinic(clinicId) {
   return typeof clinicId === "string" && clinicId.startsWith(TEST_CLINIC_PREFIX);
 }
