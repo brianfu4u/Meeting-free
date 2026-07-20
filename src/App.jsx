@@ -21,6 +21,7 @@ import StaffOnboarding from "./pages/StaffOnboarding";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import ClinicSettings from "./pages/ClinicSettings";
 import PerformanceReport from "./pages/PerformanceReport";
+import Phase5Smoke from "./pages/Phase5Smoke";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -62,6 +63,7 @@ const AuthenticatedApp = () => {
       <Route path="/analytics-dashboard" element={<AnalyticsDashboard />} />
       <Route path="/clinic-settings" element={<ClinicSettings />} />
       <Route path="/performance-report" element={<PerformanceReport />} />
+      <Route path="/phase5-smoke" element={<Phase5Smoke />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

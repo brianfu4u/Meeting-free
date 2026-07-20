@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench, Users, UserPlus, BarChart3, Settings, Trophy } from "lucide-react";
+import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench, Users, UserPlus, BarChart3, Settings, Trophy, FlaskConical } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
@@ -228,6 +228,17 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         >
           <Settings size={13} style={{ color: "#94A3B8" }} />
           <span className="text-xs font-semibold" style={{ color: "#94A3B8", fontSize: "10px" }}>配置中心</span>
+        </Link>
+
+        {/* Phase 5 multimodal ingestion smoke entry */}
+        <Link
+          to="/phase5-smoke"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
+          style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}
+          title="Phase 5 多模态碎片采集 · 隔离测试入口（mock 模式）"
+        >
+          <FlaskConical size={13} style={{ color: "#4ade80" }} />
+          <span className="text-xs font-semibold" style={{ color: "#4ade80", fontSize: "10px" }}>碎片采集</span>
         </Link>
 
         {/* Live indicator */}
