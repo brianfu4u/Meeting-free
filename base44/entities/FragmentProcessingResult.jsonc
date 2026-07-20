@@ -1,0 +1,132 @@
+{
+  "name": "FragmentProcessingResult",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5"
+    },
+    "artifact_id": {
+      "type": "string",
+      "description": "\u5173\u8054 Artifact ID\uff081:1\uff09"
+    },
+    "client_request_id": {
+      "type": "string",
+      "description": "\u5ba2\u6237\u7aef\u5e42\u7b49\u952e"
+    },
+    "ingestion_key": {
+      "type": "string",
+      "description": "clinic_id::client_request_id\uff0c\u67e5\u8be2\u7d22\u5f15"
+    },
+    "fragment_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "document",
+        "audio",
+        "text"
+      ],
+      "description": "\u788e\u7247\u7c7b\u578b"
+    },
+    "adapter_name": {
+      "type": "string",
+      "description": "\u5904\u7406 Adapter \u540d\uff08image/document/audio/text\uff09"
+    },
+    "adapter_version": {
+      "type": "string",
+      "description": "Adapter \u7248\u672c"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "processing",
+        "aligned",
+        "needs_clarification",
+        "failed",
+        "rejected"
+      ],
+      "default": "pending",
+      "description": "\u5904\u7406\u72b6\u6001\u673a\uff1apending\u2192processing\u2192aligned/needs_clarification/failed/rejected"
+    },
+    "extracted_text": {
+      "type": "string",
+      "description": "Adapter \u63d0\u53d6\u7684\u5f52\u4e00\u5316\u6587\u672c\uff08OCR/\u6587\u6863\u89e3\u6790/\u8f6c\u5199/\u539f\u6587\u6e05\u6d17\uff09\u3002\u8131\u654f\u540e\u4fdd\u5b58\u3002"
+    },
+    "transcript": {
+      "type": "string",
+      "description": "AudioAdapter \u4e13\u7528\uff1aSTT \u8f6c\u5199\u5168\u6587\u3002\u8131\u654f\u540e\u4fdd\u5b58\u3002"
+    },
+    "language": {
+      "type": "string",
+      "description": "\u68c0\u6d4b\u5230\u7684\u8bed\u8a00\uff08ISO-639-1\uff0c\u5982 ja/en/zh\uff09"
+    },
+    "duration_ms": {
+      "type": "number",
+      "description": "\u97f3\u9891\u65f6\u957f\uff08\u6beb\u79d2\uff09"
+    },
+    "evidence_spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "default": [],
+      "description": "\u8bc1\u636e\u7247\u6bb5\u6570\u7ec4\uff08\u6587\u672c\u7247\u6bb5+\u4f4d\u7f6e\uff0c\u5982 page/offset/region/timestamp\uff09"
+    },
+    "parser_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u89e3\u6790\u5c42\u544a\u8b66\u7801\uff08\u8131\u654f\uff0callowlist\uff09"
+    },
+    "quality_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u8d28\u91cf\u95e8\u69db\u544a\u8b66\u7801"
+    },
+    "fact_card_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u751f\u6210\u7684 EvidenceFactCard ID \u5217\u8868"
+    },
+    "assembly_eligible": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u662f\u5426\u5177\u5907\u9001\u5165 Composition Agent \u7684\u8d44\u683c\u3002\u4ec5 aligned \u65f6\u4e3a true\u3002"
+    },
+    "attempt_count": {
+      "type": "number",
+      "default": 0,
+      "description": "\u5c1d\u8bd5\u6b21\u6570\uff08\u542b\u9996\u6b21\uff09"
+    },
+    "error_code": {
+      "type": "string",
+      "description": "\u8131\u654f\u9519\u8bef\u7801\uff08\u6765\u81ea ALLOWED_ERROR_CODES\uff0c\u4e0d\u5f97\u5305\u542b\u539f\u59cb\u5f02\u5e38/stack\uff09"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u5904\u7406\u5f00\u59cb\u65f6\u95f4"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u5904\u7406\u5b8c\u6210\u65f6\u95f4\uff08aligned/needs_clarification/failed/rejected \u65f6\u5199\u5165\uff09"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "artifact_id",
+    "fragment_type",
+    "status"
+  ]
+}

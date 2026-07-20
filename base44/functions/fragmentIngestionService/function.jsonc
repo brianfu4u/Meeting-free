@@ -1,0 +1,4 @@
+{
+  "name": "fragmentIngestionService",
+  "entry": "entry.ts"
+}
