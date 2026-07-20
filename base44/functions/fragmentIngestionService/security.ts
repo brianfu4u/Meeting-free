@@ -46,11 +46,11 @@ export function validateUploadUrl(url, allowedDomains) {
 export function validateMimeType(fragmentType, claimed) {
   if (!isNonEmptyString(claimed)) return { ok: false, reason: "mime_type_required" };
   const lower = claimed.toLowerCase();
-  const whitelist = MIME_WHITELIST[fragmentType] || [];
-  if (!whitelist.includes(lower)) return { ok: false, reason: "mime_not_supported" };
   if (FORBIDDEN_MIME_PREFIXES.some((p) => lower.startsWith(p))) {
     return { ok: false, reason: "mime_forbidden" };
   }
+  const whitelist = MIME_WHITELIST[fragmentType] || [];
+  if (!whitelist.includes(lower)) return { ok: false, reason: "mime_not_supported" };
   return { ok: true };
 }
 
