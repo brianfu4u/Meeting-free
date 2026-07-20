@@ -128,7 +128,7 @@ async function captureFragment(base44, body, actor) {
   const fragmentType = body.fragment_type;
   const ingestionKey = computeIngestionKey(actor.clinic_id, body.client_request_id);
 
-  const existing = await findExisting(base44, actor.clinic_id, ingestionKey);
+  const existing = await findExisting(base44, actor.clinic_id, ingestionKey, fragmentType, body.source.checksum);
   if (existing.conflict) {
     return makeResponse(409, { error_code: "idempotency_conflict" });
   }
@@ -198,23 +198,26 @@ async function captureFragment(base44, body, actor) {
   return makeResponse(201, await buildCaptureResponse(base44, result.artifact, false, result.processing));
 }
 
-async function findExisting(base44, clinicId, ingestionKey) {
+async function findExisting(base44, clinicId, ingestionKey, newFragmentType, newChecksum) {
   const rows = await base44.asServiceRole.entities.Artifact.filter({
     clinic_id: clinicId,
     ingestion_key: ingestionKey,
   });
   if (!rows || rows.length === 0) return { artifact: null };
-  if (rows.length === 1) return { artifact: rows[0] };
-  // Multiple rows: dedup by keeping earliest, flag if metadata diverges.
   const sorted = rows.slice().sort((a, b) =>
     String(a.created_date || a.id).localeCompare(String(b.created_date || b.id))
   );
   const earliest = sorted[0];
+  // Conflict: new request's fragment_type/checksum diverges from the stored artifact.
+  const conflictVsNew =
+    (isNonEmptyString(newFragmentType) && earliest.fragment_type && newFragmentType !== earliest.fragment_type) ||
+    (isNonEmptyString(newChecksum) && earliest.checksum && newChecksum !== earliest.checksum);
+  // Divergence among multiple stored rows (race-condition dedup).
   const divergent = sorted.some((r) =>
     r.fragment_type !== earliest.fragment_type ||
     (r.checksum && earliest.checksum && r.checksum !== earliest.checksum)
   );
-  if (divergent) return { artifact: earliest, conflict: true };
+  if (conflictVsNew || divergent) return { artifact: earliest, conflict: true };
   return { artifact: earliest };
 }
 
