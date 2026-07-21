@@ -91,6 +91,7 @@ export const DEFAULT_UPLOAD_DOMAINS = [
   "files.base44.com",
   "uploads.base44.com",
   "files.base44.dev",
+  "media.base44.com",
 ];
 
 export const ALLOWED_ERROR_CODES = new Set([
