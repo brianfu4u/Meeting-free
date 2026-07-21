@@ -196,7 +196,7 @@ async function captureFragment(base44, body, actor) {
 
   const deps = buildDeps(base44);
   const result = await processFragment(base44, artifact, processing, deps);
-  return makeResponse(201, await buildCaptureResponse(base44, result.artifact, false, result.processing));
+  return makeResponse(201, await buildCaptureResponse(base44, result.artifact, false, result.processing, result.aligned));
 }
 
 async function findExisting(base44, clinicId, ingestionKey, newFragmentType, newChecksum) {
@@ -319,7 +319,7 @@ async function processFragment(base44, artifact, processing, deps) {
 
     const updatedArtifact = await base44.asServiceRole.entities.Artifact.get(artifact.id);
     const updatedProcessing = await base44.asServiceRole.entities.FragmentProcessingResult.get(processing.id);
-    return { artifact: updatedArtifact, processing: updatedProcessing };
+    return { artifact: updatedArtifact, processing: updatedProcessing, aligned };
   } catch (err) {
     const code = sanitizeErrorCode(err?.code || "adapter_failed");
     await base44.asServiceRole.entities.FragmentProcessingResult.update(processing.id, {
@@ -399,7 +399,7 @@ async function ensureClarificationAttention(base44, artifact, processing, issues
   });
 }
 
-async function buildCaptureResponse(base44, artifact, idempotent, processingArg) {
+async function buildCaptureResponse(base44, artifact, idempotent, processingArg, aligned) {
   const processing = processingArg || await findProcessing(base44, artifact.clinic_id, artifact.id);
   // V11 双通道：从 FactCard 取出走马灯与 Agent 编组 Payload
   let marquee = null;
@@ -448,6 +448,20 @@ async function buildCaptureResponse(base44, artifact, idempotent, processingArg)
     // V11 解析站双通道输出
     marquee,
     agent_handoff: agentHandoff,
+    // 解析预览：无论对齐与否，暴露 OCR 文本与已解析字段，供前端核对解析准确度
+    parse_preview: processing ? {
+      extracted_text: (processing.extracted_text || "").slice(0, 1000),
+      fields: aligned && Array.isArray(aligned.fields)
+        ? aligned.fields.map((f) => ({
+            field_name: f.field_name,
+            value: f.value,
+            source_quote: f.source_quote || "",
+            extraction_quality: f.extraction_quality || "uncertain",
+          }))
+        : [],
+      alignment_status: processing.status,
+      quality_issues: processing.quality_issues || [],
+    } : null,
   };
 }
 

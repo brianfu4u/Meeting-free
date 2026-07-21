@@ -95,8 +95,8 @@ export default function MetaTaggingModal({ open, attachment, staff, clinicId, on
           ...(attachment.transcript ? { client_text_hint: attachment.transcript.slice(0, 2000) } : {}),
         },
       };
-      await captureFragment(payload);
-      setResult({ ok: true, tags: selectedLabels });
+      const res = await captureFragment(payload);
+      setResult({ ok: true, tags: selectedLabels, preview: res?.parse_preview || null });
       onConfirmed?.(selected, attachment);
     } catch (e) {
       const code = e?.error_code || e?.response?.data?.error_code;
@@ -132,9 +132,41 @@ export default function MetaTaggingModal({ open, attachment, staff, clinicId, on
               <CheckCircle2 size={26} style={{ color: "#4ade80" }} />
             </div>
             <div className="text-center text-sm font-semibold mb-1" style={{ color: theme.text }}>已标记</div>
-            <div className="text-center text-[11px] mb-4" style={{ color: theme.textSub }}>
+            <div className="text-center text-[11px] mb-3" style={{ color: theme.textSub }}>
               标签「{result.tags.join(" / ")}」已随物件送入解析站
             </div>
+            {result.preview && (
+              <div className="rounded-xl p-3 mb-3 text-left" style={{ background: theme.canvas, border: `1px solid ${theme.border}` }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold" style={{ color: theme.text }}>解析结果</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: "rgba(0,199,217,0.12)", color: "#00C7D9" }}>{result.preview.alignment_status}</span>
+                </div>
+                {result.preview.extracted_text && (
+                  <div className="mb-2">
+                    <div className="text-[10px] mb-1" style={{ color: theme.textMuted }}>OCR 文本</div>
+                    <div className="text-[11px] leading-relaxed max-h-24 overflow-y-auto" style={{ color: theme.text, whiteSpace: "pre-wrap" }}>{result.preview.extracted_text}</div>
+                  </div>
+                )}
+                {result.preview.fields && result.preview.fields.length > 0 && (
+                  <div>
+                    <div className="text-[10px] mb-1" style={{ color: theme.textMuted }}>提取字段（{result.preview.fields.length}）</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {result.preview.fields.map((f, i) => (
+                        <div key={i} className="flex items-start gap-1.5">
+                          <span className="px-1 py-0.5 rounded text-[9px] font-semibold flex-shrink-0" style={{ background: "rgba(148,163,184,0.15)", color: theme.textSub }}>{f.field_name}</span>
+                          <span className="text-[11px] flex-1 break-all" style={{ color: theme.text }}>{f.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {result.preview.quality_issues && result.preview.quality_issues.length > 0 && (
+                  <div className="mt-2 pt-2 text-[10px]" style={{ borderTop: `1px solid ${theme.border}`, color: theme.textMuted }}>
+                    质量告警：{result.preview.quality_issues.join("、")}
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={onClose} className="w-full rounded-lg py-2.5 text-sm font-semibold" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>完成</button>
           </div>
         ) : (
