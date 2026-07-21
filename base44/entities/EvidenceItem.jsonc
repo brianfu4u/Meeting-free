@@ -7,8 +7,11 @@
       "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
     },
     "task_id": {
-      "type": "string",
-      "description": "\u5173\u8054OperationalTask ID"
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "\u5173\u8054OperationalTask ID\uff08\u65b0\u4e8b\u4ef6\u81ea\u4e3b\u6c47\u62a5\u65f6\u53ef\u7a7a\uff09"
     },
     "version_id": {
       "type": "string",
@@ -54,16 +57,19 @@
       "description": "EvidenceEvalSkill\u8bc4\u4f30\u7ed3\u679c"
     },
     "eval_notes": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "\u8bc4\u4f30\u5907\u6ce8/\u7f3a\u5931\u8bf4\u660e"
     }
   },
   "required": [
     "clinic_id",
-    "task_id",
     "version_id",
     "evidence_type",
     "file_url",
-    "submitted_at"
+    "submitted_at",
+    "submitted_by"
   ]
 }
