@@ -252,7 +252,27 @@ function sanitizeContextMetadata(context, source, fragmentType) {
   if (fragmentType === "text" && typeof source.text === "string") {
     meta.client_text = source.text.slice(0, 8000);
   }
+  // modal-v2: 透传弹窗人工标签，供 Agent 编组层读取提升火车编组准确度
+  if (ctx.user_interactive_meta && typeof ctx.user_interactive_meta === "object") {
+    meta.user_interactive_meta = sanitizeUserInteractiveMeta(ctx.user_interactive_meta);
+  }
   return meta;
+}
+
+function sanitizeUserInteractiveMeta(m) {
+  return {
+    schema_version: typeof m.schema_version === "string" ? m.schema_version.slice(0, 32) : null,
+    role_id: typeof m.role_id === "string" ? m.role_id.slice(0, 64) : null,
+    dept_id: typeof m.dept_id === "string" ? m.dept_id.slice(0, 64) : null,
+    category_id: typeof m.category_id === "string" ? m.category_id.slice(0, 64) : null,
+    category_label: typeof m.category_label === "string" ? m.category_label.slice(0, 64) : null,
+    is_manual_tag: m.is_manual_tag === true,
+    note: typeof m.note === "string" ? m.note.slice(0, 2000) : null,
+    captured_at: typeof m.captured_at === "string" ? m.captured_at.slice(0, 32) : null,
+    capture_latency_ms: Number.isFinite(Number(m.capture_latency_ms)) ? Number(m.capture_latency_ms) : null,
+    was_prefill: m.was_prefill === true,
+    source: typeof m.source === "string" ? m.source.slice(0, 32) : null,
+  };
 }
 
 async function processFragment(base44, artifact, processing, deps) {
