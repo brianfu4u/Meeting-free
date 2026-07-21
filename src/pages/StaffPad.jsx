@@ -10,7 +10,6 @@ import ClockBar from "@/components/staffPad/ClockBar";
 import TaskList from "@/components/staffPad/TaskList";
 import TaskDetail from "@/components/staffPad/TaskDetail";
 import ReportSheet from "@/components/staffPad/ReportSheet";
-import MetaTaggingModal from "@/components/staffPad/MetaTaggingModal";
 import HistoryList from "@/components/staffPad/HistoryList";
 import HistoryDetail from "@/components/staffPad/HistoryDetail";
 import { Loader, LogIn, ArrowLeft, Plus, Activity, Search } from "lucide-react";
@@ -23,7 +22,6 @@ function StaffPadInner() {
   const [view, setView] = useState("home");
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [sheet, setSheet] = useState({ open: false, mode: "new_event", taskId: null });
-  const [metaModal, setMetaModal] = useState({ open: false, attachments: [] });
   const [histRange, setHistRange] = useState(() => {
     const toL = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const da = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${da}`; };
     const end = new Date(); const start = new Date(); start.setDate(end.getDate() - 6);
@@ -208,13 +206,8 @@ function StaffPadInner() {
         </div>
       )}
 
-      <ReportSheet open={sheet.open} mode={sheet.mode} taskId={sheet.taskId} staff={staff}
+      <ReportSheet open={sheet.open} mode={sheet.mode} taskId={sheet.taskId} staff={staff} clinicId={clinicId}
         onClose={() => setSheet((s) => ({ ...s, open: false }))}
-        onSubmitted={invalidate}
-        onTagAttachments={(atts) => { setSheet((s) => ({ ...s, open: false })); setMetaModal({ open: true, attachments: atts }); }} />
-
-      <MetaTaggingModal open={metaModal.open} attachments={metaModal.attachments} staff={staff} clinicId={clinicId}
-        onClose={() => setMetaModal((s) => ({ ...s, open: false, attachments: [] }))}
         onSubmitted={invalidate} />
     </div>
   );

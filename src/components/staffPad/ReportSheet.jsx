@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
+import MetaTaggingModal from "@/components/staffPad/MetaTaggingModal";
 import { X, Camera, Image as ImageIcon, FileText, Mic, Square, Loader, Send, CheckCircle2, Sparkles, Paperclip } from "lucide-react";
 
 const MODE_META = {
@@ -12,7 +13,7 @@ const MODE_META = {
 const ATT_ICON = { image: ImageIcon, file: FileText, voice: Mic };
 const ATT_LABEL = { image: "照片", file: "文件", voice: "语音" };
 
-export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubmitted, onTagAttachments }) {
+export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClose, onSubmitted }) {
   const { theme } = useTheme();
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState([]);
@@ -22,6 +23,7 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [err, setErr] = useState("");
+  const [taggingAttachment, setTaggingAttachment] = useState(null);
 
   const cameraRef = useRef(null);
   const photoRef = useRef(null);
@@ -30,7 +32,7 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
   const chunksRef = useRef([]);
 
   useEffect(() => {
-    if (open) { setText(""); setAttachments([]); setResult(null); setErr(""); setRecording(false); }
+    if (open) { setText(""); setAttachments([]); setResult(null); setErr(""); setRecording(false); setTaggingAttachment(null); }
   }, [open, mode]);
 
   if (!open) return null;
@@ -41,7 +43,9 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
     setUploading(true); setErr("");
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
-      setAttachments((prev) => [...prev, { type: "image", url: file_url, name: f.name }]);
+      const att = { type: "image", url: file_url, name: f.name, file: f };
+      setAttachments((prev) => [...prev, att]);
+      setTaggingAttachment(att);
     } catch (e) { setErr("图片上传失败"); }
     finally { setUploading(false); }
   };
@@ -51,7 +55,9 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
     setUploading(true); setErr("");
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
-      setAttachments((prev) => [...prev, { type: "file", url: file_url, name: f.name }]);
+      const att = { type: "file", url: file_url, name: f.name, file: f };
+      setAttachments((prev) => [...prev, att]);
+      setTaggingAttachment(att);
     } catch (e) { setErr("文件上传失败"); }
     finally { setUploading(false); }
   };
@@ -80,7 +86,9 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
           const { file_url } = await base44.integrations.Core.UploadFile({ file });
           let transcript = "";
           try { transcript = await base44.integrations.Core.TranscribeAudio({ audio_url: file_url }); } catch (e) {}
-          setAttachments((prev) => [...prev, { type: "voice", url: file_url, name: file.name, transcript: transcript || "" }]);
+          const att = { type: "voice", url: file_url, name: file.name, transcript: transcript || "", file };
+          setAttachments((prev) => [...prev, att]);
+          setTaggingAttachment(att);
           if (transcript) setText((t) => (t ? t + "\n" : "") + "[语音] " + transcript);
         } catch (e) { setErr("语音上传失败"); }
         finally { setTranscribing(false); }
@@ -144,12 +152,7 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
               <div className="text-xs mb-1.5" style={{ color: theme.textSub }}>摘要：{result.parsed?.summary || "—"}</div>
               {result.parsed?.suggested_action && <div className="text-xs" style={{ color: theme.textSub }}>建议：{result.parsed.suggested_action}</div>}
             </div>
-            <button onClick={() => {
-              if (attachments.length > 0 && onTagAttachments) onTagAttachments(attachments);
-              onClose();
-            }} className="w-full rounded-lg py-2.5 text-sm font-semibold" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>
-              {attachments.length > 0 ? "下一步：选标签" : "完成"}
-            </button>
+            <button onClick={onClose} className="w-full rounded-lg py-2.5 text-sm font-semibold" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>完成</button>
           </div>
         ) : (
           <>
@@ -235,6 +238,9 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
           </>
         )}
       </div>
+
+      <MetaTaggingModal open={!!taggingAttachment} attachment={taggingAttachment} staff={staff} clinicId={clinicId}
+        onClose={() => setTaggingAttachment(null)} />
     </div>
   );
 }
