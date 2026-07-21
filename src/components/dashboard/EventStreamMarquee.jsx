@@ -17,6 +17,13 @@ import { isToday } from "@/lib/clinicDate";
 const CLINIC_ID = "clinic-001";
 const CLOSED = new Set(["completed", "exception"]);
 const PRIORITY_COLOR = { P1: "#DC2626", P2: "#D97706", P3: "#00C7D9", P4: "#64748B" };
+const URGENCY_COLOR = { green: "#16A34A", yellow: "#D97706", red: "#DC2626" };
+
+function todayBusinessDate() {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  } catch { return new Date().toISOString().slice(0, 10); }
+}
 
 function marqueeLabel(task) {
   if (task.ai_parsed && task.ai_parsed.marquee_label) return task.ai_parsed.marquee_label;
@@ -31,13 +38,26 @@ export default function EventStreamMarquee() {
     queryFn: () => base44.entities.OperationalTask.filter({ clinic_id: CLINIC_ID }, "-created_date", 100),
     refetchInterval: 15000,
   });
+  const fc = useQuery({
+    queryKey: ["marquee", "fact-cards", CLINIC_ID],
+    queryFn: () => base44.entities.EvidenceFactCard.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-extracted_at", 100),
+    refetchInterval: 8000,
+  });
 
-  const items = (q.data || [])
+  const taskItems = (q.data || [])
     .filter((t) => !CLOSED.has(t.status))
     .filter((t) => isToday(t.created_date))
-    .sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+    .sort((a, b) => new Date(a.created_date) - new Date(b.created_date))
+    .map((t) => ({ kind: "task", id: t.id, label: marqueeLabel(t), dot: PRIORITY_COLOR[t.priority] || "#64748B", tail: "·待核销" }));
 
-  if (q.isLoading) {
+  const factItems = (fc.data || [])
+    .filter((f) => f.marquee_label)
+    .sort((a, b) => new Date(a.extracted_at) - new Date(b.extracted_at))
+    .map((f) => ({ kind: "fact", id: f.id, label: f.marquee_label, dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A", tail: "·解析" }));
+
+  const items = [...factItems, ...taskItems];
+
+  if (q.isLoading && fc.isLoading) {
     return (
       <div className="rounded-xl px-4 py-2 flex items-center gap-2 text-xs" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.textFaint }}>
         <Loader className="animate-spin" size={12} /> 事件流加载中…
@@ -65,16 +85,13 @@ export default function EventStreamMarquee() {
       </div>
       <div className="flex-1 overflow-hidden">
         <div className="marquee-track flex items-center gap-6 whitespace-nowrap py-2" style={{ width: "max-content" }}>
-          {loop.map((t, i) => {
-            const dot = PRIORITY_COLOR[t.priority] || "#64748B";
-            return (
-              <span key={t.id + "-" + i} className="inline-flex items-center gap-1.5 text-xs" style={{ color: theme.textMsg }}>
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dot }} />
-                {marqueeLabel(t)}
-                <span className="text-[10px]" style={{ color: theme.textFaint }}>·待核销</span>
+          {loop.map((it, i) => (
+              <span key={it.kind + "-" + it.id + "-" + i} className="inline-flex items-center gap-1.5 text-xs" style={{ color: theme.textMsg }}>
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: it.dot }} />
+                {it.label}
+                <span className="text-[10px]" style={{ color: theme.textFaint }}>{it.tail}</span>
               </span>
-            );
-          })}
+            ))}
         </div>
       </div>
     </div>
