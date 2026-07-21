@@ -13,7 +13,7 @@ import ReportSheet from "@/components/staffPad/ReportSheet";
 import MetaTaggingModal from "@/components/staffPad/MetaTaggingModal";
 import HistoryList from "@/components/staffPad/HistoryList";
 import HistoryDetail from "@/components/staffPad/HistoryDetail";
-import { Loader, LogIn, ArrowLeft, Plus, Activity, Search, Paperclip } from "lucide-react";
+import { Loader, LogIn, ArrowLeft, Plus, Activity, Search } from "lucide-react";
 
 function StaffPadInner() {
   const { theme } = useTheme();
@@ -23,7 +23,7 @@ function StaffPadInner() {
   const [view, setView] = useState("home");
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [sheet, setSheet] = useState({ open: false, mode: "new_event", taskId: null });
-  const [metaModal, setMetaModal] = useState({ open: false });
+  const [metaModal, setMetaModal] = useState({ open: false, attachments: [] });
   const [histRange, setHistRange] = useState(() => {
     const toL = (d) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const da = String(d.getDate()).padStart(2, "0"); return `${y}-${m}-${da}`; };
     const end = new Date(); const start = new Date(); start.setDate(end.getDate() - 6);
@@ -144,12 +144,7 @@ function StaffPadInner() {
             <TaskList priority={priority} normal={normal}
               onSelect={(t) => { setActiveTaskId(t.id); setView("task"); }} />
           </div>
-          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
-            <button onClick={() => setMetaModal({ open: true })}
-              className="flex items-center gap-2 px-5 py-3.5 rounded-full text-sm font-bold transition-all active:scale-95"
-              style={{ background: theme.cardBg, color: "#00C7D9", border: `1px solid rgba(0,199,217,0.4)`, boxShadow: "0 6px 24px rgba(0,199,217,0.2)" }}>
-              <Paperclip size={17} /> 补充上传
-            </button>
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30">
             <button onClick={() => setSheet({ open: true, mode: "new_event", taskId: null })}
               className="flex items-center gap-2 px-6 py-3.5 rounded-full text-sm font-bold transition-all active:scale-95"
               style={{ background: "linear-gradient(135deg,#FB923C,#F97316)", color: "#0D1B2A", boxShadow: "0 6px 24px rgba(251,146,60,0.4)" }}>
@@ -215,10 +210,11 @@ function StaffPadInner() {
 
       <ReportSheet open={sheet.open} mode={sheet.mode} taskId={sheet.taskId} staff={staff}
         onClose={() => setSheet((s) => ({ ...s, open: false }))}
-        onSubmitted={invalidate} />
+        onSubmitted={invalidate}
+        onTagAttachments={(atts) => { setSheet((s) => ({ ...s, open: false })); setMetaModal({ open: true, attachments: atts }); }} />
 
-      <MetaTaggingModal open={metaModal.open} staff={staff} clinicId={clinicId}
-        onClose={() => setMetaModal((s) => ({ ...s, open: false }))}
+      <MetaTaggingModal open={metaModal.open} attachments={metaModal.attachments} staff={staff} clinicId={clinicId}
+        onClose={() => setMetaModal((s) => ({ ...s, open: false, attachments: [] }))}
         onSubmitted={invalidate} />
     </div>
   );

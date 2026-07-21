@@ -12,7 +12,7 @@ const MODE_META = {
 const ATT_ICON = { image: ImageIcon, file: FileText, voice: Mic };
 const ATT_LABEL = { image: "照片", file: "文件", voice: "语音" };
 
-export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubmitted }) {
+export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubmitted, onTagAttachments }) {
   const { theme } = useTheme();
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState([]);
@@ -143,7 +143,12 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
               <div className="text-xs mb-1.5" style={{ color: theme.textSub }}>摘要：{result.parsed?.summary || "—"}</div>
               {result.parsed?.suggested_action && <div className="text-xs" style={{ color: theme.textSub }}>建议：{result.parsed.suggested_action}</div>}
             </div>
-            <button onClick={onClose} className="w-full rounded-lg py-2.5 text-sm font-semibold" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>完成</button>
+            <button onClick={() => {
+              if (attachments.length > 0 && onTagAttachments) onTagAttachments(attachments);
+              onClose();
+            }} className="w-full rounded-lg py-2.5 text-sm font-semibold" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>
+              {attachments.length > 0 ? "下一步：选标签" : "完成"}
+            </button>
           </div>
         ) : (
           <>
