@@ -4,10 +4,11 @@ import { base44 } from "@/api/base44Client";
 import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { useClinicId } from "@/lib/ClinicContext";
 import PageShell from "@/components/PageShell";
-import { ROLE_LABELS, DEPARTMENT_BY_ID, ROLE_TO_DEPARTMENT } from "@/lib/staffPad/useStaffSelf";
+import { ROLE_LABELS, ROLE_TO_DEPARTMENT, STAFF_STATUS_LABELS, STAFF_STATUS_COLORS } from "@/lib/staffPad/useStaffSelf";
+import { DEPARTMENTS, BUSINESS_FAMILIES } from "@/lib/departments/registry";
 import {
   UserPlus, Mail, Loader, KeyRound, Copy, CheckCircle2, AlertCircle,
-  Link2, UserCheck, Trash2, Clock,
+  Link2, UserCheck, Trash2,
 } from "lucide-react";
 
 function Inner() {
@@ -20,6 +21,7 @@ function Inner() {
   const [result, setResult] = useState(null);
   const [code, setCode] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [removingId, setRemovingId] = useState(null);
 
   const pendingQ = useQuery({
     queryKey: ["staff", clinicId, "pending"],
@@ -54,10 +56,12 @@ function Inner() {
     } finally { setInviting(false); }
   };
 
-  const onReject = async (s) => {
-    if (!window.confirm(`拒绝「${s.staff_name}」的入职申请？将删除该待审记录（不影响其登录账号）。`)) return;
-    await base44.entities.Staff.delete(s.id);
-    qc.invalidateQueries({ queryKey: ["staff", clinicId, "pending"] });
+  const onRemove = async (s) => {
+    if (!window.confirm(`移除「${s.staff_name}」的员工档案？仅删除门店员工绑定，不影响其登录账号。`)) return;
+    setRemovingId(s.id);
+    try { await base44.entities.Staff.delete(s.id); }
+    catch (e) {}
+    finally { setRemovingId(null); qc.invalidateQueries({ queryKey: ["staff", clinicId, "pending"] }); }
   };
 
   const fieldStyle = { background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text };
@@ -146,46 +150,69 @@ function Inner() {
         </div>
       </div>
 
-      {/* 待审核列表 */}
+      {/* 员工花名册（按 11 部门） */}
       <div className="rounded-xl overflow-hidden" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
         <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${theme.border}` }}>
-          <UserCheck size={15} style={{ color: "#fbbf24" }} />
-          <span className="text-sm font-bold" style={{ color: theme.text }}>待审核入职申请</span>
-          <span className="text-[11px] ml-auto" style={{ color: theme.textFaint }}>{pending.length} 条 · 员工尚未绑定账号</span>
+          <UserCheck size={15} style={{ color: "#00C7D9" }} />
+          <span className="text-sm font-bold" style={{ color: theme.text }}>员工花名册（按 11 部门）</span>
+          <span className="text-[11px] ml-auto" style={{ color: theme.textFaint }}>{(pendingQ.data || []).length} 人 · 终端注册即在此显示</span>
         </div>
         {pendingQ.isLoading ? (
           <div className="p-6 flex justify-center"><Loader className="animate-spin" style={{ color: theme.textSub }} /></div>
-        ) : pending.length === 0 ? (
-          <div className="p-6 text-center text-xs" style={{ color: theme.textFaint }}>暂无待审核申请</div>
+        ) : (pendingQ.data || []).length === 0 ? (
+          <div className="p-6 text-center text-xs" style={{ color: theme.textFaint }}>暂无员工，先邀请注册或让员工在终端绑定</div>
         ) : (
-          pending.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${theme.borderSubtle}` }}>
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(251,191,36,0.12)" }}>
-                <span className="text-xs font-bold" style={{ color: "#fbbf24" }}>{(s.staff_name || "?").slice(0, 1)}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold truncate" style={{ color: theme.text }}>{s.staff_name || "未命名"}</div>
-                <div className="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap" style={{ color: theme.textSub }}>
-                  <span>{ROLE_LABELS[s.role] || s.role}</span>
-                  {s.department_id && DEPARTMENT_BY_ID[s.department_id] && (
-                    <>
-                      <span style={{ color: theme.textFaint }}>·</span>
-                      <span>{DEPARTMENT_BY_ID[s.department_id].name}</span>
-                    </>
-                  )}
-                  <span style={{ color: theme.textFaint }}>·</span>
-                  <span>{s.assigned_zone || "未分配区域"}</span>
-                  <span style={{ color: theme.textFaint }}>·</span>
-                  <Clock size={10} />
-                  <span>{s.created_date ? new Date(s.created_date).toLocaleDateString("zh-CN") : "—"}</span>
+          (() => {
+            const all = pendingQ.data || [];
+            const byDept = {};
+            all.forEach((s) => {
+              const deptId = s.department_id || ROLE_TO_DEPARTMENT[s.role] || "supplemental";
+              (byDept[deptId] = byDept[deptId] || []).push(s);
+            });
+            return DEPARTMENTS.map((dept) => {
+              const list = byDept[dept.id] || [];
+              const fam = BUSINESS_FAMILIES[dept.family];
+              return (
+                <div key={dept.id} style={{ borderBottom: `1px solid ${theme.borderSubtle}` }}>
+                  <div className="px-4 py-2 flex items-center gap-2" style={{ background: "rgba(128,128,128,0.04)" }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: fam.color }} />
+                    <span className="text-[10px] font-bold tracking-wider" style={{ color: fam.color }}>{dept.code}</span>
+                    <span className="text-xs font-semibold" style={{ color: theme.text }}>{dept.name}</span>
+                    <span className="text-[10px] ml-auto" style={{ color: theme.textFaint }}>{list.length} 人</span>
+                  </div>
+                  {list.length === 0 ? (
+                    <div className="px-4 py-2 text-[11px]" style={{ color: theme.textFaint }}>暂无员工</div>
+                  ) : list.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: `1px solid ${theme.borderSubtle}` }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${STAFF_STATUS_COLORS[s.status] || "#94A3B8"}18` }}>
+                        <span className="text-[11px] font-bold" style={{ color: STAFF_STATUS_COLORS[s.status] || "#94A3B8" }}>{(s.staff_name || "?").slice(0, 1)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold truncate" style={{ color: theme.text }}>{s.staff_name || "未命名"}</span>
+                          {s.user_id
+                            ? <span className="text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 flex-shrink-0" style={{ background: "rgba(167,139,250,0.12)", color: "#A78BFA" }}><Link2 size={9} />已绑定</span>
+                            : <span className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>待绑定</span>}
+                        </div>
+                        <div className="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap" style={{ color: theme.textSub }}>
+                          <span>{ROLE_LABELS[s.role] || s.role}</span>
+                          <span style={{ color: theme.textFaint }}>·</span>
+                          <span className="truncate">{s.assigned_zone || "未分配区域"}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: s.pad_online ? "#4ade80" : "#475569" }} title={s.pad_online ? "终端在线" : "终端离线"} />
+                        <span className="text-[10px] px-2 py-1 rounded-full font-semibold" style={{ background: `${STAFF_STATUS_COLORS[s.status] || "#94A3B8"}1a`, color: STAFF_STATUS_COLORS[s.status] || "#94A3B8" }}>{STAFF_STATUS_LABELS[s.status] || s.status}</span>
+                        <button onClick={() => onRemove(s)} disabled={removingId === s.id} className="p-1.5 rounded-lg disabled:opacity-50" style={{ background: "rgba(220,38,38,0.08)" }} title="移除档案">
+                          {removingId === s.id ? <Loader size={13} className="animate-spin" style={{ color: "#f87171" }} /> : <Trash2 size={13} style={{ color: "#f87171" }} />}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <span className="text-[10px] px-2 py-1 rounded-full font-semibold flex-shrink-0" style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>待绑定</span>
-              <button onClick={() => onReject(s)} className="p-1.5 rounded-lg flex-shrink-0" style={{ background: "rgba(220,38,38,0.08)" }} title="拒绝并删除">
-                <Trash2 size={13} style={{ color: "#f87171" }} />
-              </button>
-            </div>
-          ))
+              );
+            });
+          })()
         )}
       </div>
     </PageShell>
