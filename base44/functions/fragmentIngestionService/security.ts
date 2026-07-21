@@ -54,9 +54,16 @@ export function validateMimeType(fragmentType, claimed) {
   if (FORBIDDEN_MIME_PREFIXES.some((p) => lower.startsWith(p))) {
     return { ok: false, reason: "mime_forbidden" };
   }
+  // 去除参数后缀（如 ;codecs=opus），仅匹配基础 MIME
+  const base = lower.split(";")[0].trim();
   const whitelist = MIME_WHITELIST[fragmentType] || [];
-  if (!whitelist.includes(lower)) return { ok: false, reason: "mime_not_supported" };
-  return { ok: true };
+  if (whitelist.includes(base)) return { ok: true };
+  // 兼容：浏览器 MediaRecorder 音频录音常以 video/webm 容器封装音频，
+  // audio 片段视作 audio/webm 放行
+  if (fragmentType === "audio" && (base === "video/webm" || base === "audio/ogg" || base === "video/x-matroska")) {
+    if (whitelist.includes("audio/webm") || whitelist.includes("audio/m4a")) return { ok: true };
+  }
+  return { ok: false, reason: "mime_not_supported" };
 }
 
 export function validateFilename(filename) {
