@@ -1,9 +1,8 @@
 /**
  * Clinic OS V10 — 事件流走马灯（Event Stream Marquee）
  *
- * 采集 staffReportService 产出的待核销 OperationalTask，
- * 按 created_date 事件顺序，以极简摘要循环滚动播放；
- * 已闭环（completed/exception）项自动剔除，剩余项持续循环直到被核销。
+ * 采集今日 OperationalTask + EvidenceFactCard，按时间顺序，以解析压缩的重点短句循环滚动播报，
+ * 告诉店长今天发生了什么事件（含已归档的新事件记录）。
  * 摘要优先取 LLM 产出的 ai_parsed.marquee_label（如"前台完成新挂号"）。
  */
 
@@ -15,9 +14,9 @@ import { Radio, Loader } from "lucide-react";
 import { isToday } from "@/lib/clinicDate";
 
 const CLINIC_ID = "clinic-001";
-const CLOSED = new Set(["completed", "exception"]);
 const PRIORITY_COLOR = { P1: "#DC2626", P2: "#D97706", P3: "#00C7D9", P4: "#64748B" };
 const URGENCY_COLOR = { green: "#16A34A", yellow: "#D97706", red: "#DC2626" };
+const STAFF_SELF_DONE = new Set(["completed", "exception"]);
 
 function todayBusinessDate() {
   try {
@@ -45,10 +44,16 @@ export default function EventStreamMarquee() {
   });
 
   const taskItems = (q.data || [])
-    .filter((t) => !CLOSED.has(t.status))
     .filter((t) => isToday(t.created_date))
-    .sort((a, b) => new Date(a.created_date) - new Date(b.created_date))
-    .map((t) => ({ kind: "task", id: t.id, label: marqueeLabel(t), dot: PRIORITY_COLOR[t.priority] || "#64748B", tail: "·待核销" }));
+    .filter((t) => t.ai_parsed?.marquee_label || t.description)
+    .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
+    .map((t) => ({
+      kind: "task",
+      id: t.id,
+      label: marqueeLabel(t),
+      dot: PRIORITY_COLOR[t.priority] || "#64748B",
+      tail: STAFF_SELF_DONE.has(t.status) ? "·已归档" : "·待核销",
+    }));
 
   const factItems = (fc.data || [])
     .filter((f) => f.marquee_label)
@@ -69,7 +74,7 @@ export default function EventStreamMarquee() {
     return (
       <div className="rounded-xl px-4 py-2 flex items-center gap-2" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
         <Radio size={13} style={{ color: "#16A34A" }} />
-        <span className="text-xs" style={{ color: theme.textSub }}>今日无待核销事件</span>
+        <span className="text-xs" style={{ color: theme.textSub }}>今日无事件流</span>
       </div>
     );
   }
