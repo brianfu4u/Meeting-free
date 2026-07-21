@@ -99,7 +99,9 @@ export default function MetaTaggingModal({ open, attachment, staff, clinicId, on
       setResult({ ok: true, tags: selectedLabels });
       onConfirmed?.(selected, attachment);
     } catch (e) {
-      setErr(e?.response?.data?.error || e?.message || "提交失败");
+      const code = e?.error_code || e?.response?.data?.error_code;
+      const base = e?.response?.data?.error || e?.message || "提交失败";
+      setErr(code === "url_not_whitelisted" ? `${base}（${attachment?.url || "无URL"}）` : base);
     } finally { setSending(false); }
   };
 
