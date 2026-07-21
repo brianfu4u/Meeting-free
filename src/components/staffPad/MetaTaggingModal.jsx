@@ -15,7 +15,8 @@ import { getChipsForRole } from "@/lib/departments/modalChips";
 import { ROLE_TO_DEPARTMENT } from "@/lib/departments/registry";
 import { buildUserInteractiveMeta, validateUserInteractiveMeta } from "@/lib/phase5/metaPayload";
 import { captureFragment, computeChecksum, newClientRequestId } from "@/lib/phase5/ingestionClient";
-import { X, Send, Loader, CheckCircle2, Paperclip, Image as ImageIcon, FileText, Mic, Tag } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { X, Send, Loader, CheckCircle2, Paperclip, Image as ImageIcon, FileText, Mic, Square, Tag } from "lucide-react";
 
 const ATT_ICON = { image: ImageIcon, file: FileText, voice: Mic };
 const ATT_LABEL = { image: "照片", file: "文件", voice: "语音" };
@@ -35,7 +36,43 @@ export default function MetaTaggingModal({ open, attachment, staff, clinicId, on
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [err, setErr] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const openTsRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const toggleVoiceNote = async () => {
+    if (recording) { mediaRecorderRef.current?.stop(); return; }
+    setErr("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        if (!blob.size) return;
+        const file = new File([blob], `note-${Date.now()}.webm`, { type: blob.type });
+        setTranscribing(true);
+        try {
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          const transcript = await base44.integrations.Core.TranscribeAudio({ audio_url: file_url });
+          if (transcript) setNote((n) => (n ? n + " " : "") + transcript);
+        } catch { setErr("语音转写失败"); }
+        finally { setTranscribing(false); }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch { setErr("无法访问麦克风"); }
+  };
+
+  useEffect(() => {
+    return () => { if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop(); };
+  }, []);
 
   const { role_name, chips } = getChipsForRole(staff?.role);
   const deptId = staff?.department_id || ROLE_TO_DEPARTMENT[staff?.role] || "supplemental";
@@ -46,6 +83,7 @@ export default function MetaTaggingModal({ open, attachment, staff, clinicId, on
       setNote(""); setResult(null); setErr("");
       setSelected(defaultChip ? [defaultChip.id] : []);
       openTsRef.current = Date.now();
+      setRecording(false); setTranscribing(false);
     }
   }, [open]);
 
@@ -203,18 +241,28 @@ export default function MetaTaggingModal({ open, attachment, staff, clinicId, on
               </div>
             </div>
 
-            {/* 补充说明（选填） */}
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="补充说明（选填）…" rows={2}
-              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none mb-3"
-              style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }} />
+            {/* 补充说明（选填，支持语音输入） */}
+            <div className="relative mb-3">
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="补充说明（选填）… 点右上麦克风语音输入" rows={2}
+                className="w-full rounded-xl px-3 py-2.5 pr-10 text-sm outline-none resize-none"
+                style={{ background: theme.canvas, border: `1px solid ${recording ? "rgba(220,38,38,0.5)" : theme.border}`, color: theme.text }} />
+              <button type="button" onClick={toggleVoiceNote} disabled={transcribing}
+                title={recording ? "停止录音" : "语音输入"}
+                className="absolute top-2 right-2 p-1.5 rounded-lg disabled:opacity-50"
+                style={{ background: recording ? "rgba(220,38,38,0.15)" : "rgba(255,255,255,0.05)" }}>
+                {recording
+                  ? <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#f87171", animation: "pulseRed 1.2s ease-in-out infinite" }} />
+                  : transcribing ? <Loader size={14} className="animate-spin" style={{ color: theme.textSub }} /> : <Mic size={14} style={{ color: recording ? "#f87171" : theme.textSub }} />}
+              </button>
+            </div>
 
             {err && <div className="text-xs mb-3" style={{ color: "#f87171" }}>{err}</div>}
 
-            <button onClick={submit} disabled={sending || !attachment}
+            <button onClick={submit} disabled={sending || !attachment || recording || transcribing}
               className="w-full rounded-xl py-3 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50"
               style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>
               {sending ? <Loader size={16} className="animate-spin" /> : <Send size={16} />}
-              {sending ? "提交中…" : "确认"}
+              {sending ? "提交中…" : recording ? "录音中…" : transcribing ? "转写中…" : "确认"}
             </button>
           </>
         )}
