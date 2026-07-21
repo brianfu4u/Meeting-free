@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { useClinicId } from "@/lib/ClinicContext";
 import PageShell from "@/components/PageShell";
+import { ROLE_LABELS, DEPARTMENT_BY_ID, ROLE_TO_DEPARTMENT } from "@/lib/staffPad/useStaffSelf";
 import {
   UserPlus, Mail, Loader, KeyRound, Copy, CheckCircle2, AlertCircle,
   Link2, UserCheck, Trash2, Clock,
@@ -165,7 +166,13 @@ function Inner() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold truncate" style={{ color: theme.text }}>{s.staff_name || "未命名"}</div>
                 <div className="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap" style={{ color: theme.textSub }}>
-                  <span>{s.role}</span>
+                  <span>{ROLE_LABELS[s.role] || s.role}</span>
+                  {s.department_id && DEPARTMENT_BY_ID[s.department_id] && (
+                    <>
+                      <span style={{ color: theme.textFaint }}>·</span>
+                      <span>{DEPARTMENT_BY_ID[s.department_id].name}</span>
+                    </>
+                  )}
                   <span style={{ color: theme.textFaint }}>·</span>
                   <span>{s.assigned_zone || "未分配区域"}</span>
                   <span style={{ color: theme.textFaint }}>·</span>

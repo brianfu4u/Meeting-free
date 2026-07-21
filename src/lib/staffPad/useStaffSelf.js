@@ -6,21 +6,18 @@ import { useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useClinicId } from "@/lib/ClinicContext";
 
-export const ROLE_LABELS = {
-  doctor: "眼科医生", optometrist: "视光师", vision_trainer: "视觉训练师",
-  head_nurse: "护士长", nurse: "护士", reception: "前台接待",
-  customer_service: "客服", sales: "销售", logistics: "后勤",
-  marketing: "市场", finance: "财务", it: "IT", compliance: "合规",
-  procurement: "采购", field_ops: "外勤", equipment_maint: "设备维护", cleaning: "保洁",
-};
+// 角色/部门定义统一从部门注册表派生（唯一真理源：src/lib/departments/registry.js）
+import {
+  ROLE_LABELS as REGISTRY_ROLE_LABELS,
+  ROLE_GROUPS as REGISTRY_ROLE_GROUPS,
+  ROLE_TO_DEPARTMENT,
+  DEPARTMENT_BY_ID,
+  getCategoriesForRole,
+} from "@/lib/departments/registry";
 
-export const ROLE_GROUPS = {
-  doctor: "medical_core", optometrist: "medical_core", vision_trainer: "medical_core",
-  head_nurse: "medical_core", nurse: "medical_core",
-  reception: "front_sales", customer_service: "front_sales", sales: "front_sales", marketing: "front_sales",
-  logistics: "back_support", finance: "back_support", it: "back_support", compliance: "back_support",
-  procurement: "back_support", field_ops: "back_support", equipment_maint: "back_support", cleaning: "back_support",
-};
+export const ROLE_LABELS = REGISTRY_ROLE_LABELS;
+export const ROLE_GROUPS = REGISTRY_ROLE_GROUPS;
+export { ROLE_TO_DEPARTMENT, DEPARTMENT_BY_ID, getCategoriesForRole };
 
 export const STAFF_STATUS_LABELS = {
   off_duty: "下班", on_duty: "在岗", busy: "忙碌", break: "休息", awaiting_confirm: "待确认",

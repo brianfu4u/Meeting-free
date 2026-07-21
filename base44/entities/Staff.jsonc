@@ -18,33 +18,59 @@
       "type": "string",
       "enum": [
         "doctor",
+        "physician_asst",
         "optometrist",
+        "optician",
         "vision_trainer",
-        "head_nurse",
+        "imaging_tech",
+        "diagnostic_staff",
+        "surgeon",
+        "or_nurse",
+        "anesthesiologist",
         "nurse",
+        "triage_staff",
         "reception",
-        "customer_service",
-        "sales",
-        "logistics",
+        "crm_staff",
+        "patient_guide",
         "marketing",
-        "finance",
-        "it",
-        "compliance",
-        "procurement",
-        "field_ops",
-        "equipment_maint",
-        "cleaning"
+        "channel_dev",
+        "screening_team",
+        "cashier",
+        "insurance_officer",
+        "accountant",
+        "pharmacist",
+        "equipment_admin",
+        "inventory_staff",
+        "clinic_director",
+        "qa_officer",
+        "sanitation_staff"
       ],
-      "description": "\u5c97\u4f4d\u89d2\u8272"
+      "description": "\u5c97\u4f4d\u89d2\u8272\uff08\u4f9d\u636e\u300a\u773c\u79d1\u8bca\u6240\u90e8\u95e8-\u5c97\u4f4d\u6620\u5c04\u89c4\u8303\u300bv1.2026-07-21\uff0c\u517127\u4e2a\u6807\u51c6\u5316\u5c97\u4f4d\uff09\u3002\u679a\u4e3e\u503c\u4e0e src/lib/departments/registry.js \u4e2d ALL_ROLES \u7684 id \u4e25\u683c\u5bf9\u9f50\u3002"
     },
     "role_group": {
       "type": "string",
       "enum": [
-        "medical_core",
-        "front_sales",
-        "back_support"
+        "clinical",
+        "non_clinical"
       ],
-      "description": "\u5c97\u4f4d\u7fa4\uff1a\u533b\u7597\u6838\u5fc3\u5c97/\u524d\u53f0\u5ba2\u670d\u9500\u552e\u5c97/\u540e\u53f0\u652f\u6491\u5c97"
+      "description": "\u5c97\u4f4d\u6240\u5c5e\u4e1a\u52a1\u65cf\uff1aclinical=\u4e34\u5e8a\u4e0e\u8bca\u7597\uff08\u90e8\u95e81-5\uff09/ non_clinical=\u8fd0\u8425\u4e0e\u652f\u6301\uff08\u90e8\u95e86-10\uff09\u3002\u515c\u5e95\u90e8\u95e811\u65e0\u4e13\u5c5e\u5c97\u4f4d\u3002\u7531\u6ce8\u518c\u8868 ROLE_GROUPS \u81ea\u52a8\u6d3e\u751f\u3002"
+    },
+    "department_id": {
+      "type": "string",
+      "enum": [
+        "outpatient",
+        "refraction",
+        "diagnostics",
+        "surgery",
+        "nursing",
+        "front_desk",
+        "marketing",
+        "finance",
+        "logistics",
+        "admin",
+        "supplemental"
+      ],
+      "description": "\u6240\u5c5e\u90e8\u95e8ID\uff0811\u4e2a\u6807\u51c6\u5316\u90e8\u95e8\u4e4b\u4e00\uff09\u3002\u7531\u5c97\u4f4d\u89d2\u8272\u81ea\u52a8\u6d3e\u751f\uff08ROLE_TO_DEPARTMENT\uff09\uff0csupplemental=\u515c\u5e95/\u4ee3\u4f20\u573a\u666f\u3002"
     },
     "status": {
       "type": "string",

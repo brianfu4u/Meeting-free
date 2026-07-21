@@ -8,20 +8,20 @@
     },
     "department": {
       "type": "string",
-      "description": "\u90e8\u95e8\u533a\u57df\u4ee3\u53f7\uff08\u5982 reception/optometry/medical \u7b49\uff09\uff0c\u540c\u4e00\u95e8\u5e97\u5185\u552f\u4e00"
+      "description": "\u90e8\u95e8ID\uff0811\u4e2a\u6807\u51c6\u5316\u90e8\u95e8\u4e4b\u4e00\uff0c\u5982 outpatient/refraction/diagnostics \u7b49\uff0c\u89c1 src/lib/departments/registry.js DEPARTMENTS\uff09\uff0c\u540c\u4e00\u95e8\u5e97\u5185\u552f\u4e00"
     },
     "department_name": {
       "type": "string",
-      "description": "\u90e8\u95e8\u4e2d\u6587\u540d\u79f0"
+      "description": "\u90e8\u95e8\u4e2d\u6587\u540d\u79f0\uff08\u5982 \u95e8\u8bca/\u4e13\u79d1\u8bca\u5ba4\uff09"
     },
     "department_group": {
       "type": "string",
       "enum": [
         "clinical",
-        "support",
-        "management"
+        "non_clinical",
+        "fallback"
       ],
-      "description": "\u90e8\u95e8\u5206\u7ec4\uff1a\u4e00\u7ebf\u8bca\u7597/\u540e\u52e4\u652f\u6491/\u7ba1\u7406\u8d4b\u80fd"
+      "description": "\u90e8\u95e8\u6240\u5c5e\u4e1a\u52a1\u65cf\uff1aclinical=\u4e34\u5e8a\u4e0e\u8bca\u7597\uff08\u90e8\u95e81-5\uff09/ non_clinical=\u8fd0\u8425\u4e0e\u652f\u6301\uff08\u90e8\u95e86-10\uff09/ fallback=\u515c\u5e95\u4e0e\u4f8b\u5916\uff08\u90e8\u95e811\uff09"
     },
     "sop_document": {
       "type": "string",

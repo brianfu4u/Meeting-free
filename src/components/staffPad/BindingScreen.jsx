@@ -2,7 +2,8 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useClinicId } from "@/lib/ClinicContext";
 import { useTheme } from "@/lib/ThemeContext";
-import { ROLE_LABELS, ROLE_GROUPS } from "@/lib/staffPad/useStaffSelf";
+import { ROLE_LABELS, ROLE_GROUPS, ROLE_TO_DEPARTMENT, DEPARTMENT_BY_ID } from "@/lib/staffPad/useStaffSelf";
+import { DEPARTMENTS, BUSINESS_FAMILIES } from "@/lib/departments/registry";
 import { UserPlus, Loader } from "lucide-react";
 
 export default function BindingScreen({ user, onBound }) {
@@ -23,6 +24,7 @@ export default function BindingScreen({ user, onBound }) {
         staff_name: name.trim(),
         role,
         role_group: ROLE_GROUPS[role],
+        department_id: ROLE_TO_DEPARTMENT[role],
         status: "off_duty",
         pad_online: true,
         user_id: user.id,
@@ -33,6 +35,8 @@ export default function BindingScreen({ user, onBound }) {
       setErr(e.message || "绑定失败");
     } finally { setSubmitting(false); }
   };
+
+  const currentDept = DEPARTMENT_BY_ID[ROLE_TO_DEPARTMENT[role]];
 
   return (
     <div className="min-h-screen flex items-center justify-center p-5" style={{ background: theme.canvas }}>
@@ -55,12 +59,22 @@ export default function BindingScreen({ user, onBound }) {
 
         <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>岗位角色</label>
         <select value={role} onChange={(e) => setRole(e.target.value)}
-          className="w-full rounded-lg px-3 py-2.5 text-sm mb-3 outline-none"
+          className="w-full rounded-lg px-3 py-2.5 text-sm mb-2 outline-none"
           style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }}>
-          {Object.entries(ROLE_LABELS).map(([k, v]) => (
-            <option key={k} value={k} style={{ color: "#000" }}>{v}</option>
+          {DEPARTMENTS.filter((d) => d.roles.length > 0).map((d) => (
+            <optgroup key={d.id} label={`${d.code} · ${d.name}`} style={{ color: "#000" }}>
+              {d.roles.map((r) => (
+                <option key={r.id} value={r.id} style={{ color: "#000" }}>{r.label}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
+        {currentDept && (
+          <div className="text-[11px] mb-3 flex items-center gap-1.5" style={{ color: theme.textMuted }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: BUSINESS_FAMILIES[currentDept.family].color }} />
+            所属部门：{currentDept.name}
+          </div>
+        )}
 
         <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>所属区域（选填）</label>
         <input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="如：检查区3号位"
