@@ -68,6 +68,10 @@ export const MIME_WHITELIST = {
     "audio/webm",
     "audio/mpeg",
     "audio/x-mp3",
+    "audio/mp4",
+    "audio/aac",
+    "audio/ogg",
+    "audio/x-aac",
   ],
   text: ["text/plain"],
 };

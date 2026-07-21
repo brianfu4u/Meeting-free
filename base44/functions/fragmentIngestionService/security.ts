@@ -58,10 +58,10 @@ export function validateMimeType(fragmentType, claimed) {
   const base = lower.split(";")[0].trim();
   const whitelist = MIME_WHITELIST[fragmentType] || [];
   if (whitelist.includes(base)) return { ok: true };
-  // 兼容：浏览器 MediaRecorder 音频录音常以 video/webm 容器封装音频，
-  // audio 片段视作 audio/webm 放行
-  if (fragmentType === "audio" && (base === "video/webm" || base === "audio/ogg" || base === "video/x-matroska")) {
-    if (whitelist.includes("audio/webm") || whitelist.includes("audio/m4a")) return { ok: true };
+  // 兼容：浏览器 MediaRecorder 音频录音常以 video/* 容器封装音频，
+  // audio 片段视作可转写音频放行（video/webm / video/mp4 / video/x-matroska / audio/ogg）
+  if (fragmentType === "audio" && (base === "video/webm" || base === "video/mp4" || base === "video/x-matroska" || base === "audio/ogg")) {
+    if (whitelist.includes("audio/webm") || whitelist.includes("audio/m4a") || whitelist.includes("audio/mp4")) return { ok: true };
   }
   return { ok: false, reason: "mime_not_supported" };
 }
