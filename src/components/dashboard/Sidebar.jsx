@@ -1,31 +1,32 @@
 import React from "react";
 import {
-  LayoutDashboard, Stethoscope, Server, CircleDollarSign,
-  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
-  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
-  Wrench, Megaphone, ShoppingBag, Ambulance,
+  LayoutDashboard, Stethoscope, CircleDollarSign,
+  ConciergeBell, Microscope, Syringe,
+  HeartPulse, Warehouse,
+  Megaphone, Glasses, ShieldCheck, Boxes,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 
 const ICON_MAP = {
-  LayoutDashboard, Stethoscope, Server, CircleDollarSign,
-  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
-  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
-  Wrench, Megaphone, ShoppingBag, Ambulance,
+  LayoutDashboard, Stethoscope, CircleDollarSign,
+  ConciergeBell, Microscope, Syringe,
+  HeartPulse, Warehouse,
+  Megaphone, Glasses, ShieldCheck, Boxes,
 };
 
 const STATUS_DOT = { green: "#16A34A", amber: "#D97706", red: "#DC2626" };
 
+// 3 业务族（与 src/lib/departments/registry.js BUSINESS_FAMILIES 对齐）
 const GROUP_COLORS = {
-  clinical:   "#00C7D9",
-  support:    "#16A34A",
-  management: "#D97706",
+  clinical:     "#00C7D9",
+  non_clinical: "#16A34A",
+  fallback:     "#D97706",
 };
 
 const GROUP_LABELS = {
-  clinical:   "一线诊疗",
-  support:    "后勤支撑",
-  management: "管理赋能",
+  clinical:     "临床与诊疗",
+  non_clinical: "运营与支持",
+  fallback:     "兜底与例外",
 };
 
 export default function Sidebar({ navItems, activeSection, onNavigate, panelStatuses, isOpen, onClose }) {

@@ -3,17 +3,17 @@ import { useTheme } from "@/lib/ThemeContext";
 import {
   Users, Stethoscope, AlertTriangle, Zap, UserCheck,
   CircleDollarSign, Package, TrendingUp, Server, ChevronRight,
-  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
-  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
-  Wrench, Megaphone, LayoutDashboard, ShoppingBag, Ambulance,
+  ConciergeBell, Microscope, Syringe,
+  HeartPulse, Warehouse,
+  Megaphone, Glasses, ShieldCheck, Boxes, LayoutDashboard,
 } from "lucide-react";
 
 const ICON_MAP = {
   Users, Stethoscope, AlertTriangle, Zap, UserCheck,
   CircleDollarSign, Package, TrendingUp, Server,
-  ConciergeBell, GitBranch, Microscope, Activity, Syringe,
-  BedDouble, HeartPulse, Warehouse, CreditCard, ShoppingCart,
-  Wrench, Megaphone, LayoutDashboard, ShoppingBag, Ambulance,
+  ConciergeBell, Microscope, Syringe,
+  HeartPulse, Warehouse,
+  Megaphone, Glasses, ShieldCheck, Boxes, LayoutDashboard,
 };
 
 const STATUS_CONFIG = {
