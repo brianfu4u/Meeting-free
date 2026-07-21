@@ -281,6 +281,7 @@ Deno.serve(async (req) => {
 
     // ── 8. 若是 new_event 且员工自主发起 → 创建 staff_self Task ─────────────
     // （员工自主工作不需要店长批准即可开始，但不是 AI 决策，是系统设计规则）
+    // 新事件记录的是已发生的事（如"完成一名新患者挂号"），直接落为 completed 进历史记录
     let selfTaskId: string | null = null;
     if (report_type === "new_event" && !task_id) {
       const workDesc = combinedText || `（${atts.length}个附件汇报）`;
@@ -291,7 +292,7 @@ Deno.serve(async (req) => {
         dispatched_by: "staff_self",
         assignee_staff_id: staff_id,
         description: workDesc + (aiParsed.summary ? `\n[AI摘要] ${aiParsed.summary}` : ""),
-        status: "in_progress",
+        status: "completed",
         report_attachments: atts,
         ai_parsed: aiParsed,
         report_log: [logEntry],

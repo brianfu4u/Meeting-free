@@ -240,7 +240,11 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
       </div>
 
       <MetaTaggingModal open={!!taggingAttachment} attachment={taggingAttachment} staff={staff} clinicId={clinicId}
-        onClose={() => setTaggingAttachment(null)} />
+        onClose={() => setTaggingAttachment(null)}
+        onConfirmed={() => {
+          // 新事件模式：标签确认后自动提交汇报，生成历史记录（无需再单独按"提交汇报"）
+          if (mode === "new_event" && !taskId) submit();
+        }} />
     </div>
   );
 }
