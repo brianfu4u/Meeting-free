@@ -31,6 +31,7 @@ import {
 } from "./security.ts";
 import { runAdapter } from "./adapters.ts";
 import { alignExtraction, evaluateAlignment } from "./alignment.ts";
+import { reconstruct } from "../../shared/semanticReconstructionSkill.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -284,10 +285,13 @@ async function processFragment(base44, artifact, processing, deps) {
     const aligned = await alignExtraction({ artifact, extraction, deps });
     const gate = evaluateAlignment(aligned);
 
+    // V11 解析站 Skill：语义重构 → 双通道 Payload（走马灯 + Agent）
+    const skillResult = reconstruct({ artifact, aligned: { ...aligned, alignment_status: gate.status }, extraction });
+
     const factCardIds = [];
     let factCardId = null;
     if (gate.status === ALIGNMENT_STATUS.aligned) {
-      const factCard = await createFactCard(base44, artifact, aligned, processing, extraction, deps);
+      const factCard = await createFactCard(base44, artifact, aligned, processing, extraction, deps, skillResult);
       factCardId = factCard.id;
       factCardIds.push(factCard.id);
       await base44.asServiceRole.entities.Artifact.update(artifact.id, {
@@ -329,10 +333,14 @@ async function processFragment(base44, artifact, processing, deps) {
   }
 }
 
-async function createFactCard(base44, artifact, aligned, processing, extraction, deps) {
+async function createFactCard(base44, artifact, aligned, processing, extraction, deps, skillResult) {
+  const marqueeLabel = skillResult?.marquee_payload?.label || null;
+  const marqueeUrgency = skillResult?.marquee_payload?.urgency || null;
   const descriptor = {
     clinic_id: artifact.clinic_id,
     artifact_id: artifact.id,
+    marquee_label: marqueeLabel,
+    marquee_urgency: marqueeUrgency,
     fields: aligned.fields.map((f) => ({
       field_name: f.field_name,
       value: f.value,
@@ -393,6 +401,29 @@ async function ensureClarificationAttention(base44, artifact, processing, issues
 
 async function buildCaptureResponse(base44, artifact, idempotent, processingArg) {
   const processing = processingArg || await findProcessing(base44, artifact.clinic_id, artifact.id);
+  // V11 双通道：从 FactCard 取出走马灯与 Agent 编组 Payload
+  let marquee = null;
+  let agentHandoff = null;
+  if (processing && processing.status === PROCESSING_STATUS.aligned) {
+    for (const fcId of processing.fact_card_ids || []) {
+      const fc = await base44.asServiceRole.entities.EvidenceFactCard.get(fcId).catch(() => null);
+      if (!fc || fc.clinic_id !== artifact.clinic_id) continue;
+      marquee = fc.marquee_label ? {
+        label: fc.marquee_label,
+        urgency: fc.marquee_urgency || "green",
+        fact_card_id: fc.id,
+        timestamp: fc.occurred_at || artifact.captured_at || null,
+      } : null;
+      agentHandoff = {
+        fact_card_id: fc.id,
+        assembly_eligible: fc.assembly_eligible === true,
+        workflow_family_hint: fc.workflow_family_hint || null,
+        subject_type: fc.subject_type || "unknown",
+        occurred_at: fc.occurred_at || null,
+      };
+      break;
+    }
+  }
   return {
     idempotent,
     artifact: {
@@ -414,6 +445,9 @@ async function buildCaptureResponse(base44, artifact, idempotent, processingArg)
       assembly_eligible: processing.assembly_eligible === true,
       quality_issues: processing.quality_issues || [],
     } : null,
+    // V11 解析站双通道输出
+    marquee,
+    agent_handoff: agentHandoff,
   };
 }
 
