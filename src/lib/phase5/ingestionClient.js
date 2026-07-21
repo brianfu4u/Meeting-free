@@ -57,7 +57,15 @@ function unwrap(res) {
 }
 
 export async function captureFragment(payload) {
-  return unwrap(await base44.functions.invoke("fragmentIngestionService", payload));
+  const res = unwrap(await base44.functions.invoke("fragmentIngestionService", payload));
+  if (res && res.ok === false) {
+    const code = res.error_code || "ingestion_failed";
+    const err = new Error(ERROR_LABELS[code] || code);
+    err.error_code = code;
+    err.response = { data: res };
+    throw err;
+  }
+  return res;
 }
 
 export async function getFragmentStatus(payload) {
