@@ -99,13 +99,14 @@ export default function ReportSheet({ open, mode, taskId, staff, onClose, onSubm
     }
     setSending(true); setErr("");
     try {
-      const res = await base44.functions.invoke("staffReportService", {
+      const payload = {
         report_type: mode,
-        task_id: taskId || undefined,
         text: text.trim(),
         staff_id: staff.id,
         attachments: attachments.map((a) => ({ type: a.type, url: a.url, name: a.name, transcript: a.transcript || "" })),
-      });
+      };
+      if (taskId) payload.task_id = taskId;
+      const res = await base44.functions.invoke("staffReportService", payload);
       setResult(res.data || res);
       onSubmitted?.();
     } catch (e2) {
