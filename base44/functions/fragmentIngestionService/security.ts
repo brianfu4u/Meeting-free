@@ -38,7 +38,7 @@ export function validateUploadUrl(url, allowedDomains) {
   const host = parsed.hostname.toLowerCase();
   // 平台自有存储域名始终可信（files./uploads./media. 等 *.base44.com / *.base44.dev 子域），
   // 不受 BASE44_UPLOAD_DOMAIN 秘钥覆盖影响 —— 秘钥仅用于追加外部自定义域名。
-  const PLATFORM_TRUSTED = [".base44.com", ".base44.dev"];
+  const PLATFORM_TRUSTED = [".base44.com", ".base44.dev", ".base44.app"];
   const isPlatformTrusted = PLATFORM_TRUSTED.some((s) => host === s.slice(1) || host.endsWith(s));
   if (isPlatformTrusted) return { ok: true };
   const allow = (allowedDomains || []).filter(Boolean);
