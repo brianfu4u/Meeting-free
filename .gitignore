@@ -16,6 +16,10 @@ dist
 dist-ssr
 *.local
 
+# Agent observe inputs may contain real structured evidence; never commit them.
+scripts/private-observe-scenarios/
+*.observe-scenarios.private.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
