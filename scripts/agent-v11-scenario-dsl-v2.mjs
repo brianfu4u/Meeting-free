@@ -85,7 +85,7 @@ const EXECUTION_SUPPORT = {
   S012: { level: "supported", reason: null },
   S013: { level: "supported", reason: null },
   S014: { level: "supported", reason: null },
-  S015: { level: "unsupported", reason: "runtime_manager_approved_exception_archive_path_not_wired" },
+  S015: { level: "supported", reason: null },
 };
 
 function convert(row) {
