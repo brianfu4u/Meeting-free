@@ -619,6 +619,23 @@ async function run(
     if (best && (!Array.isArray(best.validation_blocks) || best.validation_blocks.length > 0)) {
       autoAttachGateReasons.push("validation_blocks_present");
     }
+    // Workflow closure is an authoritative state, not an inferred property of
+    // open_loops or a configurable policy. Never create an attach intent for a
+    // closed/archived target, even when the pipeline ranked it as the unique best.
+    if (best && requiredString(best.target_workflow_id)) {
+      const targetWorkflow = await ops.getWorkflow(best.target_workflow_id);
+      if (!targetWorkflow) {
+        autoAttachGateReasons.push("target_workflow_not_found");
+      } else if (!tenantSafe(ops, actor.clinic_id, targetWorkflow)) {
+        autoAttachGateReasons.push("target_workflow_tenant_violation");
+      } else if (
+        ["closed", "archived"].includes(
+          String(targetWorkflow.status || "").toLowerCase()
+        )
+      ) {
+        autoAttachGateReasons.push("workflow_closed");
+      }
+    }
     const canAutoAttach = autoAttachGateReasons.length === 0;
     const autoAttachMode = ops.agentAutoAttachMode();
     const authoritative_attachment = canAutoAttach
