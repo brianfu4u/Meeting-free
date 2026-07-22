@@ -249,9 +249,11 @@ describe("compositionOrchestrator run", () => {
     expect(result.attention_item.id).toBe("att-1");
     expect(result.attention_item.selected_hypothesis_id).toBe("p1#h0");
     expect(result.attention_item.manager_dispatch_required).toBe(false);
-    expect(result.dispatch).toEqual({
+    expect(result.dispatch).toMatchObject({
       needsManagerDispatch: false,
       bestHypothesisId: "p1#h0",
+      llmAuditRequired: false,
+      validationBlocked: false,
     });
     expect(result.review).toEqual({
       required: true,
