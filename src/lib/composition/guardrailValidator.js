@@ -197,7 +197,10 @@ function policyChecks(h, { factCardByArtifactId, workflowById, snapshotById, har
       }
       case "attach_to_closed_workflow": {
         const wf = h.target_workflow_id ? workflowById.get(h.target_workflow_id) : null;
-        if (wf && Array.isArray(wf.open_loops) && wf.open_loops.length === 0) {
+        if (
+          wf &&
+          ["closed", "archived"].includes(String(wf.status || "").toLowerCase())
+        ) {
           blocks.push({ rule_code: "attach_to_closed_workflow" });
         }
         break;
