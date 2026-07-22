@@ -90,7 +90,9 @@ const EXECUTION_SUPPORT = {
 
 function convert(row) {
   const id = row.scenario_id.trim().toUpperCase();
-  const blueprint = BLUEPRINTS[id];
+  const matched = id.match(/^(S\\d{3})(?:-[A-Z0-9_-]+)?$/);
+  const blueprintId = matched?.[1] || id;
+  const blueprint = BLUEPRINTS[blueprintId];
   if (!blueprint) throw new Error(`scenario_blueprint_missing:${id}`);
   const fixture = blueprint();
   return {
@@ -98,7 +100,7 @@ function convert(row) {
     scenario_type: row.business_family.trim().toLowerCase(),
     source_spec: { department: row.department, description: row.description, notes: row.notes },
     fixture,
-    execution_support: EXECUTION_SUPPORT[id],
+    execution_support: EXECUTION_SUPPORT[blueprintId],
     oracle: {
       expected_eligible: bool(row.expected_eligible, "expected_eligible", id),
       expected_guardrail_dispatch: bool(row.has_guardrail_dispatch, "has_guardrail_dispatch", id),
@@ -110,11 +112,12 @@ function convert(row) {
 const [inputPath] = process.argv.slice(2);
 if (!inputPath) throw new Error("usage: node agent-v11-scenario-dsl-v2.mjs <scenarios.csv>");
 const rows = parseCsv(await readFile(inputPath, "utf8"));
-if (rows.length < 1 || rows.length > 50) throw new Error("scenario_count_must_be_between_1_and_50");
+if (rows.length < 1 || rows.length > 200) throw new Error("scenario_count_must_be_between_1_and_200");
 const ids = new Set();
 const scenarios = rows.map((row) => {
-  if (ids.has(row.scenario_id)) throw new Error(`scenario_id_duplicate:${row.scenario_id}`);
-  ids.add(row.scenario_id);
+  const normalizedId = row.scenario_id.trim().toUpperCase();
+  if (ids.has(normalizedId)) throw new Error(`scenario_id_duplicate:${row.scenario_id}`);
+  ids.add(normalizedId);
   return convert(row);
 });
 process.stdout.write(`${JSON.stringify({
