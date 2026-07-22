@@ -191,14 +191,24 @@ export function buildHypothesisDescriptors({
 
 export function deriveDispatchDecision({ guardrailResult = {}, validationIssues = [] }) {
   const blockingIssues = asArray(validationIssues).filter(isBlockingValidationIssue);
-  if (blockingIssues.length > 0) {
-    return { needsManagerDispatch: true, bestHypothesisId: null };
-  }
+  const ambiguousCandidates = Boolean(guardrailResult.needsManagerDispatch);
+  const validationBlocked = blockingIssues.length > 0;
+  const llmAuditReasonCodes = [];
+  if (ambiguousCandidates) llmAuditReasonCodes.push("ambiguous_candidates");
+  if (validationBlocked) llmAuditReasonCodes.push("validation_block");
+  const llmAuditRequired = llmAuditReasonCodes.length > 0;
+
   return {
-    needsManagerDispatch: Boolean(guardrailResult.needsManagerDispatch),
-    bestHypothesisId: guardrailResult.needsManagerDispatch
+    // Agent v1.1 sends ambiguity and validation conflicts to the scheduled LLM
+    // logic audit first. A manager sees only an eventual flagged audit verdict.
+    needsManagerDispatch: false,
+    bestHypothesisId: llmAuditRequired
       ? null
       : guardrailResult.bestHypothesisId || null,
+    llmAuditRequired,
+    llmAuditType: llmAuditRequired ? "pre_attach_audit" : null,
+    llmAuditReasonCodes,
+    validationBlocked,
   };
 }
 
