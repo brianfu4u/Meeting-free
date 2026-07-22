@@ -6,12 +6,12 @@ describe("Agent v1.1 runtime identity validation", () => {
     const issues = collectDeviceIdentityValidationIssues([
       {
         id: "fc-1",
-        subject_fingerprint: { device_serial: "DEVICE-C" },
+        device_serial: "DEVICE-C",
         _candidateWorkflowIds: ["wf-a", "wf-b"],
       },
     ], [
-      { id: "wf-a", subject_fingerprint: { device_serial: "DEVICE-A" } },
-      { id: "wf-b", subject_fingerprint: { device_serial: "DEVICE-B" } },
+      { id: "wf-a", device_serial: "DEVICE-A" },
+      { id: "wf-b", device_serial: "DEVICE-B" },
     ]);
     expect(issues).toEqual([{
       type: "device_identity_conflict",
@@ -30,8 +30,8 @@ describe("Agent v1.1 runtime identity validation", () => {
         _candidateWorkflowIds: [],
       },
     ], [
-      { id: "wf-a", workflow_family: "patient_care", status: "active", subject_fingerprint: { device_serial: "DEVICE-A" } },
-      { id: "wf-b", workflow_family: "patient_care", status: "active", subject_fingerprint: { device_serial: "DEVICE-B" } },
+      { id: "wf-a", workflow_family: "patient_care", status: "active", device_serial: "DEVICE-A" },
+      { id: "wf-b", workflow_family: "patient_care", status: "active", device_serial: "DEVICE-B" },
       { id: "wf-other", workflow_family: "finance", status: "active", subject_fingerprint: { device_serial: "DEVICE-C" } },
     ]);
     expect(issues).toEqual([{
@@ -46,11 +46,11 @@ describe("Agent v1.1 runtime identity validation", () => {
     expect(collectDeviceIdentityValidationIssues([
       {
         id: "fc-1",
-        subject_fingerprint: { device_serial: "DEVICE-A" },
+        device_serial: "DEVICE-A",
         _candidateWorkflowIds: ["wf-a", "wf-b"],
       },
     ], [
-      { id: "wf-a", subject_fingerprint: { device_serial: "DEVICE-A" } },
+      { id: "wf-a", device_serial: "DEVICE-A" },
       { id: "wf-b", subject_fingerprint: {} },
     ])).toEqual([]);
   });
