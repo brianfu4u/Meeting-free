@@ -27,14 +27,16 @@ describe("Agent v1.1 Scenario DSL v2", () => {
     expect(scenario.oracle.expected_eligible).toBe(true);
   });
 
-  it("honestly marks runtime fixture gaps instead of treating the oracle as execution", () => {
-    const unsupported = run(`${header}\nS003,后勤→医生处方,patient_care,role,1,TRUE,TRUE,FALSE,role\n`).scenarios[0];
+  it("promotes verified hard gates while keeping approximate evidence separate", () => {
+    const roleConflict = run(`${header}\nS003,后勤→医生处方,patient_care,role,1,FALSE,TRUE,FALSE,role\n`).scenarios[0];
+    const businessConflict = run(`${header}\nS004,验光→采购,procurement,family,1,FALSE,TRUE,FALSE,family\n`).scenarios[0];
+    const deviceConflict = run(`${header}\nS014,设备维护,inventory,device,1,FALSE,TRUE,FALSE,device\n`).scenarios[0];
     const approximate = run(`${header}\nS010,跨诊所,patient_care,cross,1,TRUE,TRUE,FALSE,cross\n`).scenarios[0];
-    expect(unsupported.execution_support).toEqual({
-      level: "unsupported", reason: "runtime_role_source_conflict_fixture_not_wired",
-    });
+    for (const scenario of [roleConflict, businessConflict, deviceConflict]) {
+      expect(scenario.execution_support).toEqual({ level: "supported", reason: null });
+      expect(scenario.fixture).not.toHaveProperty("expected_eligible");
+    }
     expect(approximate.execution_support.level).toBe("approximate");
-    expect(unsupported.fixture).not.toHaveProperty("expected_eligible");
   });
 
   it("represents multi-candidate ambiguity as two real workflows", () => {
