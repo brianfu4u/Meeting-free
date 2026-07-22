@@ -32,6 +32,7 @@ export type ServiceRequest = {
   review_decision?: ReviewDecision;
   decision_note?: string | null;
   attention_item_id?: string;
+  exception_artifact_id?: string;
 };
 
 export type ServiceResult = {
@@ -127,6 +128,13 @@ export type CompositionOps = {
     id: string,
     patch: Record<string, unknown>
   ) => Promise<Record<string, unknown>>;
+  findManagerExceptionDecision: (
+    clinicId: string,
+    artifactId: string
+  ) => Promise<Record<string, unknown> | null>;
+  getPublishedPolicy: (
+    clinicId: string
+  ) => Promise<Record<string, unknown> | null>;
   findManagerDecision: (
     clinicId: string,
     workflowHypothesisId: string
