@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectManagerExceptionValidationIssues } from "../../../base44/functions/compositionOrchestrator/runtimeAdapter.ts";
+import { collectManagerExceptionValidationIssues } from "../../../../base44/functions/compositionOrchestrator/runtimeAdapter.ts";
 
 describe("Agent v1.1 manager exception isolation", () => {
   it("hard-isolates only explicitly archived exception artifacts", () => {
