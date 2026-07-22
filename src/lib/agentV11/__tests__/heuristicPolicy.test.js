@@ -14,10 +14,13 @@ const policy = {
     precedence: ["document", "system_business", "captured_at", "received_at"],
     evaluate_delay_as_fault: false,
   },
-  missing_segments: {
-    semantics: "descriptive",
-    triggers_manager_dispatch: false,
-    triggers_exception: false,
+  missing_segments: { semantics: "descriptive", triggers_manager_dispatch: false, triggers_exception: false },
+  business_family_gating: { enabled: true, conflict_action: "block_candidate" },
+  device_consistency: { explicit_conflict_action: "block_candidate" },
+  manager_approved_exception: {
+    output_status: "manager_approved_exception",
+    normal_assembly_eligible: false,
+    contributes_to_learning: false,
   },
   department_handoff_rules: [
     { rule_code: "HANDOFF_OPTOMETRY_DOCTOR", from_department: "OPTOMETRY", to_department: "OUTPATIENT", score_adjustment: 0.2 },
@@ -35,71 +38,86 @@ const policy = {
   },
 };
 
+const candidate = {
+  workflow_id: "wf-a",
+  clinic_id: "phase-it-policy",
+  workflow_status: "open",
+  business_domain: "CLINICAL",
+  department: "OUTPATIENT",
+  base_score: 0.7,
+};
+
+function evaluate(evidence, candidates = [candidate]) {
+  return evaluateHeuristicPolicyShadow({ policy, evidence: { clinic_id: "phase-it-policy", event_times: {}, ...evidence }, candidates });
+}
+
 describe("Agent v1.1 heuristic policy shadow evaluator", () => {
-  it("requires explicit shadow mode and product-safe missing/reverse semantics", () => {
+  it("requires shadow-only safety configuration", () => {
     expect(validateHeuristicPolicy(policy)).toEqual({ valid: true, errors: [] });
     expect(validateHeuristicPolicy({ ...policy, execution_mode: "active" }).errors).toContain("execution_mode_must_be_shadow");
-    expect(validateHeuristicPolicy({ ...policy, missing_segments: { ...policy.missing_segments, triggers_manager_dispatch: true } }).errors)
-      .toContain("missing_segments_dispatch_forbidden");
+    expect(validateHeuristicPolicy({ ...policy, manager_approved_exception: { ...policy.manager_approved_exception, normal_assembly_eligible: true } }).errors)
+      .toContain("manager_approved_exception_boundary_invalid");
   });
 
-  it("uses configured department rules and remains non-authoritative", () => {
-    const result = evaluateHeuristicPolicyShadow({
-      policy,
-      evidence: {
-        clinic_id: "phase-it-policy",
-        department: "OPTOMETRY",
-        uploader_role: "OPTOMETRIST",
-        event_times: { document: "2026-07-22T09:15:00+09:00", captured_at: "2026-07-22T10:00:00+09:00" },
-      },
-      candidates: [
-        { workflow_id: "wf-a", clinic_id: "phase-it-policy", workflow_status: "open", department: "OUTPATIENT", base_score: 0.4 },
-      ],
-    });
-    expect(result.ok).toBe(true);
-    expect(result.authoritative).toBe(false);
-    expect(result.proposed_candidates[0].candidate_score).toBeCloseTo(0.6);
-    expect(result.effective_event_time.event_time_source).toBe("document");
-    expect(result.needs_manager_dispatch).toBe(false);
+  it("S003 blocks an undeclared source-role conflict and emits rule trace", () => {
+    const result = evaluate({ uploader_role: "RECEPTION", content_role: "DOCTOR", is_proxy: false });
+    expect(result.proposed_candidates).toHaveLength(0);
+    expect(result.blocked_candidates[0].rule_codes).toContain("UNDECLARED_SOURCE_ROLE_CONFLICT");
+    expect(result.rule_trace).toContainEqual(expect.objectContaining({ rule_code: "UNDECLARED_SOURCE_ROLE_CONFLICT", effect: "candidate_blocked" }));
   });
 
-  it("allows a declared proxy but blocks an undeclared source-role conflict", () => {
-    const candidate = { workflow_id: "wf-a", clinic_id: "phase-it-policy", workflow_status: "open", department: "OUTPATIENT", base_score: 0.7 };
-    const declared = evaluateHeuristicPolicyShadow({
-      policy,
-      evidence: { clinic_id: "phase-it-policy", uploader_role: "RECEPTION", content_role: "DOCTOR", is_proxy: true, on_behalf_of_role: "DOCTOR", event_times: {} },
-      candidates: [candidate],
-    });
-    expect(declared.proposed_candidates).toHaveLength(1);
-    const undeclared = evaluateHeuristicPolicyShadow({
-      policy,
-      evidence: { clinic_id: "phase-it-policy", uploader_role: "RECEPTION", content_role: "DOCTOR", is_proxy: false, event_times: {} },
-      candidates: [candidate],
-    });
-    expect(undeclared.proposed_candidates).toHaveLength(0);
-    expect(undeclared.blocked_candidates[0].rule_codes).toContain("UNDECLARED_SOURCE_ROLE_CONFLICT");
+  it("allows the configured declared proxy without weakening unrelated hard blocks", () => {
+    const result = evaluate({ uploader_role: "RECEPTION", content_role: "DOCTOR", is_proxy: true, on_behalf_of_role: "DOCTOR" });
+    expect(result.proposed_candidates).toHaveLength(1);
+    expect(result.rule_trace).toContainEqual(expect.objectContaining({ rule_code: "DECLARED_PROXY_ALLOWED", effect: "candidate_scored" }));
   });
 
-  it("treats financial reverse inference as expected missing, never fact or closure evidence", () => {
-    const inferred = inferExpectedMissing({ business_domain: "FINANCE", payment_category: "oct_exam_fee" }, policy);
+  it("S004 blocks a business-family conflict", () => {
+    const result = evaluate({ business_domain: "FINANCE" });
+    expect(result.proposed_candidates).toHaveLength(0);
+    expect(result.blocked_candidates[0].rule_codes).toContain("BUSINESS_FAMILY_CONFLICT");
+  });
+
+  it("S009 records financial reverse inference only as expected_missing", () => {
+    const evidence = { business_domain: "FINANCE", payment_category: "oct_exam_fee" };
+    const inferred = inferExpectedMissing(evidence, policy);
     expect(inferred).toEqual([expect.objectContaining({
       artifact_type: "ophthalmic_imaging",
       status: "expected_missing",
       creates_fact: false,
       closure_evidence: false,
     })]);
+    const result = evaluate(evidence, [{ ...candidate, business_domain: "FINANCE" }]);
+    expect(result.expected_missing).toEqual(inferred);
+    expect(result.creates_virtual_artifact).toBe(false);
+    expect(result.contributes_to_closure).toBe(false);
+    expect(result.needs_manager_dispatch).toBe(false);
   });
 
-  it("hard-blocks cross-tenant and closed workflows regardless of score", () => {
-    const result = evaluateHeuristicPolicyShadow({
-      policy,
-      evidence: { clinic_id: "clinic-a", uploader_role: "OPTOMETRIST", event_times: {} },
-      candidates: [
-        { workflow_id: "wf-cross", clinic_id: "clinic-b", workflow_status: "open", base_score: 1 },
-        { workflow_id: "wf-closed", clinic_id: "clinic-a", workflow_status: "closed", base_score: 1 },
-      ],
-    });
+  it("S014 blocks an explicit device identity conflict", () => {
+    const result = evaluate({ device_id: "device-a" }, [{ ...candidate, device_id: "device-b" }]);
     expect(result.proposed_candidates).toHaveLength(0);
-    expect(result.blocked_candidates.flatMap((item) => item.rule_codes)).toEqual(expect.arrayContaining(["cross_tenant", "workflow_closed"]));
+    expect(result.blocked_candidates[0].rule_codes).toContain("DEVICE_IDENTITY_CONFLICT");
+  });
+
+  it("S015 preserves a manager-approved exception as archive-only and excludes normal learning", () => {
+    const result = evaluate({ manager_approved_exception: true, business_domain: "CLINICAL" });
+    expect(result.proposed_status).toBe("manager_approved_exception");
+    expect(result.normal_assembly_eligible).toBe(false);
+    expect(result.contributes_to_learning).toBe(false);
+    expect(result.proposed_candidates).toHaveLength(0);
+    expect(result.blocked_candidates[0].rule_codes).toContain("MANAGER_APPROVED_EXCEPTION_ARCHIVE_ONLY");
+  });
+
+  it("remains non-authoritative and never dispatches, closes, or creates facts", () => {
+    const result = evaluate({ business_domain: "CLINICAL" });
+    expect(result).toEqual(expect.objectContaining({
+      authoritative: false,
+      execution_mode: "shadow",
+      needs_manager_dispatch: false,
+      creates_exception: false,
+      creates_virtual_artifact: false,
+      contributes_to_closure: false,
+    }));
   });
 });
