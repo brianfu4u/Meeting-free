@@ -120,6 +120,7 @@ function isolatedOps({ autoAttachMode = "commit" } = {}) {
       return row;
     }),
     createAttention: async descriptor => ({ id: "attention-1", ...descriptor }),
+    getWorkflow: async id => id === workflow.id ? workflow : null,
     agentAutoAttachMode: () => autoAttachMode,
     recordAgentAutoAttachObservation: async request => {
       if (intent) return { outcome: "observed", idempotent: true, intent };

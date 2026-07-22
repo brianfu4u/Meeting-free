@@ -46,8 +46,22 @@ async function execute(scenario, actor) {
     const replay=unwrap(await base44.functions.invoke("compositionOrchestrator",request)); assert(replay?.idempotent===true&&replay?.run?.id===first.run.id,"replay_failed");
     const replayCounts=await counts(); for(const e of ["CompositionRun","WorkflowHypothesis","AgentAttachIntent","WorkflowArtifactLink","WorkflowSnapshot","UndoListItem"]) assert(replayCounts[e]===after[e],`replay_growth_${e}`);
     // Oracle is consulted only after runtime fixture execution and gate observation.
+    // Match every declared dimension so dispatch/validation regressions cannot
+    // hide behind a correct eligible boolean.
+    const actualEligible=first.run.auto_attach_eligible===true;
+    const actualGuardrailDispatch=first.dispatch?.needsManagerDispatch===true;
+    const actualValidationBlock=
+      reasons.includes("validation_blocks_present") ||
+      (Array.isArray(first.hypotheses) && first.hypotheses.some(
+        h=>Array.isArray(h.validation_blocks)&&h.validation_blocks.length>0
+      ));
+    const oracleChecks={
+      eligible:actualEligible===scenario.oracle.expected_eligible,
+      guardrail_dispatch:actualGuardrailDispatch===scenario.oracle.expected_guardrail_dispatch,
+      validation_block:actualValidationBlock===scenario.oracle.expected_validation_block,
+    };
     report.oracle=scenario.oracle;
-    report.result={eligible:first.run.auto_attach_eligible===true,gate_reasons:reasons,oracle_match:(first.run.auto_attach_eligible===true)===scenario.oracle.expected_eligible,observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true};
+    report.result={eligible:actualEligible,gate_reasons:reasons,actual_guardrail_dispatch:actualGuardrailDispatch,actual_validation_block:actualValidationBlock,oracle_checks:oracleChecks,oracle_match:Object.values(oracleChecks).every(Boolean),observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true};
   } catch(e) { report.error=String(e?.message||e).replace(/[\r\n]+/g," ").slice(0,300); }
   finally { const before=await counts(); for(const e of ENTITIES) for(const x of await rows(e)) await base44.entities[e].delete(String(x.id)); const after=await counts(); report.cleanup={before,after,cleanup_all_zero:Object.values(after).every(x=>x===0)}; }
   return report;

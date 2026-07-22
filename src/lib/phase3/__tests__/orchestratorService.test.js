@@ -374,6 +374,83 @@ describe("compositionOrchestrator run", () => {
       auto_attach_outcome: "observed",
     }));
   });
+  it("blocks observe intent creation for a closed target Workflow", async () => {
+    const ops = makeOps({
+      agentAutoAttachMode: () => "observe",
+      getWorkflow: vi.fn(async (id) => ({
+        id, clinic_id: "c1", status: "closed",
+        current_snapshot_id: "snap3", current_snapshot_version: 3,
+      })),
+      executePipeline: vi.fn(async () => ({
+        hypotheses: [{
+          source_proposal_id: "p-closed",
+          workflow_hypothesis_id: "p-closed#h0",
+          composition_type: "attach",
+          target_workflow_id: "wf1",
+          target_snapshot_id: "snap3",
+          target_snapshot_version: 3,
+          ordered_artifact_ids: ["a1"],
+        }],
+        guardrailResult: {
+          bestHypothesisId: "p-closed#h0",
+          needsManagerDispatch: false,
+        },
+        validationIssues: [], artifactIds: ["a1"], factCardIds: ["fc1"],
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.auto_attach_gate).toEqual({
+      mode: "observe",
+      eligible: false,
+      reasons: ["workflow_closed"],
+      hypothesisId: "p-closed#h0",
+    });
+    expect(result.authoritative_attachment).toBeNull();
+    expect(result.review).toMatchObject({
+      required: false,
+      reason: "authoritative_target_closed",
+    });
+    expect(result.attention_item).toBeNull();
+    expect(ops.createAttention).not.toHaveBeenCalled();
+    expect(ops.recordAgentAutoAttachObservation).not.toHaveBeenCalled();
+    expect(ops.executeAgentAutoAttach).not.toHaveBeenCalled();
+    expect(ops.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      auto_attach_eligible: false,
+      auto_attach_gate_reasons: ["workflow_closed"],
+      auto_attach_outcome: "not_eligible",
+    }));
+  });
+  it("keeps an active Workflow eligible even when open_loops is empty", async () => {
+    const ops = makeOps({
+      agentAutoAttachMode: () => "observe",
+      getWorkflow: vi.fn(async (id) => ({
+        id, clinic_id: "c1", status: "active", open_loops: [],
+        current_snapshot_id: "snap3", current_snapshot_version: 3,
+      })),
+      executePipeline: vi.fn(async () => ({
+        hypotheses: [{
+          source_proposal_id: "p-active",
+          workflow_hypothesis_id: "p-active#h0",
+          composition_type: "attach",
+          target_workflow_id: "wf1",
+          target_snapshot_id: "snap3",
+          target_snapshot_version: 3,
+          ordered_artifact_ids: ["a1"],
+        }],
+        guardrailResult: {
+          bestHypothesisId: "p-active#h0",
+          needsManagerDispatch: false,
+        },
+        validationIssues: [], artifactIds: ["a1"], factCardIds: ["fc1"],
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.auto_attach_gate).toMatchObject({
+      eligible: true,
+      reasons: [],
+    });
+    expect(ops.recordAgentAutoAttachObservation).toHaveBeenCalledTimes(1);
+  });
   it("resumes an unfinished attach intent when the CompositionRun retry finds the existing run", async () => {
     const existing = { id: "run-1", clinic_id: "c1", status: "running" };
     const recovery = {
