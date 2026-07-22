@@ -64,6 +64,16 @@
       "type": "string",
       "description": "Server-validated declared business role represented by a proxy upload"
     },
+    "exception_class": {
+      "type": "string",
+      "enum": ["manager_approved_exception"],
+      "description": "Explicit exceptional context isolated from normal assembly and rule learning"
+    },
+    "normal_rule_learning_eligible": {
+      "type": "boolean",
+      "default": true,
+      "description": "False permanently excludes this Artifact from normal policy/rule learning"
+    },
     "source_workflow_id": {
       "type": "string",
       "description": "Phase 3\uff1a\u663e\u5f0f\u7ed1\u5b9a Workflow ID\uff08CandidateFinder explicit_id \u81ea\u52a8\u6302\u63a5\u4f9d\u636e\uff09"
