@@ -61,7 +61,7 @@ async function execute(scenario, actor) {
       validation_block:actualValidationBlock===scenario.oracle.expected_validation_block,
     };
     report.oracle=scenario.oracle;
-    report.result={eligible:actualEligible,gate_reasons:reasons,actual_guardrail_dispatch:actualGuardrailDispatch,actual_validation_block:actualValidationBlock,oracle_checks:oracleChecks,oracle_match:Object.values(oracleChecks).every(Boolean),observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true};
+    report.result={eligible:actualEligible,gate_reasons:reasons,actual_guardrail_dispatch:actualGuardrailDispatch,actual_validation_block:actualValidationBlock,llm_audit:{required:first.run.llm_audit_required===true,type:first.run.llm_audit_type||null,status:first.run.llm_audit_status||null,reason_codes:Array.isArray(first.run.llm_audit_reason_codes)?first.run.llm_audit_reason_codes:[]},oracle_checks:oracleChecks,oracle_match:Object.values(oracleChecks).every(Boolean),observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true};
   } catch(e) { report.error=String(e?.message||e).replace(/[\r\n]+/g," ").slice(0,300); }
   finally { const before=await counts(); for(const e of ENTITIES) for(const x of await rows(e)) await base44.entities[e].delete(String(x.id)); const after=await counts(); report.cleanup={before,after,cleanup_all_zero:Object.values(after).every(x=>x===0)}; }
   return report;
