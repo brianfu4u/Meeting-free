@@ -12,7 +12,7 @@ async function execute(scenario, actor) {
   const rows = async e => (await base44.entities[e].filter({clinic_id:clinic})) || [];
   const create = async (e,p) => { assert(p.clinic_id === clinic,"tenant_scope"); return await base44.entities[e].create(p); };
   const counts = async () => Object.fromEntries(await Promise.all(ENTITIES.map(async e=>[e,(await rows(e)).length])));
-  const report={scenario_id:scenario.scenario_id,execution_support:"supported",oracle:scenario.oracle,result:null,cleanup:null};
+  const report={scenario_id:scenario.scenario_id,execution_support:"supported",result:null,cleanup:null};
   try {
     const now=new Date(), nowIso=now.toISOString(), c=clock(now);
     const staff=await create("Staff",{clinic_id:clinic,user_id:actor.id,staff_name:"V2 Observe",role:"doctor",role_group:"medical_core",status:"off_duty"});
@@ -45,6 +45,8 @@ async function execute(scenario, actor) {
     assert(after.WorkflowArtifactLink===baseline.WorkflowArtifactLink,"link_write"); assert(after.WorkflowSnapshot===baseline.WorkflowSnapshot,"snapshot_write"); assert((await rows("UndoListItem")).every(x=>x.status==="pending"),"undo_write"); assert(after.ManagerDecision===0&&after.WorkflowCommitIntent===0,"authority_write");
     const replay=unwrap(await base44.functions.invoke("compositionOrchestrator",request)); assert(replay?.idempotent===true&&replay?.run?.id===first.run.id,"replay_failed");
     const replayCounts=await counts(); for(const e of ["CompositionRun","WorkflowHypothesis","AgentAttachIntent","WorkflowArtifactLink","WorkflowSnapshot","UndoListItem"]) assert(replayCounts[e]===after[e],`replay_growth_${e}`);
+    // Oracle is consulted only after runtime fixture execution and gate observation.
+    report.oracle=scenario.oracle;
     report.result={eligible:first.run.auto_attach_eligible===true,gate_reasons:reasons,oracle_match:(first.run.auto_attach_eligible===true)===scenario.oracle.expected_eligible,observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true};
   } catch(e) { report.error=String(e?.message||e).replace(/[\r\n]+/g," ").slice(0,300); }
   finally { const before=await counts(); for(const e of ENTITIES) for(const x of await rows(e)) await base44.entities[e].delete(String(x.id)); const after=await counts(); report.cleanup={before,after,cleanup_all_zero:Object.values(after).every(x=>x===0)}; }
