@@ -21,9 +21,20 @@ describe("Agent v1.1 Scenario DSL v2", () => {
     const output = run(`${header}\nS009,财务收款,patient_care,OCT收费,1,FALSE,FALSE,TRUE,倒推\n`);
     const scenario = output.scenarios[0];
     expect(output.schema_version).toBe("agent-v11-scenario-dsl-v2");
+    expect(output.runner_compatibility).toBe("requires_v2_fixture_adapter");
     expect(scenario.fixture.fragments[0].finance_expected_missing).toEqual(["ophthalmic_imaging"]);
     expect(scenario.fixture).not.toHaveProperty("expected_eligible");
     expect(scenario.oracle.expected_eligible).toBe(true);
+  });
+
+  it("honestly marks runtime fixture gaps instead of treating the oracle as execution", () => {
+    const unsupported = run(`${header}\nS003,后勤→医生处方,patient_care,role,1,TRUE,TRUE,FALSE,role\n`).scenarios[0];
+    const approximate = run(`${header}\nS010,跨诊所,patient_care,cross,1,TRUE,TRUE,FALSE,cross\n`).scenarios[0];
+    expect(unsupported.execution_support).toEqual({
+      level: "unsupported", reason: "runtime_role_source_conflict_fixture_not_wired",
+    });
+    expect(approximate.execution_support.level).toBe("approximate");
+    expect(unsupported.fixture).not.toHaveProperty("expected_eligible");
   });
 
   it("represents multi-candidate ambiguity as two real workflows", () => {
