@@ -136,6 +136,8 @@ function makeOps(overrides = {}) {
       workflow_hypothesis_id: "h1",
       ...patch,
     })),
+    findManagerExceptionDecision: vi.fn(async () => null),
+    getPublishedPolicy: vi.fn(async () => ({ id: "policy-1", clinic_id: "c1", policy_version: 7, status: "published" })),
     findManagerDecision: vi.fn(async () => null),
     createManagerDecision: vi.fn(async (d) => ({ id: "md-1", ...d })),
     updateAttention: vi.fn(async (id, patch) => ({
@@ -974,5 +976,48 @@ describe("compositionOrchestrator attach commit", () => {
     const result = await createCompositionService(ops).handle(request, admin);
     expect(result.http_status).toBe(403);
     expect(ops.planAttachCommit).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("manager exception archive isolation", () => {
+  const manager = { user_id: "manager-1", role: "admin", clinic_id: "c1" };
+  it("creates one archive-only decision without policy or attachment mutation", async () => {
+    const policy = { id: "policy-1", clinic_id: "c1", policy_version: 7, status: "published", decision_rules: { min_score: 0.8 } };
+    const policyBefore = JSON.stringify(policy);
+    const createManagerDecision = vi.fn(async d => ({ id: "md-exception-1", ...d }));
+    const ops = makeOps({
+      getArtifact: vi.fn(async id => ({ id, clinic_id: "c1", exception_class: "manager_approved_exception", normal_rule_learning_eligible: false })),
+      getPublishedPolicy: vi.fn(async () => policy),
+      findManagerExceptionDecision: vi.fn(async () => null),
+      createManagerDecision,
+    });
+    const result = await createCompositionService(ops).handle({ action: "review", clinic_id: "c1", exception_artifact_id: "artifact-exception-1", decision_note: "approved for archive only" }, manager);
+    expect(result.http_status).toBe(201);
+    expect(result.normal_rule_policy_mutation).toBe(false);
+    expect(result.authoritative_attachment).toBeNull();
+    expect(result.exception_archive).toMatchObject({ target_type: "artifact_exception", decision_scope: "exception_archive_only", normal_rule_learning_eligible: false, policy_version_at_decision: 7 });
+    expect(JSON.stringify(policy)).toBe(policyBefore);
+    expect(ops.executeCommitSaga).not.toHaveBeenCalled();
+    expect(ops.executeAgentAutoAttach).not.toHaveBeenCalled();
+    expect(createManagerDecision).toHaveBeenCalledTimes(1);
+  });
+  it("replays an existing archive without creating a second record", async () => {
+    const existing = { id: "md-existing", clinic_id: "c1", target_type: "artifact_exception", target_id: "artifact-exception-1", decision: "approved", decision_scope: "exception_archive_only", normal_rule_learning_eligible: false };
+    const ops = makeOps({
+      getArtifact: vi.fn(async id => ({ id, clinic_id: "c1", exception_class: "manager_approved_exception", normal_rule_learning_eligible: false })),
+      findManagerExceptionDecision: vi.fn(async () => existing),
+    });
+    const result = await createCompositionService(ops).handle({ action: "review", clinic_id: "c1", exception_artifact_id: "artifact-exception-1" }, manager);
+    expect(result.http_status).toBe(200);
+    expect(result.idempotent).toBe(true);
+    expect(result.exception_archive.id).toBe("md-existing");
+    expect(ops.createManagerDecision).not.toHaveBeenCalled();
+  });
+  it("rejects normal artifacts from the archive-only path", async () => {
+    const ops = makeOps({ getArtifact: vi.fn(async id => ({ id, clinic_id: "c1", normal_rule_learning_eligible: true })) });
+    const result = await createCompositionService(ops).handle({ action: "review", clinic_id: "c1", exception_artifact_id: "ordinary-artifact" }, manager);
+    expect(result).toMatchObject({ http_status: 409, error_code: "exception_archive_contract_required" });
+    expect(ops.createManagerDecision).not.toHaveBeenCalled();
   });
 });
