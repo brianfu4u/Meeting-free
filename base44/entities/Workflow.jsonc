@@ -24,6 +24,10 @@
       },
       "additionalProperties": true
     },
+    "device_serial": {
+      "type": "string",
+      "description": "Explicit device identity used by Agent v1.1 hard-conflict validation"
+    },
     "status": {
       "type": "string",
       "enum": [
