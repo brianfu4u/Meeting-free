@@ -1,0 +1,33 @@
+{
+  "schema_version": "agent-v11-observe-batch-v1",
+  "scenarios": [
+    {
+      "scenario_id": "normal-forward-01",
+      "scenario_type": "normal_forward",
+      "workflow": {
+        "workflow_family": "optometry",
+        "subject_type": "patient",
+        "subject_name": "REDACTED-SUBJECT",
+        "open_loops": ["clinical_review"]
+      },
+      "fragments": [
+        {
+          "targeting": "explicit",
+          "artifact_type": "image",
+          "source_region": "optometry",
+          "occurred_at_offset_seconds": 0,
+          "workflow_family_hint": "optometry",
+          "subject_type": "patient",
+          "subject_name": "REDACTED-SUBJECT",
+          "fields": [
+            {
+              "field_name": "refraction_result",
+              "value": "OD -2.00 OS -1.75",
+              "source_quote": "redacted structured extraction"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
