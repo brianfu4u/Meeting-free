@@ -61,9 +61,9 @@
     },
     "trigger_type": {
       "type": "string",
-      "enum": ["manual", "scheduled"],
-      "default": "manual",
-      "description": "运行触发来源"
+      "enum": ["manual", "scheduled", "manager_manual", "cutoff_reconciliation"],
+      "default": "manager_manual",
+      "description": "运行触发来源；manual 仅用于历史兼容"
     },
     "prompt_version": {
       "type": "string",
@@ -84,6 +84,30 @@
     "error_message": {
       "type": "string",
       "description": "面向调用方的安全失败摘要，不得存储 token/stack/原始异常"
+    },
+    "auto_attach_mode": {
+      "type": "string",
+      "enum": ["observe", "commit"],
+      "description": "Agent authority gate used for this Run; observe never writes Snapshot/Link/Undo projections"
+    },
+    "auto_attach_eligible": {
+      "type": "boolean",
+      "description": "Whether the unique best candidate passed every authoritative attachment gate"
+    },
+    "auto_attach_gate_reasons": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Non-evaluative machine-readable reasons why authority remained closed"
+    },
+    "auto_attach_hypothesis_id": {
+      "type": "string",
+      "description": "Unique best hypothesis evaluated by the authority gate"
+    },
+    "auto_attach_outcome": {
+      "type": "string",
+      "enum": ["not_eligible", "observed", "cas_retryable", "committed"],
+      "description": "Outcome of the authority gate without evaluative or alert semantics"
     }
   },
   "required": [

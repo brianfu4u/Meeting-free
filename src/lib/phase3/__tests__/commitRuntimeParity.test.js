@@ -51,7 +51,7 @@ describe("Base44 commit runtime parity", () => {
       "src/lib/phase3/commitPlanner.js blob=de527c61941b640cdd83fd83f6b6f8926c461999"
     );
     expect(runtime).toContain(
-      "src/lib/phase3/commitSaga.js blob=efc10bbaa47d4fb9c3a47fbe9345c90497015365"
+      "src/lib/phase3/commitSaga.js blob=deab30392a2aa683ace60801e300c0d9d6ac1005"
     );
   });
 
@@ -83,6 +83,12 @@ describe("Base44 commit runtime parity", () => {
       updateHypothesis: vi.fn(async (_id, patch) => patch),
       updateAttention: vi.fn(async (_id, patch) => patch),
       updateManagerDecision: vi.fn(async (_id, patch) => patch),
+      createOrGetAttachmentLink: vi.fn(async input => ({
+        id: `link-${input.artifact_id}`, status: "attached",
+        clinic_id: input.clinic_id, workflow_id: input.workflow_id,
+        artifact_id: input.artifact_id,
+      })),
+      reconcileUndoFromAttachmentLink: vi.fn(async () => ({ resolved: 1 })),
     };
     const result = await executeAttachCommitSagaRuntime({
       plan, ops, now: "2026-07-19T02:01:00.000Z",
@@ -114,6 +120,12 @@ describe("Base44 commit runtime parity", () => {
       updateHypothesis: vi.fn(async (_id, patch) => patch),
       updateAttention: vi.fn(async (_id, patch) => patch),
       updateManagerDecision: vi.fn(async (_id, patch) => patch),
+      createOrGetAttachmentLink: vi.fn(async input => ({
+        id: `link-${input.artifact_id}`, status: "attached",
+        clinic_id: input.clinic_id, workflow_id: input.workflow_id,
+        artifact_id: input.artifact_id,
+      })),
+      reconcileUndoFromAttachmentLink: vi.fn(async () => ({ resolved: 1 })),
     };
     const result = await executeAttachCommitSagaRuntime({
       plan, ops, now: "2026-07-19T02:01:00.000Z",

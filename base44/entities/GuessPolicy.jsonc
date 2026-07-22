@@ -97,6 +97,21 @@
       "format": "date-time",
       "description": "\u9000\u5f79\u65f6\u95f4"
     },
+    "daily_cutoff_time": {
+      "type": "string",
+      "default": "17:30",
+      "description": "Daily reconciliation time (HH:mm); state transition only, never an alarm"
+    },
+    "agent_run_frequency": {
+      "type": "number",
+      "default": 2,
+      "description": "Planned daily run count; manager manual runs remain unrestricted"
+    },
+    "next_business_day_start_time": {
+      "type": "string",
+      "default": "08:00",
+      "description": "Reference time for exposing reconciled items on the next business day"
+    },
     "publish_idempotency_key": {
       "type": "string",
       "description": "\u53d1\u5e03\u8bf7\u6c42\u5e42\u7b49\u952e\uff1a\u76f8\u540c clinic_id + key \u7684\u91cd\u590d publish \u8bf7\u6c42\u53ea\u4ea7\u751f\u4e00\u6761 Policy"

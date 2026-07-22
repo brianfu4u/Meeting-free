@@ -23,7 +23,13 @@ function makeOps(overrides = {}) {
       idempotency_key: `${input.clinicId}::${input.businessDate}::${input.slot}::pv${input.policyVersion}::seq${input.cutoffEventSeq}`,
     }),
     buildHypotheses: ({ clinicId, compositionRunId, hypotheses }) =>
-      hypotheses.map((h) => ({ ...h, clinic_id: clinicId, composition_run_id: compositionRunId, status: "pending_review" })),
+      hypotheses.map((h) => ({
+        ...h,
+        clinic_id: clinicId,
+        composition_run_id: compositionRunId,
+        validation_blocks: h.validation_blocks || [],
+        status: "pending_review",
+      })),
     deriveDispatch: ({ guardrailResult = {}, validationIssues }) => ({
       needsManagerDispatch: validationIssues.length > 0,
       bestHypothesisId:
@@ -90,6 +96,18 @@ function makeOps(overrides = {}) {
     })),
     createHypotheses: vi.fn(async (d) => d.map((x, i) => ({ id: `h-${i}`, ...x }))),
     createAttention: vi.fn(async (d) => ({ id: "att-1", ...d })),
+    executeAgentAutoAttach: vi.fn(async () => ({
+      outcome: "committed",
+      idempotent: false,
+      intent: { id: "agent-intent-1", status: "committed" },
+    })),
+    agentAutoAttachMode: () => "commit",
+    recordAgentAutoAttachObservation: vi.fn(async () => ({
+      outcome: "observed",
+      idempotent: false,
+      intent: { id: "observed-intent-1", status: "observed" },
+    })),
+    resumeAgentAutoAttachForRun: vi.fn(async () => null),
     getHypothesisByKey: vi.fn(async (clinicId, key) => ({
       id: "h-db-1",
       clinic_id: clinicId,
@@ -226,6 +244,7 @@ describe("compositionOrchestrator run", () => {
       reason: "human_review_required",
       suggestedHypothesisId: "p1#h0",
       autoCommitAllowed: false,
+      authoritativeAttachmentOutcome: null,
     });
     expect(ops.createHypotheses).toHaveBeenCalledTimes(1);
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
@@ -253,8 +272,132 @@ describe("compositionOrchestrator run", () => {
       reason: "guardrail_dispatch_required",
       suggestedHypothesisId: null,
       autoCommitAllowed: false,
+      authoritativeAttachmentOutcome: null,
     });
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
+  });
+  it("records missing segments without evidence_missing attention or dispatch", async () => {
+    const ops = makeOps({
+      deriveDispatch: () => ({ needsManagerDispatch: false, bestHypothesisId: "p1#h0" }),
+      executePipeline: vi.fn(async () => ({
+        hypotheses: [{ source_proposal_id: "p1", workflow_hypothesis_id: "p1#h0", composition_type: "new_train" }],
+        guardrailResult: { bestHypothesisId: "p1#h0" },
+        validationIssues: [{ type: "missing_segment", segment: "financial_settlement" }],
+        artifactIds: ["a1"], factCardIds: ["fc1"],
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.dispatch.needsManagerDispatch).toBe(false);
+    expect(result.review).toMatchObject({
+      required: false, reason: "missing_segments_recorded",
+    });
+    expect(result.attention_item).toBeNull();
+    expect(ops.createAttention).not.toHaveBeenCalled();
+  });
+  it("routes a unique guardrail-clean attach through the replayable authoritative Saga", async () => {
+    const ops = makeOps({
+      executePipeline: vi.fn(async () => ({
+        hypotheses: [{
+          source_proposal_id: "p-attach",
+          workflow_hypothesis_id: "p-attach#h0",
+          composition_type: "attach",
+          target_workflow_id: "wf1",
+          target_snapshot_id: "snap3",
+          target_snapshot_version: 3,
+          ordered_artifact_ids: ["a1"],
+        }],
+        guardrailResult: {
+          bestHypothesisId: "p-attach#h0",
+          needsManagerDispatch: false,
+        },
+        validationIssues: [],
+        artifactIds: ["a1"], factCardIds: ["fc1"],
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.authoritative_attachment).toMatchObject({
+      outcome: "committed",
+      intent: { id: "agent-intent-1", status: "committed" },
+    });
+    expect(ops.executeAgentAutoAttach).toHaveBeenCalledWith({
+      clinicId: "c1",
+      runId: "run-1",
+      hypothesisId: "p-attach#h0",
+      sourceProposalId: "p-attach",
+      workflowId: "wf1",
+      artifactIds: ["a1"],
+      policyVersion: 3,
+    });
+    expect(result.attention_item).toBeNull();
+    expect(result.review).toMatchObject({
+      required: false,
+      reason: "authoritative_attachment_committed",
+      authoritativeAttachmentOutcome: "committed",
+    });
+  });
+  it("defaults the authority gate to observation without creating authoritative projections", async () => {
+    const ops = makeOps({
+      agentAutoAttachMode: () => "observe",
+      executePipeline: vi.fn(async () => ({
+        hypotheses: [{
+          source_proposal_id: "p-observe",
+          workflow_hypothesis_id: "p-observe#h0",
+          composition_type: "attach",
+          target_workflow_id: "wf1",
+          target_snapshot_id: "snap3",
+          target_snapshot_version: 3,
+          ordered_artifact_ids: ["a1"],
+        }],
+        guardrailResult: {
+          bestHypothesisId: "p-observe#h0",
+          needsManagerDispatch: false,
+        },
+        validationIssues: [], artifactIds: ["a1"], factCardIds: ["fc1"],
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.authoritative_attachment).toMatchObject({
+      outcome: "observed",
+      intent: { status: "observed" },
+    });
+    expect(result.auto_attach_gate).toEqual({
+      mode: "observe", eligible: true, reasons: [], hypothesisId: "p-observe#h0",
+    });
+    expect(result.review).toMatchObject({
+      required: false, reason: "authoritative_attachment_observed",
+    });
+    expect(ops.recordAgentAutoAttachObservation).toHaveBeenCalledTimes(1);
+    expect(ops.executeAgentAutoAttach).not.toHaveBeenCalled();
+    expect(ops.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      auto_attach_mode: "observe",
+      auto_attach_eligible: true,
+      auto_attach_outcome: "observed",
+    }));
+  });
+  it("resumes an unfinished attach intent when the CompositionRun retry finds the existing run", async () => {
+    const existing = { id: "run-1", clinic_id: "c1", status: "running" };
+    const recovery = {
+      outcome: "committed",
+      idempotent: true,
+      repaired: true,
+      intent: { id: "agent-intent-1", status: "committed" },
+    };
+    const ops = makeOps({
+      findRunByIdempotency: vi.fn(async () => existing),
+      resumeAgentAutoAttachForRun: vi.fn(async () => recovery),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result).toMatchObject({
+      http_status: 200,
+      idempotent: true,
+      run: { id: "run-1", clinic_id: "c1", status: "completed" },
+      authoritative_attachment: recovery,
+    });
+    expect(ops.resumeAgentAutoAttachForRun).toHaveBeenCalledWith(existing, 3);
+    expect(ops.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      status: "completed",
+    }));
+    expect(ops.executePipeline).not.toHaveBeenCalled();
   });
   it("serializes concurrent creation with a short lock and second lookup", async () => {
     const existing = { id: "run-other", clinic_id: "c1", status: "running" };

@@ -11,6 +11,7 @@ import {
   canPerform,
   computeRunIdempotencyKey,
 } from "./contract";
+import { normalizeTriggerType } from "../phase4/triggerCore";
 
 const RUN_ERROR_CODES = new Set([
   "authorization_failed",
@@ -75,7 +76,7 @@ export function buildRunDescriptor({
   policyVersion,
   cutoffEventSeq,
   cutoffIngestedAt = null,
-  triggerType = "manual",
+  triggerType = "manager_manual",
   promptVersion = null,
   modelVersion = null,
   contractVersion = PHASE3_CONTRACT_VERSION,
@@ -85,7 +86,8 @@ export function buildRunDescriptor({
   requireString(businessDate, "businessDate");
   requireString(slot, "slot");
   if (policyVersion == null || cutoffEventSeq == null) fail("invalid_input", "run_watermark_required");
-  if (!["manual", "scheduled"].includes(triggerType)) fail("invalid_input", "trigger_type_invalid");
+  const canonicalTrigger = normalizeTriggerType(triggerType);
+  if (!canonicalTrigger) fail("invalid_input", "trigger_type_invalid");
 
   return {
     clinic_id: clinicId,
@@ -104,7 +106,7 @@ export function buildRunDescriptor({
     }),
     proposals_generated: 0,
     artifact_ids_processed: uniqueStrings(artifactIds),
-    trigger_type: triggerType,
+    trigger_type: canonicalTrigger,
     prompt_version: promptVersion,
     model_version: modelVersion,
     contract_version: contractVersion,
@@ -186,7 +188,8 @@ export function buildHypothesisDescriptors({
 }
 
 export function deriveDispatchDecision({ guardrailResult = {}, validationIssues = [] }) {
-  if (asArray(validationIssues).length > 0) {
+  const blockingIssues = asArray(validationIssues).filter(isBlockingValidationIssue);
+  if (blockingIssues.length > 0) {
     return { needsManagerDispatch: true, bestHypothesisId: null };
   }
   return {
@@ -195,6 +198,37 @@ export function deriveDispatchDecision({ guardrailResult = {}, validationIssues 
       ? null
       : guardrailResult.bestHypothesisId || null,
   };
+}
+
+const DESCRIPTIVE_MISSING_CODES = new Set([
+  "missing_segment",
+  "expected_missing",
+  "workflow_segment_missing",
+]);
+
+/**
+ * Missing workflow segments are a factual description of an incomplete story,
+ * not an exception. They must never create evidence_missing attention or
+ * manager dispatch by themselves.
+ */
+export function isBlockingValidationIssue(issue) {
+  if (!issue || typeof issue !== "object") return true;
+  const code = String(issue.rule_code || issue.code || issue.type || "").toLowerCase();
+  if (DESCRIPTIVE_MISSING_CODES.has(code)) return false;
+  if (issue.semantic_class === "missing_segment" || issue.status === "expected_missing") {
+    return false;
+  }
+  return true;
+}
+
+export function partitionValidationIssues(validationIssues = []) {
+  return asArray(validationIssues).reduce(
+    (result, issue) => {
+      result[isBlockingValidationIssue(issue) ? "blockingIssues" : "missingSegments"].push(issue);
+      return result;
+    },
+    { blockingIssues: [], missingSegments: [] }
+  );
 }
 
 export function buildAttentionDescriptor({

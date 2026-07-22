@@ -58,6 +58,12 @@ function makeOps(overrides = {}) {
     updateHypothesis: vi.fn(async (_id, patch) => patch),
     updateAttention: vi.fn(async (_id, patch) => patch),
     updateManagerDecision: vi.fn(async (_id, patch) => patch),
+    createOrGetAttachmentLink: vi.fn(async input => ({
+      id: `link-${input.artifact_id}`, status: "attached",
+      clinic_id: input.clinic_id, workflow_id: input.workflow_id,
+      artifact_id: input.artifact_id,
+    })),
+    reconcileUndoFromAttachmentLink: vi.fn(async () => ({ resolved: 1 })),
     _setIntent(value) { intent = value; },
     _setWorkflow(value) { workflow = value; },
     ...overrides,
@@ -83,6 +89,11 @@ describe("Phase 3 attach commit Saga", () => {
     expect(ops.updateAttention).toHaveBeenCalledWith("att1", {
       committed_workflow_id: "wf1", commit_outcome: "committed",
     });
+    expect(ops.createOrGetAttachmentLink).toHaveBeenCalledTimes(1);
+    expect(ops.reconcileUndoFromAttachmentLink).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "link-a1", status: "attached" }),
+      "2026-07-19T01:01:00.000Z"
+    );
     expect(result.intent.status).toBe("committed");
   });
 

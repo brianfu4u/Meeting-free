@@ -270,8 +270,10 @@ describe("CompositionRun Phase 3 Batch 2 metadata", () => {
       expect(schema.properties).toHaveProperty(field);
     }
   });
-  it("limits trigger_type to manual/scheduled", () => {
-    expect(schema.properties.trigger_type.enum).toEqual(["manual", "scheduled"]);
+  it("retains legacy manual and defines the three Agent v1.1 triggers", () => {
+    expect(schema.properties.trigger_type.enum).toEqual([
+      "manual", "scheduled", "manager_manual", "cutoff_reconciliation",
+    ]);
   });
   it("does not duplicate WorkflowHypothesis relationships", () => {
     expect(schema.properties).not.toHaveProperty("hypothesis_ids");

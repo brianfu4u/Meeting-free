@@ -10,6 +10,7 @@ import {
   buildWorkflowPointerPatch,
   evaluatePointerCasResult,
 } from "./commitPlanner";
+import { executeAuthoritativeAttachSaga } from "../agentV11/authoritativeAttachSaga";
 
 export class CommitSagaError extends Error {
   constructor(code) {
@@ -34,6 +35,8 @@ function requiredOps(ops) {
     "updateHypothesis",
     "updateAttention",
     "updateManagerDecision",
+    "createOrGetAttachmentLink",
+    "reconcileUndoFromAttachmentLink",
   ]) {
     if (typeof ops?.[name] !== "function") fail(`commit_ops_missing_${name}`);
   }
@@ -50,6 +53,22 @@ function pointerMatches(workflow, intent) {
 
 async function projectCommitted({ ops, plan, intent, now }) {
   const workflowId = plan.intent_descriptor.target_workflow_id;
+  await executeAuthoritativeAttachSaga({
+    attachment: {
+      clinicId: plan.intent_descriptor.clinic_id,
+      workflowId,
+      artifactIds: plan.snapshot_descriptor.artifact_ids || [],
+      runId: plan.snapshot_descriptor.composition_run_id,
+      hypothesisId: plan.intent_descriptor.selected_hypothesis_id,
+      snapshotId: intent.new_snapshot_id,
+      snapshotVersion: intent.new_snapshot_version,
+      policyVersion: plan.snapshot_descriptor.policy_version ?? null,
+      decisionSource: "manager_manual",
+      decisionActorId: plan.intent_descriptor.manager_decision_id,
+    },
+    ops,
+    now,
+  });
   await ops.updateHypothesis(plan.intent_descriptor.selected_hypothesis_id, {
     status: "committed",
   });

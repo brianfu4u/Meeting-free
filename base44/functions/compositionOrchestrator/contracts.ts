@@ -20,7 +20,7 @@ export type ServiceRequest = {
   composition_run_id?: string;
   business_date?: string;
   slot?: string;
-  trigger_type?: "manual" | "scheduled";
+  trigger_type?: "manual" | "scheduled" | "manager_manual" | "cutoff_reconciliation";
   cutoff_event_seq?: number;
   cutoff_ingested_at?: string | null;
   policy_version?: number;

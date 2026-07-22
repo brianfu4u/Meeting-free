@@ -481,7 +481,7 @@ async function run(
       clinicId: actor.clinic_id,
       businessDate: request.business_date,
       slot: request.slot,
-      triggerType: request.trigger_type || "manual",
+      triggerType: request.trigger_type || "manager_manual",
       cutoffEventSeq: request.cutoff_event_seq,
       cutoffIngestedAt: request.cutoff_ingested_at ?? null,
       policyVersion: request.policy_version,
@@ -501,7 +501,25 @@ async function run(
       if (!tenantSafe(ops, actor.clinic_id, initialExisting)) {
         return response(403, { error_code: "tenant_scope_violation" });
       }
-      return response(200, { idempotent: true, run: initialExisting });
+      const authoritative_attachment = await ops.resumeAgentAutoAttachForRun(
+        initialExisting,
+        request.policy_version
+      );
+      const recoveredRun =
+        authoritative_attachment?.outcome === "committed" &&
+        initialExisting.status !== "completed"
+          ? await ops.updateRun(String(initialExisting.id), {
+              status: "completed",
+              run_finished_at: ops.now(),
+              error_code: null,
+              error_message: null,
+            })
+          : initialExisting;
+      return response(200, {
+        idempotent: true,
+        run: recoveredRun,
+        authoritative_attachment,
+      });
     }
 
     // Concurrent retry protection: short CAS lease only surrounds recheck + create.
@@ -533,7 +551,25 @@ async function run(
         if (!tenantSafe(ops, actor.clinic_id, lockedExisting)) {
           return response(403, { error_code: "tenant_scope_violation" });
         }
-        return response(200, { idempotent: true, run: lockedExisting });
+        const authoritative_attachment = await ops.resumeAgentAutoAttachForRun(
+          lockedExisting,
+          request.policy_version
+        );
+        const recoveredRun =
+          authoritative_attachment?.outcome === "committed" &&
+          lockedExisting.status !== "completed"
+            ? await ops.updateRun(String(lockedExisting.id), {
+                status: "completed",
+                run_finished_at: ops.now(),
+                error_code: null,
+                error_message: null,
+              })
+            : lockedExisting;
+        return response(200, {
+          idempotent: true,
+          run: recoveredRun,
+          authoritative_attachment,
+        });
       }
       persistedRun = await ops.createRun({
         ...descriptor,
@@ -562,21 +598,86 @@ async function run(
       validationIssues: pipeline.validationIssues || [],
     });
 
+    // Only a unique, guardrail-clean attach may cross the authoritative
+    // attachment boundary. New trains, orphans, incomplete attaches and any
+    // ambiguous/blocked candidate remain non-authoritative.
+    const best = hypotheses.find(
+      (item) => item.workflow_hypothesis_id === dispatch.bestHypothesisId
+    );
+    const autoAttachGateReasons: string[] = [];
+    if (dispatch.needsManagerDispatch) autoAttachGateReasons.push("manager_dispatch_required");
+    if (!best) autoAttachGateReasons.push("unique_best_missing");
+    if (best && best.composition_type !== "attach") autoAttachGateReasons.push("best_not_attach");
+    if (best && !requiredString(best.target_workflow_id)) autoAttachGateReasons.push("target_workflow_missing");
+    if (best && !requiredString(best.target_snapshot_id)) autoAttachGateReasons.push("target_snapshot_missing");
+    if (best && !Number.isFinite(Number(best.target_snapshot_version))) {
+      autoAttachGateReasons.push("target_snapshot_version_missing");
+    }
+    if (best && (!Array.isArray(best.ordered_artifact_ids) || best.ordered_artifact_ids.length === 0)) {
+      autoAttachGateReasons.push("artifact_ids_missing");
+    }
+    if (best && (!Array.isArray(best.validation_blocks) || best.validation_blocks.length > 0)) {
+      autoAttachGateReasons.push("validation_blocks_present");
+    }
+    const canAutoAttach = autoAttachGateReasons.length === 0;
+    const autoAttachMode = ops.agentAutoAttachMode();
+    const authoritative_attachment = canAutoAttach
+      ? await (autoAttachMode === "commit"
+        ? ops.executeAgentAutoAttach
+        : ops.recordAgentAutoAttachObservation)({
+          clinicId: actor.clinic_id,
+          runId: String(persistedRun.id),
+          hypothesisId: String(best.workflow_hypothesis_id),
+          sourceProposalId: String(best.source_proposal_id),
+          workflowId: String(best.target_workflow_id),
+          artifactIds: best.ordered_artifact_ids,
+          policyVersion: request.policy_version,
+        })
+      : null;
+    if (authoritative_attachment?.outcome === "committed" && best) {
+      // Keep the immediate API response consistent with the persisted
+      // Hypothesis projection performed inside the Saga.
+      best.status = "committed";
+    }
+
     // Review visibility is independent from Guardrail ambiguity semantics:
     // every persisted pending_review hypothesis must be visible to a manager.
     // A unique best candidate is only a suggestion; it is never auto-selected,
     // approved, dispatched, or committed.
     let attention_item: Record<string, unknown> | null = null;
-    const pendingReviewExists = hypotheses.some((item) => item.status === "pending_review");
+    const autoAttachAttempted = authoritative_attachment !== null;
+    const pendingReviewExists = hypotheses.some(
+      (item) =>
+        item.status === "pending_review" &&
+        (!autoAttachAttempted ||
+          item.workflow_hypothesis_id !== best?.workflow_hypothesis_id)
+    );
+    // A missing segment describes an incomplete Workflow; it is not an
+    // exception and must not create evidence_missing attention/dispatch.
+    const descriptiveMissingOnly =
+      (pipeline.validationIssues || []).length > 0 &&
+      !dispatch.needsManagerDispatch &&
+      Boolean(dispatch.bestHypothesisId);
     const review = {
-      required: pendingReviewExists || dispatch.needsManagerDispatch,
+      required:
+        dispatch.needsManagerDispatch || (pendingReviewExists && !descriptiveMissingOnly),
       reason: dispatch.needsManagerDispatch
         ? "guardrail_dispatch_required"
+        : authoritative_attachment?.outcome === "committed"
+          ? "authoritative_attachment_committed"
+        : authoritative_attachment?.outcome === "cas_retryable"
+          ? "authoritative_attachment_retryable"
+        : authoritative_attachment?.outcome === "observed"
+          ? "authoritative_attachment_observed"
+        : descriptiveMissingOnly
+          ? "missing_segments_recorded"
         : pendingReviewExists
           ? "human_review_required"
           : "not_required",
       suggestedHypothesisId: dispatch.bestHypothesisId || null,
       autoCommitAllowed: false,
+      authoritativeAttachmentOutcome:
+        authoritative_attachment?.outcome || null,
     };
     if (review.required) {
       const attentionDescriptor = ops.buildAttention({
@@ -596,6 +697,11 @@ async function run(
       run_finished_at: ops.now(),
       proposals_generated: hypotheses.length,
       artifact_ids_processed: pipeline.artifactIds || [],
+      auto_attach_mode: autoAttachMode,
+      auto_attach_eligible: canAutoAttach,
+      auto_attach_gate_reasons: autoAttachGateReasons,
+      auto_attach_hypothesis_id: best?.workflow_hypothesis_id || null,
+      auto_attach_outcome: authoritative_attachment?.outcome || "not_eligible",
       error_code: null,
       error_message: null,
     });
@@ -606,6 +712,13 @@ async function run(
       attention_item,
       review,
       dispatch,
+      authoritative_attachment,
+      auto_attach_gate: {
+        mode: autoAttachMode,
+        eligible: canAutoAttach,
+        reasons: autoAttachGateReasons,
+        hypothesisId: best?.workflow_hypothesis_id || null,
+      },
     });
   } catch (error) {
     const failure = ops.buildFailure(error);
