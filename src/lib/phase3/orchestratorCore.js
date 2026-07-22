@@ -188,8 +188,13 @@ export function buildHypothesisDescriptors({
 }
 
 export function deriveDispatchDecision({ guardrailResult = {}, validationIssues = [] }) {
-  const blockingIssues = asArray(validationIssues).filter(isBlockingValidationIssue);
-  const ambiguousCandidates = Boolean(guardrailResult.needsManagerDispatch);
+  const issues = asArray(validationIssues);
+  const ambiguityIssues = issues.filter(isAmbiguityValidationIssue);
+  const blockingIssues = issues.filter(
+    (issue) => !isAmbiguityValidationIssue(issue) && isBlockingValidationIssue(issue)
+  );
+  const ambiguousCandidates =
+    Boolean(guardrailResult.needsManagerDispatch) || ambiguityIssues.length > 0;
   const validationBlocked = blockingIssues.length > 0;
   const llmAuditReasonCodes = [];
   if (ambiguousCandidates) llmAuditReasonCodes.push("ambiguous_candidates");
@@ -215,6 +220,18 @@ const DESCRIPTIVE_MISSING_CODES = new Set([
   "expected_missing",
   "workflow_segment_missing",
 ]);
+
+const AMBIGUITY_ISSUE_CODES = new Set([
+  "remaining_orphans",
+  "orphan_cluster_overlap",
+  "candidate_ambiguity",
+]);
+
+export function isAmbiguityValidationIssue(issue) {
+  if (!issue || typeof issue !== "object") return false;
+  const code = String(issue.rule_code || issue.code || issue.type || "").toLowerCase();
+  return AMBIGUITY_ISSUE_CODES.has(code) || issue.semantic_class === "candidate_ambiguity";
+}
 
 /**
  * Missing workflow segments are a factual description of an incomplete story,
