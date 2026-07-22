@@ -70,6 +70,24 @@ const BLUEPRINTS = {
   S015: () => ({ workflows: [primary()], fragments: [fragment({ source_department: "FRONT_DESK", source_role: "RECEPTION", category_id: "prescription_order", is_proxy: true, proxy_for_role: "DOCTOR", exception_class: "manager_approved_exception", normal_rule_learning_eligible: false })] }),
 };
 
+const EXECUTION_SUPPORT = {
+  S001: { level: "supported", reason: null },
+  S002: { level: "supported", reason: null },
+  S003: { level: "unsupported", reason: "runtime_role_source_conflict_fixture_not_wired" },
+  S004: { level: "unsupported", reason: "runtime_business_family_conflict_fixture_not_wired" },
+  S005: { level: "supported", reason: null },
+  S006: { level: "supported", reason: null },
+  S007: { level: "supported", reason: null },
+  S008: { level: "supported", reason: null },
+  S009: { level: "unsupported", reason: "runtime_finance_expected_missing_projection_not_wired" },
+  S010: { level: "approximate", reason: "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context" },
+  S011: { level: "approximate", reason: "causal_order_is_descriptive_until_runtime_rule_code_is_wired" },
+  S012: { level: "supported", reason: null },
+  S013: { level: "supported", reason: null },
+  S014: { level: "unsupported", reason: "runtime_device_identity_veto_fixture_not_wired" },
+  S015: { level: "unsupported", reason: "runtime_manager_approved_exception_archive_path_not_wired" },
+};
+
 function convert(row) {
   const id = row.scenario_id.trim().toUpperCase();
   const blueprint = BLUEPRINTS[id];
@@ -80,6 +98,7 @@ function convert(row) {
     scenario_type: row.business_family.trim().toLowerCase(),
     source_spec: { department: row.department, description: row.description, notes: row.notes },
     fixture,
+    execution_support: EXECUTION_SUPPORT[id],
     oracle: {
       expected_eligible: bool(row.expected_eligible, "expected_eligible", id),
       expected_guardrail_dispatch: bool(row.has_guardrail_dispatch, "has_guardrail_dispatch", id),
@@ -98,4 +117,8 @@ const scenarios = rows.map((row) => {
   ids.add(row.scenario_id);
   return convert(row);
 });
-process.stdout.write(`${JSON.stringify({ schema_version: "agent-v11-scenario-dsl-v2", scenarios }, null, 2)}\n`);
+process.stdout.write(`${JSON.stringify({
+  schema_version: "agent-v11-scenario-dsl-v2",
+  runner_compatibility: "requires_v2_fixture_adapter",
+  scenarios,
+}, null, 2)}\n`);
