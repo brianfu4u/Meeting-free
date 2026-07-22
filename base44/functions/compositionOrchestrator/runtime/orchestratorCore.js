@@ -1,4 +1,4 @@
-// GENERATED_PHASE3_MIRROR source=src/lib/phase3/orchestratorCore.js blob=025ef158a00f139f2b785bc6f06edc257aed6341
+// GENERATED_PHASE3_MIRROR source=src/lib/phase3/orchestratorCore.js blob=32d0fe8362990a42f5e736beae1b4e2c88f133b3
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS Phase 3 — Composition Orchestrator Core
@@ -190,8 +190,13 @@ export function buildHypothesisDescriptors({
 }
 
 export function deriveDispatchDecision({ guardrailResult = {}, validationIssues = [] }) {
-  const blockingIssues = asArray(validationIssues).filter(isBlockingValidationIssue);
-  const ambiguousCandidates = Boolean(guardrailResult.needsManagerDispatch);
+  const issues = asArray(validationIssues);
+  const ambiguityIssues = issues.filter(isAmbiguityValidationIssue);
+  const blockingIssues = issues.filter(
+    (issue) => !isAmbiguityValidationIssue(issue) && isBlockingValidationIssue(issue)
+  );
+  const ambiguousCandidates =
+    Boolean(guardrailResult.needsManagerDispatch) || ambiguityIssues.length > 0;
   const validationBlocked = blockingIssues.length > 0;
   const llmAuditReasonCodes = [];
   if (ambiguousCandidates) llmAuditReasonCodes.push("ambiguous_candidates");
@@ -217,6 +222,18 @@ const DESCRIPTIVE_MISSING_CODES = new Set([
   "expected_missing",
   "workflow_segment_missing",
 ]);
+
+const AMBIGUITY_ISSUE_CODES = new Set([
+  "remaining_orphans",
+  "orphan_cluster_overlap",
+  "candidate_ambiguity",
+]);
+
+export function isAmbiguityValidationIssue(issue) {
+  if (!issue || typeof issue !== "object") return false;
+  const code = String(issue.rule_code || issue.code || issue.type || "").toLowerCase();
+  return AMBIGUITY_ISSUE_CODES.has(code) || issue.semantic_class === "candidate_ambiguity";
+}
 
 /**
  * Missing workflow segments are a factual description of an incomplete story,
