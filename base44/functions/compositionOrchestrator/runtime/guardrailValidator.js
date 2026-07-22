@@ -1,4 +1,4 @@
-// GENERATED_PHASE2_MIRROR source=src/lib/composition/guardrailValidator.js blob=1207e1ccce1365c025a53586aa4e0d5233fc089f
+// GENERATED_PHASE2_MIRROR source=src/lib/composition/guardrailValidator.js blob=39275606474fe379c5bd3370eea90ba6b4284770
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS V10 — Guardrail Validator（修订版 R2.2）
@@ -199,7 +199,10 @@ function policyChecks(h, { factCardByArtifactId, workflowById, snapshotById, har
       }
       case "attach_to_closed_workflow": {
         const wf = h.target_workflow_id ? workflowById.get(h.target_workflow_id) : null;
-        if (wf && Array.isArray(wf.open_loops) && wf.open_loops.length === 0) {
+        if (
+          wf &&
+          ["closed", "archived"].includes(String(wf.status || "").toLowerCase())
+        ) {
           blocks.push({ rule_code: "attach_to_closed_workflow" });
         }
         break;
