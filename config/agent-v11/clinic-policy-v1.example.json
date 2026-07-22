@@ -15,6 +15,18 @@
     "triggers_manager_dispatch": false,
     "triggers_exception": false
   },
+  "business_family_gating": {
+    "enabled": true,
+    "conflict_action": "block_candidate"
+  },
+  "device_consistency": {
+    "explicit_conflict_action": "block_candidate"
+  },
+  "manager_approved_exception": {
+    "output_status": "manager_approved_exception",
+    "normal_assembly_eligible": false,
+    "contributes_to_learning": false
+  },
   "department_handoff_rules": [],
   "proxy_rules": [],
   "finance_reverse_inference": {
