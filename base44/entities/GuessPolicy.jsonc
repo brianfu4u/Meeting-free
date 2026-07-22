@@ -83,6 +83,54 @@
       "default": [],
       "description": "\u5168\u5c40\u786c\u62a4\u680f\u6e05\u5355\uff08\u7ed3\u6784\u5316\u5bf9\u8c61\uff1b\u5386\u53f2\u5b57\u7b26\u4e32\u8bb0\u5f55\u5c06\u88ab\u5e42\u7b49\u8fc1\u79fb\u4e3a legacy_text\uff09"
     },
+    "heuristic_policy": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "description": "Agent v1.1 Layer-2 policy contract version"
+        },
+        "policy_version": {
+          "type": "string",
+          "description": "Immutable clinic policy version label"
+        },
+        "execution_mode": {
+          "type": "string",
+          "enum": ["shadow"],
+          "description": "Shadow-only in this batch; cannot authorize attachment"
+        },
+        "candidate_cutoff": {
+          "type": "object",
+          "description": "Clinic-supplied minimum score and maximum candidate count (max 5)"
+        },
+        "temporal_evidence": {
+          "type": "object",
+          "description": "Evidence-source precedence only; time must not judge fault, lateness, or abnormality"
+        },
+        "missing_segments": {
+          "type": "object",
+          "description": "Descriptive missing segments; must never dispatch, notify, or create exceptions"
+        },
+        "department_handoff_rules": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true },
+          "default": [],
+          "description": "Versioned clinic-supplied handoff rules and score adjustments"
+        },
+        "proxy_rules": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true },
+          "default": [],
+          "description": "Declared proxy allowlists and undeclared role-source conflict rules"
+        },
+        "finance_reverse_inference": {
+          "type": "object",
+          "description": "Expected-missing hints only; cannot create facts or count as closure evidence"
+        }
+      },
+      "additionalProperties": true,
+      "description": "Agent v1.1 configurable Layer-2 policy; stored for shadow evaluation only in this batch"
+    },
     "published_at": {
       "type": "string",
       "format": "date-time",

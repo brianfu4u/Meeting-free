@@ -1,0 +1,26 @@
+{
+  "schema_version": "agent-v1.1-policy-v1",
+  "policy_version": "clinic-policy-v1",
+  "execution_mode": "shadow",
+  "candidate_cutoff": {
+    "minimum_score": null,
+    "maximum_count": null
+  },
+  "temporal_evidence": {
+    "precedence": ["document", "system_business", "captured_at", "received_at"],
+    "evaluate_delay_as_fault": false
+  },
+  "missing_segments": {
+    "semantics": "descriptive",
+    "triggers_manager_dispatch": false,
+    "triggers_exception": false
+  },
+  "department_handoff_rules": [],
+  "proxy_rules": [],
+  "finance_reverse_inference": {
+    "output_status": "expected_missing",
+    "create_virtual_artifact": false,
+    "counts_as_closure_evidence": false,
+    "rules": []
+  }
+}
