@@ -723,6 +723,19 @@ async function run(
       attention_item = await ops.createAttention(attentionDescriptor);
     }
 
+    const expectedMissingProjections = Array.isArray(pipeline.expectedMissingProjections)
+      ? pipeline.expectedMissingProjections
+      : [];
+    const expectedMissingSegments = [...new Set(
+      expectedMissingProjections
+        .filter((item) => item?.status === "expected_missing")
+        .map((item) => item.expected_artifact_type)
+        .filter(requiredString)
+    )];
+    const reverseInferenceRuleCodes = [...new Set(
+      expectedMissingProjections.map((item) => item?.rule_code).filter(requiredString)
+    )];
+
     const completed = await ops.updateRun(String(persistedRun.id), {
       status: "completed",
       run_finished_at: ops.now(),
@@ -733,6 +746,8 @@ async function run(
       auto_attach_gate_reasons: autoAttachGateReasons,
       auto_attach_hypothesis_id: best?.workflow_hypothesis_id || null,
       auto_attach_outcome: authoritative_attachment?.outcome || "not_eligible",
+      expected_missing_segments: expectedMissingSegments,
+      reverse_inference_rule_codes: reverseInferenceRuleCodes,
       llm_audit_required: dispatch.llmAuditRequired === true,
       llm_audit_reason_codes: dispatch.llmAuditReasonCodes || [],
       ...(dispatch.llmAuditRequired
@@ -752,6 +767,12 @@ async function run(
       review,
       dispatch,
       authoritative_attachment,
+      reverse_inference: {
+        projections: expectedMissingProjections,
+        expected_missing_segments: expectedMissingSegments,
+        rule_codes: reverseInferenceRuleCodes,
+        authoritative: false,
+      },
       llm_audit: {
         required: dispatch.llmAuditRequired === true,
         type: dispatch.llmAuditType || null,
