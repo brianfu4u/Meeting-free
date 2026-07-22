@@ -1,4 +1,4 @@
-// GENERATED_PHASE3_MIRROR source=src/lib/phase3/contract.js blob=d7cf563cd2fdf8da6e7bbb85dbbfb3df7eccca6b
+// GENERATED_PHASE3_MIRROR source=src/lib/phase3/contract.js blob=e9b901be89c170d34ac02b55a7e432a3d1509c58
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS Phase 3 — 契约与状态机（纯逻辑，前后端通用，不依赖 base44 SDK）
@@ -70,7 +70,7 @@ export const COMMIT_INTENT_TRANSITIONS = {
 export const COMMIT_OUTCOMES = ["committed", "stale", "failed"];
 
 /** ManagerDecision.target_type 扩展集 */
-export const MANAGER_TARGET_TYPES = ["task", "alert", "staff_request", "hypothesis", "proposal"];
+export const MANAGER_TARGET_TYPES = ["task", "alert", "staff_request", "hypothesis", "proposal", "artifact_exception"];
 
 /** 主体识别质量（subject_conflict 硬护栏仅 high 参与） */
 export const SUBJECT_QUALITIES = ["high", "medium", "low", "uncertain"];

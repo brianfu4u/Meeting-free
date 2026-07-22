@@ -180,6 +180,9 @@ async function review(
   request: ServiceRequest,
   actor: ActorContext
 ): Promise<ServiceResult> {
+  if (requiredString(request.exception_artifact_id)) {
+    return archiveException(ops, request, actor);
+  }
   if (!requiredString(request.workflow_hypothesis_id)) {
     return response(400, { error_code: "workflow_hypothesis_id_required" });
   }
@@ -319,6 +322,86 @@ async function review(
     await ops.releaseRunLock(actor.clinic_id, lockKey, owner).catch(() => undefined);
   }
   return projectDecision(decision, idempotent);
+}
+
+async function archiveException(
+  ops: CompositionOps,
+  request: ServiceRequest,
+  actor: ActorContext
+): Promise<ServiceResult> {
+  if (!requiredString(request.exception_artifact_id)) {
+    return response(400, { error_code: "exception_artifact_id_required" });
+  }
+  if (actor.user_id === "auto" || actor.user_id === "system") {
+    return response(403, { error_code: "human_manager_required" });
+  }
+  const artifact = await ops.getArtifact(request.exception_artifact_id);
+  if (!artifact) return response(404, { error_code: "artifact_not_found" });
+  if (!tenantSafe(ops, actor.clinic_id, artifact)) {
+    return response(403, { error_code: "tenant_scope_violation" });
+  }
+  if (artifact.exception_class !== "manager_approved_exception" ||
+      artifact.normal_rule_learning_eligible !== false) {
+    return response(409, { error_code: "exception_archive_contract_required" });
+  }
+
+  const project = (decision: Record<string, unknown>, idempotent: boolean) =>
+    response(idempotent ? 200 : 201, {
+      idempotent,
+      exception_archive: decision,
+      normal_rule_policy_mutation: false,
+      authoritative_attachment: null,
+    });
+  const existing = await ops.findManagerExceptionDecision(
+    actor.clinic_id,
+    request.exception_artifact_id
+  );
+  if (existing) {
+    if (!tenantSafe(ops, actor.clinic_id, existing)) {
+      return response(403, { error_code: "tenant_scope_violation" });
+    }
+    return project(existing, true);
+  }
+
+  const lockKey = `manager-exception-archive::${request.exception_artifact_id}`;
+  const owner = ops.newRunLockOwner(actor.user_id, lockKey);
+  const lockNow = ops.now();
+  const expiresAt = new Date(new Date(lockNow).getTime() + RUN_LOCK_LEASE_MS).toISOString();
+  const lock = await ops.acquireRunLock(
+    actor.clinic_id, lockKey, owner, lockNow, expiresAt
+  );
+  if (!lock.acquired) {
+    return response(409, { error_code: "exception_archive_lock_busy", retryable: true });
+  }
+  try {
+    const lockedExisting = await ops.findManagerExceptionDecision(
+      actor.clinic_id,
+      request.exception_artifact_id
+    );
+    if (lockedExisting) return project(lockedExisting, true);
+    const policy = await ops.getPublishedPolicy(actor.clinic_id);
+    if (policy && !tenantSafe(ops, actor.clinic_id, policy)) {
+      return response(403, { error_code: "tenant_scope_violation" });
+    }
+    const decision = await ops.createManagerDecision({
+      clinic_id: actor.clinic_id,
+      manager_id: actor.user_id,
+      target_type: "artifact_exception",
+      target_id: request.exception_artifact_id,
+      decision: "approved",
+      decision_note: typeof request.decision_note === "string"
+        ? request.decision_note.slice(0, 1000)
+        : null,
+      decision_scope: "exception_archive_only",
+      exception_class: "manager_approved_exception",
+      normal_rule_learning_eligible: false,
+      policy_version_at_decision: Number(policy?.policy_version || 0),
+      decided_at: ops.now(),
+    });
+    return project(decision, false);
+  } finally {
+    await ops.releaseRunLock(actor.clinic_id, lockKey, owner).catch(() => undefined);
+  }
 }
 
 async function commit(

@@ -68,7 +68,7 @@ export const COMMIT_INTENT_TRANSITIONS = {
 export const COMMIT_OUTCOMES = ["committed", "stale", "failed"];
 
 /** ManagerDecision.target_type 扩展集 */
-export const MANAGER_TARGET_TYPES = ["task", "alert", "staff_request", "hypothesis", "proposal"];
+export const MANAGER_TARGET_TYPES = ["task", "alert", "staff_request", "hypothesis", "proposal", "artifact_exception"];
 
 /** 主体识别质量（subject_conflict 硬护栏仅 high 参与） */
 export const SUBJECT_QUALITIES = ["high", "medium", "low", "uncertain"];

@@ -27,12 +27,14 @@ async function execute(scenario, actor) {
       await base44.entities.Workflow.update(wf.id,{current_snapshot_id:snap.id,current_snapshot_version:1});
       workflowMap.set(spec.key,{wf,snap});
     }
+    const exceptionArtifactIds=[];
     let seq=0;
     for (const frag of scenario.fixture.fragments || []) {
       seq++; const target=workflowMap.get(frag.targeting?.workflow_key); const explicit=frag.targeting?.mode === "explicit" && target;
       const occurred=new Date(now.getTime()+Number(frag.occurred_at_offset_seconds||0)*1000).toISOString();
       const fp=frag.subject?.fingerprint||{};
-      const artifact=await create("Artifact",{clinic_id:clinic,artifact_type:clean(frag.artifact_type,"document"),file_url:`https://example.invalid/${clinic}/${seq}`,source_staff_id:staff.id,source_region:clean(frag.source_department),source_role:clean(frag.source_role),category_id:clean(frag.category_id),is_proxy:frag.is_proxy===true,...(frag.proxy_for_role?{proxy_for_role:clean(frag.proxy_for_role)}:{}),business_date:c.date,captured_at:new Date(now.getTime()+Number(frag.captured_at_offset_seconds||30)*1000).toISOString(),occurred_at:occurred,ingestion_seq:seq,interpreted:true,...(explicit?{source_workflow_id:target.wf.id}:{})});
+      const artifact=await create("Artifact",{clinic_id:clinic,artifact_type:clean(frag.artifact_type,"document"),file_url:`https://example.invalid/${clinic}/${seq}`,source_staff_id:staff.id,source_region:clean(frag.source_department),source_role:clean(frag.source_role),category_id:clean(frag.category_id),is_proxy:frag.is_proxy===true,...(frag.proxy_for_role?{proxy_for_role:clean(frag.proxy_for_role)}:{}),...(frag.exception_class?{exception_class:clean(frag.exception_class),normal_rule_learning_eligible:frag.normal_rule_learning_eligible===true}:{}),business_date:c.date,captured_at:new Date(now.getTime()+Number(frag.captured_at_offset_seconds||30)*1000).toISOString(),occurred_at:occurred,ingestion_seq:seq,interpreted:true,...(explicit?{source_workflow_id:target.wf.id}:{})});
+      if(frag.exception_class==="manager_approved_exception") exceptionArtifactIds.push(String(artifact.id));
       const fact=await create("EvidenceFactCard",{clinic_id:clinic,artifact_id:artifact.id,...(explicit?{explicit_workflow_id:target.wf.id}:{}),fields:Object.entries(frag.document_numbers||{}).map(([k,v])=>({field_name:k,value:String(v),source_artifact_id:artifact.id,source_region:clean(frag.source_department),source_quote:String(v),extraction_quality:"high",extraction_method:"manual"})),business_date:c.date,extracted_at:nowIso,model_version:"v2-fixture-adapter",prompt_version:"v2-fixture-adapter",policy_version:1,stale:false,workflow_family_hint:clean(target?.wf?.workflow_family,scenario.fixture.workflows?.[0]?.workflow_family||"unknown"),subject_type:clean(frag.subject?.type),subject_fingerprint:{...fp,...(frag.device_serial?{device_serial:String(frag.device_serial)}:{}),name:clean(fp.name,"UNKNOWN")},...(frag.device_serial?{device_serial:String(frag.device_serial)}:{}),subject_quality:fp.name?"high":"low",occurred_at:occurred,time_uncertain:frag.time_uncertain===true,alignment_status:"aligned",assembly_eligible:true,missing_segments:Array.isArray(frag.missing_segments)?frag.missing_segments:[]});
       await base44.entities.Artifact.update(artifact.id,{evidence_fact_card_id:fact.id,interpreted:true});
       await create("UndoListItem",{clinic_id:clinic,artifact_id:artifact.id,original_uploader_id:staff.id,idempotency_key:`${clinic}::${artifact.id}`,business_date:c.date,bounced_at:nowIso,bounce_reason:"not_assembled_by_cutoff",status:"pending"});
@@ -45,6 +47,25 @@ async function execute(scenario, actor) {
     assert(after.WorkflowArtifactLink===baseline.WorkflowArtifactLink,"link_write"); assert(after.WorkflowSnapshot===baseline.WorkflowSnapshot,"snapshot_write"); assert(after.Artifact===baseline.Artifact,"virtual_artifact_write"); assert(after.EvidenceFactCard===baseline.EvidenceFactCard,"virtual_fact_card_write"); assert((await rows("UndoListItem")).every(x=>x.status==="pending"),"undo_write"); assert(after.ManagerDecision===0&&after.WorkflowCommitIntent===0,"authority_write");
     const replay=unwrap(await base44.functions.invoke("compositionOrchestrator",request)); assert(replay?.idempotent===true&&replay?.run?.id===first.run.id,"replay_failed");
     const replayCounts=await counts(); for(const e of ["CompositionRun","WorkflowHypothesis","AgentAttachIntent","WorkflowArtifactLink","WorkflowSnapshot","UndoListItem"]) assert(replayCounts[e]===after[e],`replay_growth_${e}`);
+    let exceptionArchive=null;
+    if(exceptionArtifactIds.length>0){
+      assert(exceptionArtifactIds.length===1,"exception_fixture_count");
+      const policyBefore=JSON.stringify(await rows("GuessPolicy"));
+      const archiveRequest={action:"review",clinic_id:clinic,exception_artifact_id:exceptionArtifactIds[0],decision_note:"S015 isolated manager approval"};
+      const archived=unwrap(await base44.functions.invoke("compositionOrchestrator",archiveRequest));
+      assert(archived?.ok===true&&archived?.exception_archive?.decision_scope==="exception_archive_only","exception_archive_failed");
+      assert(archived.exception_archive.normal_rule_learning_eligible===false,"exception_learning_enabled");
+      assert(archived.normal_rule_policy_mutation===false&&archived.authoritative_attachment===null,"exception_authority_leak");
+      const archiveReplay=unwrap(await base44.functions.invoke("compositionOrchestrator",archiveRequest));
+      assert(archiveReplay?.ok===true&&archiveReplay?.idempotent===true&&archiveReplay?.exception_archive?.id===archived.exception_archive.id,"exception_archive_replay_failed");
+      const archiveRows=await rows("ManagerDecision"); assert(archiveRows.length===1,"exception_archive_duplicate");
+      const policyAfter=JSON.stringify(await rows("GuessPolicy")); assert(policyAfter===policyBefore,"policy_mutated_by_exception");
+      const postRequest={...request,slot:"23:59"};
+      const post=unwrap(await base44.functions.invoke("compositionOrchestrator",postRequest));
+      assert(post?.ok===true&&post?.run?.auto_attach_eligible===first.run.auto_attach_eligible,"exception_changed_eligibility");
+      assert(JSON.stringify(post.run.auto_attach_gate_reasons||[])===JSON.stringify(first.run.auto_attach_gate_reasons||[]),"exception_changed_gates");
+      exceptionArchive={record_count:archiveRows.length,idempotent:true,decision_scope:archiveRows[0].decision_scope,normal_rule_learning_eligible:archiveRows[0].normal_rule_learning_eligible,policy_unchanged:true,gates_unchanged_after_approval:true,authoritative_attachment_zero:true};
+    }
     // Oracle is consulted only after runtime fixture execution and gate observation.
     // Match every declared dimension so dispatch/validation regressions cannot
     // hide behind a correct eligible boolean.
@@ -62,7 +83,7 @@ async function execute(scenario, actor) {
     };
     report.oracle=scenario.oracle;
     const expectedMissing=Array.isArray(first.run.expected_missing_segments)?first.run.expected_missing_segments:[]; const reverseRules=Array.isArray(first.run.reverse_inference_rule_codes)?first.run.reverse_inference_rule_codes:[]; const fixtureExpected=[...new Set((scenario.fixture.fragments||[]).flatMap(f=>Array.isArray(f.finance_expected_missing)?f.finance_expected_missing:[]))]; const reverseInferenceMatch=fixtureExpected.length===0||fixtureExpected.every(x=>expectedMissing.includes(x));
-    report.result={eligible:actualEligible,gate_reasons:reasons,actual_guardrail_dispatch:actualGuardrailDispatch,actual_validation_block:actualValidationBlock,llm_audit:{required:first.run.llm_audit_required===true,type:first.run.llm_audit_type||null,status:first.run.llm_audit_status||null,reason_codes:Array.isArray(first.run.llm_audit_reason_codes)?first.run.llm_audit_reason_codes:[]},oracle_checks:oracleChecks,oracle_match:Object.values(oracleChecks).every(Boolean),observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true,expected_missing_segments:expectedMissing,reverse_inference_rule_codes:reverseRules,reverse_inference_match:reverseInferenceMatch,virtual_artifact_writes_zero:true};
+    report.result={eligible:actualEligible,gate_reasons:reasons,actual_guardrail_dispatch:actualGuardrailDispatch,actual_validation_block:actualValidationBlock,llm_audit:{required:first.run.llm_audit_required===true,type:first.run.llm_audit_type||null,status:first.run.llm_audit_status||null,reason_codes:Array.isArray(first.run.llm_audit_reason_codes)?first.run.llm_audit_reason_codes:[]},oracle_checks:oracleChecks,oracle_match:Object.values(oracleChecks).every(Boolean),observed_intent_count:(await rows("AgentAttachIntent")).filter(x=>x.status==="observed").length,replay_idempotent:true,authoritative_writes_zero:true,expected_missing_segments:expectedMissing,reverse_inference_rule_codes:reverseRules,reverse_inference_match:reverseInferenceMatch,virtual_artifact_writes_zero:true,exception_archive:exceptionArchive};
   } catch(e) { report.error=String(e?.message||e).replace(/[\r\n]+/g," ").slice(0,300); }
   finally { const before=await counts(); for(const e of ENTITIES) for(const x of await rows(e)) await base44.entities[e].delete(String(x.id)); const after=await counts(); report.cleanup={before,after,cleanup_all_zero:Object.values(after).every(x=>x===0)}; }
   return report;

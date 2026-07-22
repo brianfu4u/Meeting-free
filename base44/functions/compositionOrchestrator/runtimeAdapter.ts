@@ -71,6 +71,25 @@ function isDeclaredProxy(artifact) {
     artifact?.user_interactive_meta?.execution_context?.is_proxy === true;
 }
 
+export function collectManagerExceptionValidationIssues(resolvedCards = [], artifacts = []) {
+  const artifactMap = byId(artifacts);
+  const issues = [];
+  for (const card of resolvedCards) {
+    const artifact = artifactMap.get(card.artifact_id);
+    if (!artifact) continue;
+    if (artifact.exception_class !== "manager_approved_exception" &&
+        artifact.normal_rule_learning_eligible !== false) continue;
+    issues.push({
+      type: "manager_exception_archive_only",
+      semantic_class: "hard_exception_isolation",
+      artifact_id: artifact.id || card.artifact_id,
+      fact_card_id: card.id || null,
+      normal_rule_learning_eligible: false,
+    });
+  }
+  return issues;
+}
+
 export function collectSourceContextValidationIssues(resolvedCards = [], artifacts = []) {
   const artifactMap = byId(artifacts);
   const issues = [];
@@ -225,6 +244,7 @@ export async function executeCompositionRuntime({
   const validationIssues = [
     ...(clusters.validation_issues || []),
     ...collectSourceContextValidationIssues(resolvedCards, artifacts),
+    ...collectManagerExceptionValidationIssues(resolvedCards, artifacts),
     ...collectDeviceIdentityValidationIssues(resolvedCards, scopedWorkflows),
   ];
 

@@ -660,6 +660,25 @@ function makeOps(svc: any): CompositionOps {
     },
     updateHypothesis: (id, patch) =>
       svc.entities.WorkflowHypothesis.update(id, patch),
+    findManagerExceptionDecision: async (clinicId, artifactId) => {
+      const rows = await svc.entities.ManagerDecision.filter({
+        clinic_id: clinicId,
+        target_type: "artifact_exception",
+        target_id: artifactId,
+      });
+      return (rows || []).sort((x: any, y: any) =>
+        String(x.created_date || x.id).localeCompare(String(y.created_date || y.id))
+      )[0] || null;
+    },
+    getPublishedPolicy: async (clinicId) => {
+      const rows = await svc.entities.GuessPolicy.filter({
+        clinic_id: clinicId,
+        status: "published",
+      });
+      return (rows || []).sort((x: any, y: any) =>
+        Number(y.policy_version || 0) - Number(x.policy_version || 0)
+      )[0] || null;
+    },
     findManagerDecision: async (clinicId, workflowHypothesisId) => {
       const rows = await svc.entities.ManagerDecision.filter({
         clinic_id: clinicId,
