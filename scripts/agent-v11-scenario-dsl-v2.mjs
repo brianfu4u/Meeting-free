@@ -90,7 +90,7 @@ const EXECUTION_SUPPORT = {
 
 function convert(row) {
   const id = row.scenario_id.trim().toUpperCase();
-  const matched = id.match(/^(S\\d{3})(?:-[A-Z0-9_-]+)?$/);
+  const matched = id.match(/^(S\d{3})(?:-[A-Z0-9_-]+)?$/);
   const blueprintId = matched?.[1] || id;
   const blueprint = BLUEPRINTS[blueprintId];
   if (!blueprint) throw new Error(`scenario_blueprint_missing:${id}`);
