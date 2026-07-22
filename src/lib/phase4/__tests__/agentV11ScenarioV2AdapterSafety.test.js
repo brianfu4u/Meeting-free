@@ -10,6 +10,7 @@ describe("scenario v2 fixture adapter safety",()=>{
   it("constructs real workflow, snapshot, artifact, fact-card and undo conditions",()=>{
     for(const name of ["Workflow","WorkflowSnapshot","Artifact","EvidenceFactCard","UndoListItem"]) expect(runner).toContain(`create(\"${name}\"`);
     expect(runner).toContain("scenario.fixture.workflows"); expect(runner).toContain("scenario.fixture.fragments");
+    expect(runner).toContain("spec.device_serial"); expect(runner).toContain("frag.device_serial");
   });
   it("keeps oracle out of fixture construction and gates",()=>{
     const beforeRun=runner.slice(0,runner.indexOf('const first=unwrap'));
