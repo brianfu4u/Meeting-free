@@ -15,6 +15,9 @@ const HARD_BLOCKS = new Set([
   "workflow_closed",
   "subject_conflict",
   "document_number_conflict",
+  "BUSINESS_FAMILY_CONFLICT",
+  "DEVICE_IDENTITY_CONFLICT",
+  "MANAGER_APPROVED_EXCEPTION_ARCHIVE_ONLY",
 ]);
 
 function finite01(value) {
@@ -27,6 +30,10 @@ function asArray(value) {
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
+}
+
+function trace(ruleCode, effect, workflowId = null, detail = null) {
+  return { rule_code: ruleCode, effect, workflow_id: workflowId, detail };
 }
 
 export function validateHeuristicPolicy(policy = {}) {
@@ -52,6 +59,19 @@ export function validateHeuristicPolicy(policy = {}) {
   if (policy.missing_segments?.semantics !== "descriptive") errors.push("missing_segments_must_be_descriptive");
   if (policy.missing_segments?.triggers_manager_dispatch !== false) errors.push("missing_segments_dispatch_forbidden");
   if (policy.missing_segments?.triggers_exception !== false) errors.push("missing_segments_exception_forbidden");
+
+  const family = policy.business_family_gating || {};
+  if (family.enabled !== true || family.conflict_action !== "block_candidate") errors.push("business_family_gating_invalid");
+
+  const device = policy.device_consistency || {};
+  if (device.explicit_conflict_action !== "block_candidate") errors.push("device_conflict_action_invalid");
+
+  const managerException = policy.manager_approved_exception || {};
+  if (managerException.output_status !== "manager_approved_exception" ||
+      managerException.normal_assembly_eligible !== false ||
+      managerException.contributes_to_learning !== false) {
+    errors.push("manager_approved_exception_boundary_invalid");
+  }
 
   const reverse = policy.finance_reverse_inference || {};
   if (reverse.output_status !== "expected_missing") errors.push("reverse_inference_status_invalid");
@@ -114,12 +134,19 @@ export function inferExpectedMissing(evidence = {}, policy = {}) {
     }));
 }
 
-function hardBlockCodes(evidence, candidate) {
+function hardBlockCodes(evidence, candidate, policy) {
   const codes = [];
   if (!evidence.clinic_id || evidence.clinic_id !== candidate.clinic_id) codes.push("cross_tenant");
   if (["closed", "archived"].includes(candidate.workflow_status)) codes.push("workflow_closed");
   if (candidate.subject_conflict === true) codes.push("subject_conflict");
   if (candidate.document_number_conflict === true) codes.push("document_number_conflict");
+  if (policy.business_family_gating.enabled === true && evidence.business_domain && candidate.business_domain &&
+      evidence.business_domain !== candidate.business_domain) codes.push("BUSINESS_FAMILY_CONFLICT");
+  if (candidate.device_conflict === true ||
+      (evidence.device_id && candidate.device_id && evidence.device_id !== candidate.device_id)) {
+    codes.push("DEVICE_IDENTITY_CONFLICT");
+  }
+  if (evidence.manager_approved_exception === true) codes.push("MANAGER_APPROVED_EXCEPTION_ARCHIVE_ONLY");
   return codes.filter((code) => HARD_BLOCKS.has(code));
 }
 
@@ -129,18 +156,23 @@ export function evaluateHeuristicPolicyShadow({ policy, evidence, candidates = [
 
   const proxy = evaluateProxyContext(evidence, policy);
   const eventTime = selectEffectiveEventTime(evidence, policy);
+  const expectedMissing = inferExpectedMissing(evidence, policy);
   const scored = [];
   const blocked = [];
+  const ruleTrace = [];
 
   for (const candidate of candidates) {
-    const hardBlocks = hardBlockCodes(evidence, candidate);
+    const hardBlocks = hardBlockCodes(evidence, candidate, policy);
     if (!proxy.allowed) hardBlocks.push(...proxy.rule_codes);
     if (hardBlocks.length > 0) {
-      blocked.push({ workflow_id: candidate.workflow_id, rule_codes: [...new Set(hardBlocks)] });
+      const ruleCodes = [...new Set(hardBlocks)];
+      blocked.push({ workflow_id: candidate.workflow_id, rule_codes: ruleCodes });
+      ruleCodes.forEach((code) => ruleTrace.push(trace(code, "candidate_blocked", candidate.workflow_id)));
       continue;
     }
     if (!finite01(candidate.base_score)) {
       blocked.push({ workflow_id: candidate.workflow_id, rule_codes: ["candidate_base_score_missing"] });
+      ruleTrace.push(trace("candidate_base_score_missing", "candidate_blocked", candidate.workflow_id));
       continue;
     }
     let score = candidate.base_score;
@@ -151,6 +183,7 @@ export function evaluateHeuristicPolicyShadow({ policy, evidence, candidates = [
         matched.push(rule.rule_code);
       }
     }
+    matched.forEach((code) => ruleTrace.push(trace(code, "candidate_scored", candidate.workflow_id)));
     scored.push({
       workflow_id: candidate.workflow_id,
       candidate_score: clamp01(score),
@@ -160,6 +193,7 @@ export function evaluateHeuristicPolicyShadow({ policy, evidence, candidates = [
     });
   }
 
+  expectedMissing.forEach((item) => ruleTrace.push(trace(item.rule_code, "expected_missing_recorded", null, item.artifact_type)));
   scored.sort((a, b) => b.candidate_score - a.candidate_score || a.workflow_id.localeCompare(b.workflow_id));
   const retained = scored
     .filter((candidate) => candidate.candidate_score >= policy.candidate_cutoff.minimum_score)
@@ -170,14 +204,18 @@ export function evaluateHeuristicPolicyShadow({ policy, evidence, candidates = [
     authoritative: false,
     execution_mode: "shadow",
     policy_version: policy.policy_version,
+    proposed_status: evidence.manager_approved_exception === true ? "manager_approved_exception" : "shadow_evaluated",
+    normal_assembly_eligible: evidence.manager_approved_exception !== true && retained.length > 0,
     effective_event_time: eventTime,
     proposed_candidates: retained,
     blocked_candidates: blocked,
-    expected_missing: inferExpectedMissing(evidence, policy),
+    expected_missing: expectedMissing,
+    rule_trace: ruleTrace,
     missing_segments_semantics: "descriptive",
     needs_manager_dispatch: false,
     creates_exception: false,
     creates_virtual_artifact: false,
     contributes_to_closure: false,
+    contributes_to_learning: evidence.manager_approved_exception !== true,
   };
 }
