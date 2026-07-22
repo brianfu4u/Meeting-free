@@ -48,7 +48,7 @@ async function archiveEvidence(
   for (const att of atts) {
     const ev = await svc.entities.EvidenceItem.create({
       clinic_id,
-      task_id: task_id || null,
+      ...(task_id ? { task_id } : {}),
       version_id: `v-${event_id}`,
       submission_count: 1,
       evidence_type: classifyEvidenceType(att),
@@ -56,7 +56,7 @@ async function archiveEvidence(
       submitted_at: now,
       submitted_by: staff_id,
       eval_result: "pending",
-      eval_notes: att.transcript ? `语音转写：${att.transcript}` : null,
+      ...(att.transcript ? { eval_notes: `语音转写：${att.transcript}` } : {}),
     });
     ids.push(ev.id);
   }
