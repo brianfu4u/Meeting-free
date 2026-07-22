@@ -5,7 +5,7 @@ const runner=fs.readFileSync("scripts/agent-v11-scenario-v2-adapter.template.mjs
 describe("scenario v2 fixture adapter safety",()=>{
   it("executes exactly supported fixtures and separates non-production evidence",()=>{
     expect(build).toContain('level === "supported"'); expect(build).toContain('level === "approximate"'); expect(build).toContain('level === "unsupported"');
-    expect(build).toContain("supported.length !== 13"); expect(runner).toContain("approximate_report"); expect(runner).toContain("unsupported_skipped"); expect(runner).toContain("excluded_from_eligible_rate:true");
+    expect(build).toContain("supported.length < 1 || supported.length > 200"); expect(runner).toContain("approximate_report"); expect(runner).toContain("unsupported_skipped"); expect(runner).toContain("excluded_from_eligible_rate:true");
   });
   it("constructs real workflow, snapshot, artifact, fact-card and undo conditions",()=>{
     for(const name of ["Workflow","WorkflowSnapshot","Artifact","EvidenceFactCard","UndoListItem"]) expect(runner).toContain(`create(\"${name}\"`);
@@ -19,6 +19,6 @@ describe("scenario v2 fixture adapter safety",()=>{
   });
   it("enforces observe-only, zero authority, replay and cleanup",()=>{
     expect(runner).toContain('auto_attach_mode===\"observe\"'); expect(runner).not.toMatch(/secrets\.(set|delete)|auto_attach_mode\s*:\s*["']commit/);
-    expect(runner).toContain("link_write"); expect(runner).toContain("snapshot_write"); expect(runner).toContain("undo_write"); expect(runner).toContain("replay_growth_"); expect(runner).toContain("cleanup_all_zero"); expect(runner).toContain("virtual_artifact_write"); expect(runner).toContain("reverse_inference_match"); expect(runner).toContain("policy_mutated_by_exception"); expect(runner).toContain("exception_changed_gates"); expect(runner).toContain("exception_archive_replay_failed"); expect(runner).toContain('clinic !== \"clinic-001\"');
+    expect(runner).toContain("link_write"); expect(runner).toContain("snapshot_write"); expect(runner).toContain("undo_write"); expect(runner).toContain("replay_growth_"); expect(runner).toContain("cleanup_all_zero"); expect(runner).toContain("virtual_artifact_write"); expect(runner).toContain("reverse_inference_match"); expect(runner).toContain("policy_mutated_by_exception"); expect(runner).toContain("exception_changed_gates"); expect(runner).toContain("exception_archive_replay_failed"); expect(runner).toContain("async function retry"); expect(runner).toContain("status!==429"); expect(runner).toContain('clinic !== \"clinic-001\"');
   });
 });
