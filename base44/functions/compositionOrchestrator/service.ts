@@ -663,12 +663,19 @@ async function run(
     // approved, dispatched, or committed.
     let attention_item: Record<string, unknown> | null = null;
     const autoAttachAttempted = authoritative_attachment !== null;
-    const pendingReviewExists = hypotheses.some(
-      (item) =>
-        item.status === "pending_review" &&
-        (!autoAttachAttempted ||
-          item.workflow_hypothesis_id !== best?.workflow_hypothesis_id)
-    );
+    // A closed authoritative target is a silent hard stop, not missing evidence
+    // and not a request for manager intervention. Preserve the hypothesis and
+    // gate reason for audit, but do not create an open AttentionItem.
+    const authoritativeTargetClosed =
+      autoAttachGateReasons.includes("workflow_closed");
+    const pendingReviewExists =
+      !authoritativeTargetClosed &&
+      hypotheses.some(
+        (item) =>
+          item.status === "pending_review" &&
+          (!autoAttachAttempted ||
+            item.workflow_hypothesis_id !== best?.workflow_hypothesis_id)
+      );
     // A missing segment describes an incomplete Workflow; it is not an
     // exception and must not create evidence_missing attention/dispatch.
     const descriptiveMissingOnly =
@@ -686,6 +693,8 @@ async function run(
           ? "authoritative_attachment_retryable"
         : authoritative_attachment?.outcome === "observed"
           ? "authoritative_attachment_observed"
+        : authoritativeTargetClosed
+          ? "authoritative_target_closed"
         : descriptiveMissingOnly
           ? "missing_segments_recorded"
         : pendingReviewExists
