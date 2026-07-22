@@ -44,9 +44,17 @@ export function collectDeviceIdentityValidationIssues(resolvedCards = [], workfl
   const issues = [];
   for (const card of resolvedCards) {
     const observed = deviceSerial(card?.subject_fingerprint?.device_serial);
-    const candidateIds = Array.isArray(card?._candidateWorkflowIds)
+    const resolvedCandidateIds = Array.isArray(card?._candidateWorkflowIds)
       ? card._candidateWorkflowIds
       : [];
+    const candidateIds = resolvedCandidateIds.length > 0
+      ? resolvedCandidateIds
+      : workflows
+          .filter((workflow) =>
+            workflow.workflow_family === card.workflow_family_hint &&
+            !["closed", "archived"].includes(String(workflow.status || "").toLowerCase())
+          )
+          .map((workflow) => workflow.id);
     if (!observed || candidateIds.length === 0) continue;
     const declared = candidateIds
       .map((id) => deviceSerial(workflowMap.get(id)?.subject_fingerprint?.device_serial))
