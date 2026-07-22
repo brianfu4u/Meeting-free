@@ -30,11 +30,25 @@ function makeOps(overrides = {}) {
         validation_blocks: h.validation_blocks || [],
         status: "pending_review",
       })),
-    deriveDispatch: ({ guardrailResult = {}, validationIssues }) => ({
-      needsManagerDispatch: validationIssues.length > 0,
-      bestHypothesisId:
-        validationIssues.length > 0 ? null : guardrailResult.bestHypothesisId || null,
-    }),
+    deriveDispatch: ({ guardrailResult = {}, validationIssues }) => {
+      const validationBlocked = validationIssues.length > 0;
+      const ambiguousCandidates = guardrailResult.needsManagerDispatch === true;
+      const llmAuditReasonCodes = [
+        ...(ambiguousCandidates ? ["ambiguous_candidates"] : []),
+        ...(validationBlocked ? ["validation_block"] : []),
+      ];
+      const llmAuditRequired = llmAuditReasonCodes.length > 0;
+      return {
+        needsManagerDispatch: false,
+        bestHypothesisId: llmAuditRequired
+          ? null
+          : guardrailResult.bestHypothesisId || null,
+        llmAuditRequired,
+        llmAuditType: llmAuditRequired ? "pre_attach_audit" : null,
+        llmAuditReasonCodes,
+        validationBlocked,
+      };
+    },
     buildAttention: ({
       clinicId,
       compositionRunId,
@@ -249,7 +263,7 @@ describe("compositionOrchestrator run", () => {
     expect(ops.createHypotheses).toHaveBeenCalledTimes(1);
     expect(ops.createAttention).toHaveBeenCalledTimes(1);
   });
-  it("keeps ambiguous dispatch visible without preselecting a hypothesis", async () => {
+  it("queues blocking validation for LLM audit without manager attention", async () => {
     const ops = makeOps({
       executePipeline: vi.fn(async () => ({
         hypotheses: [{ source_proposal_id: "p1", workflow_hypothesis_id: "p1#h0", composition_type: "orphan" }],
@@ -260,21 +274,64 @@ describe("compositionOrchestrator run", () => {
       })),
     });
     const result = await createCompositionService(ops).handle(request, actor);
-    expect(result.attention_item.id).toBe("att-1");
-    expect(result.attention_item.selected_hypothesis_id).toBeNull();
-    expect(result.attention_item.manager_dispatch_required).toBe(true);
-    expect(result.dispatch).toEqual({
-      needsManagerDispatch: true,
+    expect(result.attention_item).toBeNull();
+    expect(result.dispatch).toMatchObject({
+      needsManagerDispatch: false,
       bestHypothesisId: null,
+      llmAuditRequired: true,
+      validationBlocked: true,
     });
-    expect(result.review).toEqual({
+    expect(result.llm_audit).toEqual({
       required: true,
-      reason: "guardrail_dispatch_required",
-      suggestedHypothesisId: null,
-      autoCommitAllowed: false,
-      authoritativeAttachmentOutcome: null,
+      type: "pre_attach_audit",
+      reason_codes: ["validation_block"],
+      status: "queued",
     });
-    expect(ops.createAttention).toHaveBeenCalledTimes(1);
+    expect(result.review).toMatchObject({
+      required: false,
+      reason: "llm_pre_attach_audit_queued",
+    });
+    expect(ops.createAttention).not.toHaveBeenCalled();
+    expect(ops.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
+      llm_audit_required: true,
+      llm_audit_type: "pre_attach_audit",
+      llm_audit_reason_codes: ["validation_block"],
+      llm_audit_status: "queued",
+    }));
+  });
+
+  it("queues ambiguous candidates for LLM audit without manager attention", async () => {
+    const ops = makeOps({
+      executePipeline: vi.fn(async () => ({
+        hypotheses: [
+          { source_proposal_id: "p1", workflow_hypothesis_id: "p1#h0", composition_type: "attach" },
+          { source_proposal_id: "p1", workflow_hypothesis_id: "p1#h1", composition_type: "attach" },
+        ],
+        guardrailResult: { needsManagerDispatch: true, bestHypothesisId: null },
+        validationIssues: [],
+        artifactIds: ["a1"],
+        factCardIds: ["fc1"],
+      })),
+    });
+    const result = await createCompositionService(ops).handle(request, actor);
+    expect(result.attention_item).toBeNull();
+    expect(result.dispatch).toMatchObject({
+      needsManagerDispatch: false,
+      bestHypothesisId: null,
+      llmAuditRequired: true,
+      validationBlocked: false,
+    });
+    expect(result.llm_audit).toEqual({
+      required: true,
+      type: "pre_attach_audit",
+      reason_codes: ["ambiguous_candidates"],
+      status: "queued",
+    });
+    expect(result.review).toMatchObject({
+      required: false,
+      reason: "llm_pre_attach_audit_queued",
+    });
+    expect(ops.createAttention).not.toHaveBeenCalled();
   });
   it("records missing segments without evidence_missing attention or dispatch", async () => {
     const ops = makeOps({
