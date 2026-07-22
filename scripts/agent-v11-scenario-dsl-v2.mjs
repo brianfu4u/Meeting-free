@@ -73,8 +73,8 @@ const BLUEPRINTS = {
 const EXECUTION_SUPPORT = {
   S001: { level: "supported", reason: null },
   S002: { level: "supported", reason: null },
-  S003: { level: "unsupported", reason: "runtime_role_source_conflict_fixture_not_wired" },
-  S004: { level: "unsupported", reason: "runtime_business_family_conflict_fixture_not_wired" },
+  S003: { level: "supported", reason: null },
+  S004: { level: "supported", reason: null },
   S005: { level: "supported", reason: null },
   S006: { level: "supported", reason: null },
   S007: { level: "supported", reason: null },
@@ -84,7 +84,7 @@ const EXECUTION_SUPPORT = {
   S011: { level: "approximate", reason: "causal_order_is_descriptive_until_runtime_rule_code_is_wired" },
   S012: { level: "supported", reason: null },
   S013: { level: "supported", reason: null },
-  S014: { level: "unsupported", reason: "runtime_device_identity_veto_fixture_not_wired" },
+  S014: { level: "supported", reason: null },
   S015: { level: "unsupported", reason: "runtime_manager_approved_exception_archive_path_not_wired" },
 };
 
