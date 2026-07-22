@@ -406,6 +406,12 @@ describe("compositionOrchestrator run", () => {
       hypothesisId: "p-closed#h0",
     });
     expect(result.authoritative_attachment).toBeNull();
+    expect(result.review).toMatchObject({
+      required: false,
+      reason: "authoritative_target_closed",
+    });
+    expect(result.attention_item).toBeNull();
+    expect(ops.createAttention).not.toHaveBeenCalled();
     expect(ops.recordAgentAutoAttachObservation).not.toHaveBeenCalled();
     expect(ops.executeAgentAutoAttach).not.toHaveBeenCalled();
     expect(ops.updateRun).toHaveBeenCalledWith("run-1", expect.objectContaining({
