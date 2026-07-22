@@ -47,6 +47,23 @@
       "type": "string",
       "description": "\u6765\u6e90\u533a\u57df/\u90e8\u95e8\u804c\u80fd\u7f16\u7801\uff08\u5982 reception/optometry/medical\uff09"
     },
+    "source_role": {
+      "type": "string",
+      "description": "Server-validated uploader role used as source-context evidence; never trust an unverified client role"
+    },
+    "category_id": {
+      "type": "string",
+      "description": "Stable upload micro-explanation category key; strong prior, never ground truth"
+    },
+    "is_proxy": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the authenticated uploader explicitly declared an on-behalf-of upload"
+    },
+    "proxy_for_role": {
+      "type": "string",
+      "description": "Server-validated declared business role represented by a proxy upload"
+    },
     "source_workflow_id": {
       "type": "string",
       "description": "Phase 3\uff1a\u663e\u5f0f\u7ed1\u5b9a Workflow ID\uff08CandidateFinder explicit_id \u81ea\u52a8\u6302\u63a5\u4f9d\u636e\uff09"
