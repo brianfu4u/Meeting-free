@@ -1,0 +1,14 @@
+import { readFile } from "node:fs/promises";
+const [inputPath,indexRaw,sizeRaw="4"] = process.argv.slice(2);
+if(!inputPath||indexRaw==null) throw new Error("usage: node agent-v11-distribution-chunk-build.mjs <dsl.json> <chunk-index> [chunk-size]");
+const input=JSON.parse(await readFile(inputPath,"utf8"));
+if(input?.schema_version!=="agent-v11-scenario-dsl-v2") throw new Error("dsl_v2_required");
+const index=Number(indexRaw), size=Number(sizeRaw);
+if(!Number.isInteger(index)||index<0||!Number.isInteger(size)||size<1||size>10) throw new Error("chunk_arguments_invalid");
+const supported=input.scenarios.filter(x=>x.execution_support?.level==="supported").map(x=>({scenario_id:x.scenario_id,scenario_type:x.scenario_type,fixture:x.fixture,oracle:x.oracle}));
+const approximate=input.scenarios.filter(x=>x.execution_support?.level==="approximate").map(x=>({scenario_id:x.scenario_id,scenario_type:x.scenario_type,reason:x.execution_support.reason,oracle:x.oracle}));
+const start=index*size, selected=supported.slice(start,start+size);
+if(selected.length===0) throw new Error(`chunk_empty:${index}`);
+const template=await readFile(new URL("./agent-v11-scenario-v2-adapter.template.mjs",import.meta.url),"utf8");
+const marker="__AGENT_V11_SCENARIO_V2_EXECUTION_PLAN__";
+process.stdout.write(template.replace(marker,JSON.stringify({schema_version:"agent-v11-scenario-v2-execution-plan",supported:selected,approximate,unsupported:[],distribution:{total:input.scenarios.length,supported:supported.length,approximate:approximate.length,chunk_index:index,chunk_size:size}})));
