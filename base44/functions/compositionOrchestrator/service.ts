@@ -606,6 +606,8 @@ async function run(
     );
     const autoAttachGateReasons: string[] = [];
     if (dispatch.needsManagerDispatch) autoAttachGateReasons.push("manager_dispatch_required");
+    if (dispatch.llmAuditRequired) autoAttachGateReasons.push("llm_audit_required");
+    if (dispatch.validationBlocked) autoAttachGateReasons.push("validation_blocks_present");
     if (!best) autoAttachGateReasons.push("unique_best_missing");
     if (best && best.composition_type !== "attach") autoAttachGateReasons.push("best_not_attach");
     if (best && !requiredString(best.target_workflow_id)) autoAttachGateReasons.push("target_workflow_missing");
@@ -670,6 +672,7 @@ async function run(
       autoAttachGateReasons.includes("workflow_closed");
     const pendingReviewExists =
       !authoritativeTargetClosed &&
+      !dispatch.llmAuditRequired &&
       hypotheses.some(
         (item) =>
           item.status === "pending_review" &&
@@ -693,6 +696,8 @@ async function run(
           ? "authoritative_attachment_retryable"
         : authoritative_attachment?.outcome === "observed"
           ? "authoritative_attachment_observed"
+        : dispatch.llmAuditRequired
+          ? "llm_pre_attach_audit_queued"
         : authoritativeTargetClosed
           ? "authoritative_target_closed"
         : descriptiveMissingOnly
@@ -728,6 +733,14 @@ async function run(
       auto_attach_gate_reasons: autoAttachGateReasons,
       auto_attach_hypothesis_id: best?.workflow_hypothesis_id || null,
       auto_attach_outcome: authoritative_attachment?.outcome || "not_eligible",
+      llm_audit_required: dispatch.llmAuditRequired === true,
+      llm_audit_reason_codes: dispatch.llmAuditReasonCodes || [],
+      ...(dispatch.llmAuditRequired
+        ? {
+            llm_audit_type: dispatch.llmAuditType,
+            llm_audit_status: "queued",
+          }
+        : {}),
       error_code: null,
       error_message: null,
     });
@@ -739,6 +752,12 @@ async function run(
       review,
       dispatch,
       authoritative_attachment,
+      llm_audit: {
+        required: dispatch.llmAuditRequired === true,
+        type: dispatch.llmAuditType || null,
+        reason_codes: dispatch.llmAuditReasonCodes || [],
+        status: dispatch.llmAuditRequired ? "queued" : "not_required",
+      },
       auto_attach_gate: {
         mode: autoAttachMode,
         eligible: canAutoAttach,

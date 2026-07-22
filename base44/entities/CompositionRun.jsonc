@@ -108,6 +108,27 @@
       "type": "string",
       "enum": ["not_eligible", "observed", "cas_retryable", "committed"],
       "description": "Outcome of the authority gate without evaluative or alert semantics"
+    },
+    "llm_audit_required": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this Run is queued for scheduled LLM logic audit; never implies manager dispatch"
+    },
+    "llm_audit_type": {
+      "type": "string",
+      "enum": ["pre_attach_audit", "post_attach_quality_audit"],
+      "description": "Scheduled LLM audit class"
+    },
+    "llm_audit_reason_codes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Non-evaluative reasons for entering the LLM audit queue"
+    },
+    "llm_audit_status": {
+      "type": "string",
+      "enum": ["queued", "confirmed", "flagged", "rejected", "correction_proposed"],
+      "description": "LLM audit lifecycle; only flagged may later become manager-visible"
     }
   },
   "required": [
