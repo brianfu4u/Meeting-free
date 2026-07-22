@@ -109,6 +109,18 @@
       "enum": ["not_eligible", "observed", "cas_retryable", "committed"],
       "description": "Outcome of the authority gate without evaluative or alert semantics"
     },
+    "expected_missing_segments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Descriptive reverse-inference projections only; never facts, validation blocks, or closure evidence"
+    },
+    "reverse_inference_rule_codes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Policy rule codes that produced expected_missing projections"
+    },
     "llm_audit_required": {
       "type": "boolean",
       "default": false,

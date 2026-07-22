@@ -79,7 +79,7 @@ const EXECUTION_SUPPORT = {
   S006: { level: "supported", reason: null },
   S007: { level: "supported", reason: null },
   S008: { level: "supported", reason: null },
-  S009: { level: "unsupported", reason: "runtime_finance_expected_missing_projection_not_wired" },
+  S009: { level: "supported", reason: null },
   S010: { level: "approximate", reason: "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context" },
   S011: { level: "approximate", reason: "causal_order_is_descriptive_until_runtime_rule_code_is_wired" },
   S012: { level: "supported", reason: null },

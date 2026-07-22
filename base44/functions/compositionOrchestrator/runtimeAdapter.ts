@@ -96,6 +96,32 @@ export function collectSourceContextValidationIssues(resolvedCards = [], artifac
   return issues;
 }
 
+function factField(card, name) {
+  const field = (card?.fields || []).find((item) => item?.field_name === name);
+  return typeof field?.value === "string" ? field.value.trim() : null;
+}
+
+export function collectFinanceExpectedMissingProjections(resolvedCards = [], artifacts = []) {
+  const artifactMap = byId(artifacts);
+  const projections = [];
+  for (const card of resolvedCards) {
+    const artifact = artifactMap.get(card.artifact_id);
+    if (!artifact || artifact.category_id !== "financial_settlement") continue;
+    const paymentCategory = String(factField(card, "payment_category") || "").toUpperCase();
+    if (paymentCategory.includes("OCT")) {
+      projections.push({
+        status: "expected_missing",
+        expected_artifact_type: "ophthalmic_imaging",
+        rule_code: "REVERSE_INFER_FINANCE_01",
+        source_artifact_id: artifact.id,
+        source_fact_card_id: card.id || null,
+        evidence_field: "payment_category",
+      });
+    }
+  }
+  return projections;
+}
+
 export function collectDeviceIdentityValidationIssues(resolvedCards = [], workflows = []) {
   const workflowMap = byId(workflows);
   const issues = [];
@@ -255,10 +281,14 @@ export async function executeCompositionRuntime({
     now,
   });
 
+  const expectedMissingProjections =
+    collectFinanceExpectedMissingProjections(resolvedCards, artifacts);
+
   return {
     hypotheses,
     guardrailResult,
     validationIssues,
+    expectedMissingProjections,
     artifactIds: [...new Set(hypotheses.flatMap((item) => item.ordered_artifact_ids || []))],
     factCardIds: resolvedCards.map((item) => item.id).filter(Boolean),
   };
