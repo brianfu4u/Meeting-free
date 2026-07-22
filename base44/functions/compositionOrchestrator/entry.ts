@@ -30,6 +30,11 @@ import {
   executeAttachCommitSagaRuntime,
   planAttachCommitRuntime,
 } from "./runtime/commitRuntime.js";
+import {
+  buildAttachmentLinkDescriptor,
+  reconcileUndoFromAttachmentLink,
+} from "./runtime/attachmentProjection.js";
+import { executeAgentAutoAttachSaga } from "./runtime/agentAutoAttachSaga.js";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -236,6 +241,85 @@ async function resolveActor(svc: any, user: any, clinicId: string): Promise<Acto
 function makeOps(svc: any): CompositionOps {
   const invokeLLM = (input: any) =>
     svc.integrations.Core.InvokeLLM({ ...input, model: input.model || "automatic" });
+  const agentAttachMode = () =>
+    Deno.env.get("AGENT_AUTO_ATTACH_MODE") === "commit" ? "commit" : "observe";
+
+  const createOrGetAttachmentLink = async (input: any) => {
+    const descriptor = input?.idempotency_key
+      ? input
+      : buildAttachmentLinkDescriptor(input);
+    const existing = await svc.entities.WorkflowArtifactLink.filter({
+      clinic_id: descriptor.clinic_id,
+      idempotency_key: descriptor.idempotency_key,
+    });
+    return existing?.[0] || svc.entities.WorkflowArtifactLink.create(descriptor);
+  };
+
+  const reconcileUndo = (link: any, now: string) =>
+    reconcileUndoFromAttachmentLink({
+      link,
+      now,
+      findPendingUndo: (clinicId: string, artifactId: string) =>
+        svc.entities.UndoListItem.filter({
+          clinic_id: clinicId,
+          artifact_id: artifactId,
+          status: "pending",
+        }),
+      updateUndo: (id: string, patch: any) =>
+        svc.entities.UndoListItem.update(id, patch),
+    });
+
+  const executeAgentAttach = (request: any) =>
+    executeAgentAutoAttachSaga({
+      request,
+      now: new Date().toISOString(),
+      ops: {
+        findIntent: async (clinicId: string, key: string) => {
+          const rows = await svc.entities.AgentAttachIntent.filter({
+            clinic_id: clinicId,
+            idempotency_key: key,
+          });
+          return (rows || []).sort((a: any, b: any) =>
+            String(a.created_date || a.id).localeCompare(
+              String(b.created_date || b.id)
+            )
+          )[0] || null;
+        },
+        createIntent: (descriptor: any) =>
+          svc.entities.AgentAttachIntent.create(descriptor),
+        updateIntent: (id: string, patch: any) =>
+          svc.entities.AgentAttachIntent.update(id, patch),
+        getWorkflow: async (id: string) => {
+          try {
+            return await svc.entities.Workflow.get(id);
+          } catch {
+            return null;
+          }
+        },
+        getSnapshot: async (id: string) => {
+          try {
+            return await svc.entities.WorkflowSnapshot.get(id);
+          } catch {
+            return null;
+          }
+        },
+        createSnapshot: (descriptor: any) =>
+          svc.entities.WorkflowSnapshot.create(descriptor),
+        casWorkflowPointer: (filter: any, patch: any) =>
+          svc.entities.Workflow.updateMany(filter, { $set: patch }),
+        createOrGetAttachmentLink,
+        reconcileUndoFromAttachmentLink: reconcileUndo,
+        updateHypothesis: async (workflowHypothesisId: string, patch: any) => {
+          const rows = await svc.entities.WorkflowHypothesis.filter({
+            clinic_id: request.clinicId,
+            workflow_hypothesis_id: workflowHypothesisId,
+          });
+          const row = rows?.[0];
+          if (!row?.id) throw new Error("agent_attach_hypothesis_not_found");
+          return svc.entities.WorkflowHypothesis.update(row.id, patch);
+        },
+      },
+    });
 
   return {
     authorize: ({ action, role, clinicId }) => {
@@ -496,6 +580,76 @@ function makeOps(svc: any): CompositionOps {
       return created;
     },
     createAttention: (descriptor) => svc.entities.AttentionItem.create(descriptor),
+    executeAgentAutoAttach: executeAgentAttach,
+    agentAutoAttachMode: agentAttachMode,
+    recordAgentAutoAttachObservation: async (request) => {
+      const key = `${request.clinicId}::${request.hypothesisId}`;
+      const rows = await svc.entities.AgentAttachIntent.filter({
+        clinic_id: request.clinicId,
+        idempotency_key: key,
+      });
+      const existing = (rows || []).sort((a: any, b: any) =>
+        String(a.created_date || a.id).localeCompare(
+          String(b.created_date || b.id)
+        )
+      )[0];
+      if (existing) {
+        return {
+          outcome: existing.status === "committed" ? "committed" : "observed",
+          idempotent: true,
+          intent: existing,
+        };
+      }
+      const intent = await svc.entities.AgentAttachIntent.create({
+        clinic_id: request.clinicId,
+        idempotency_key: key,
+        composition_run_id: request.runId,
+        workflow_hypothesis_id: request.hypothesisId,
+        target_workflow_id: request.workflowId,
+        artifact_ids: [...new Set(request.artifactIds || [])],
+        status: "observed",
+        decision_source: "agent_autonomous",
+        retry_count: 0,
+        created_at: new Date().toISOString(),
+        reconciliation: {
+          last_step: "eligibility_observed",
+          pending_compensation: [],
+        },
+      });
+      return { outcome: "observed", idempotent: false, intent };
+    },
+    resumeAgentAutoAttachForRun: async (run, policyVersion) => {
+      if (!run?.id || !run?.clinic_id) return null;
+      const intents = await svc.entities.AgentAttachIntent.filter({
+        clinic_id: run.clinic_id,
+        composition_run_id: run.id,
+      });
+      const intent = (intents || [])
+        .sort((a: any, b: any) =>
+          String(a.created_date || a.id).localeCompare(
+            String(b.created_date || b.id)
+          )
+        )[0];
+      if (!intent) return null;
+      const hypotheses = await svc.entities.WorkflowHypothesis.filter({
+        clinic_id: run.clinic_id,
+        workflow_hypothesis_id: intent.workflow_hypothesis_id,
+      });
+      const hypothesis = hypotheses?.[0];
+      if (!hypothesis) throw new Error("agent_attach_recovery_hypothesis_not_found");
+      if (agentAttachMode() !== "commit") {
+        return { outcome: "observed", idempotent: true, intent };
+      }
+      return executeAgentAttach({
+        clinicId: run.clinic_id,
+        runId: run.id,
+        hypothesisId: intent.workflow_hypothesis_id,
+        sourceProposalId: hypothesis.source_proposal_id,
+        workflowId: intent.target_workflow_id,
+        artifactIds: intent.artifact_ids,
+        policyVersion,
+      });
+    },
 
     getHypothesisByKey: async (clinicId, workflowHypothesisId) => {
       const rows = await svc.entities.WorkflowHypothesis.filter({
@@ -591,6 +745,8 @@ function makeOps(svc: any): CompositionOps {
             svc.entities.AttentionItem.update(id, patch),
           updateManagerDecision: (id, patch) =>
             svc.entities.ManagerDecision.update(id, patch),
+          createOrGetAttachmentLink,
+          reconcileUndoFromAttachmentLink: reconcileUndo,
         },
       });
     },

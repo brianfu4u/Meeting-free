@@ -70,6 +70,7 @@ describe("Phase 3 run descriptor", () => {
     expect(a.idempotency_key).toBe(b.idempotency_key);
     expect(a.status).toBe("pending");
     expect(a.contract_version).toBe(1);
+    expect(a.trigger_type).toBe("manager_manual");
     expect(a.artifact_ids_processed).toEqual(["a2", "a1"]);
     expect(a).not.toHaveProperty("hypothesis_ids");
   });
@@ -79,6 +80,15 @@ describe("Phase 3 run descriptor", () => {
       policyVersion: 1, cutoffEventSeq: 1, triggerType: "other",
     })).toThrow(/trigger_type_invalid/);
   });
+  it.each(["scheduled", "manager_manual", "cutoff_reconciliation"])(
+    "accepts canonical trigger %s",
+    (triggerType) => {
+      expect(buildRunDescriptor({
+        clinicId: "c1", businessDate: "2026-07-18", slot: "17:30",
+        policyVersion: 1, cutoffEventSeq: 1, triggerType,
+      }).trigger_type).toBe(triggerType);
+    }
+  );
 });
 
 describe("Phase 3 hypothesis descriptors", () => {
@@ -129,6 +139,16 @@ describe("Phase 3 dispatch boundary", () => {
       guardrailResult: { needsManagerDispatch: false, bestHypothesisId: "h1" },
       validationIssues: [{ type: "orphan_cluster_overlap" }],
     })).toEqual({ needsManagerDispatch: true, bestHypothesisId: null });
+  });
+
+  it("keeps missing segments descriptive and out of manager dispatch", () => {
+    expect(deriveDispatchDecision({
+      guardrailResult: { needsManagerDispatch: false, bestHypothesisId: "h1" },
+      validationIssues: [
+        { type: "missing_segment", segment: "financial_settlement" },
+        { status: "expected_missing", segment: "diagnostic_imaging" },
+      ],
+    })).toEqual({ needsManagerDispatch: false, bestHypothesisId: "h1" });
   });
 });
 

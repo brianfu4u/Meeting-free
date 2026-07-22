@@ -1,0 +1,30 @@
+{
+  "name": "UndoListItem",
+  "type": "object",
+  "properties": {
+    "clinic_id": { "type": "string", "description": "Strict tenant scope" },
+    "artifact_id": { "type": "string", "description": "Artifact without an authoritative Workflow attachment" },
+    "original_uploader_id": { "type": "string", "description": "Staff owner of the Undo List item" },
+    "idempotency_key": { "type": "string", "description": "clinic_id::artifact_id; one durable item per Artifact" },
+    "business_date": { "type": "string", "format": "date" },
+    "bounced_at": { "type": "string", "format": "date-time", "description": "Cutoff reconciliation record time" },
+    "bounce_reason": {
+      "type": "string",
+      "enum": ["not_assembled_by_cutoff"],
+      "description": "Factual state only; no alarm or evaluative meaning"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "resolved", "manager_cleared"],
+      "default": "pending",
+      "description": "resolved requires an authoritative WorkflowArtifactLink; manager clear never deletes the record"
+    },
+    "resolved_at": { "type": "string", "format": "date-time" },
+    "resolved_into_workflow_id": { "type": "string" },
+    "resolved_by_link_id": { "type": "string" },
+    "cleared_by_manager_id": { "type": "string" },
+    "cleared_at": { "type": "string", "format": "date-time" },
+    "created_by_run_id": { "type": "string" }
+  },
+  "required": ["clinic_id", "artifact_id", "original_uploader_id", "idempotency_key", "business_date", "bounced_at", "bounce_reason", "status"]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "WorkflowArtifactLink",
+  "type": "object",
+  "properties": {
+    "clinic_id": { "type": "string", "description": "Strict tenant scope" },
+    "workflow_id": { "type": "string", "description": "Authoritative Workflow ID" },
+    "artifact_id": { "type": "string", "description": "Attached Artifact ID" },
+    "idempotency_key": { "type": "string", "description": "clinic_id::workflow_id::artifact_id" },
+    "status": {
+      "type": "string",
+      "enum": ["attached", "superseded"],
+      "default": "attached",
+      "description": "Append-only authority; corrections preserve the superseded record"
+    },
+    "attached_at": { "type": "string", "format": "date-time" },
+    "attached_by_run_id": { "type": "string" },
+    "source_hypothesis_id": { "type": "string", "description": "Trace only; a Hypothesis is not an authoritative attachment" },
+    "snapshot_id": { "type": "string" },
+    "snapshot_version": { "type": "number" },
+    "policy_version": { "type": "number" },
+    "decision_source": {
+      "type": "string",
+      "enum": ["agent_autonomous", "manager_manual"],
+      "description": "Who made the authoritative attachment decision"
+    },
+    "decision_actor_id": {
+      "type": "string",
+      "description": "CompositionRun ID for agent_autonomous; ManagerDecision ID for manager_manual"
+    },
+    "superseded_at": { "type": "string", "format": "date-time" },
+    "superseded_by_link_id": { "type": "string" },
+    "correction_reason": { "type": "string" }
+  },
+  "required": ["clinic_id", "workflow_id", "artifact_id", "idempotency_key", "status", "attached_at", "attached_by_run_id", "decision_source", "decision_actor_id"]
+}

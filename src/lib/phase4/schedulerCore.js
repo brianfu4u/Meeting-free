@@ -6,6 +6,8 @@
  * artifact watermark.
  */
 
+import { buildUnifiedRunRequest } from "./triggerCore.js";
+
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const ENABLED_STATES = new Set(["shadow", "pilot", "active"]);
 
@@ -74,31 +76,13 @@ export function buildScheduledRunRequest({ config, due, artifacts }) {
   if (!due?.eligible || !due.slot || !due.businessDate) {
     return { ok: false, reason: "slot_not_due" };
   }
-  const rows = Array.isArray(artifacts) ? artifacts : [];
-  const watermarkRows = rows
-    .map((item) => ({
-      seq: Number(item?.ingestion_seq),
-      ingestedAt: item?.ingested_at || item?.captured_at || item?.created_date || null,
-    }))
-    .filter((item) => Number.isFinite(item.seq));
-  if (!watermarkRows.length) return { ok: false, reason: "no_artifacts" };
-  const cutoffEventSeq = Math.max(...watermarkRows.map((item) => item.seq));
-  const cutoffIngestedAt = watermarkRows
-    .map((item) => item.ingestedAt)
-    .filter((value) => typeof value === "string" && value)
-    .sort()
-    .at(-1) || null;
-  return {
-    ok: true,
-    request: {
-      action: "run",
-      clinic_id: config.clinic_id,
-      business_date: due.businessDate,
-      slot: due.slot,
-      trigger_type: "scheduled",
-      cutoff_event_seq: cutoffEventSeq,
-      cutoff_ingested_at: cutoffIngestedAt,
-      policy_version: config.active_policy_version,
-    },
-  };
+  // Unified triggerCore always emits action: "run"; it cannot review or commit.
+  return buildUnifiedRunRequest({
+    clinicId: config.clinic_id,
+    businessDate: due.businessDate,
+    slot: due.slot,
+    policyVersion: config.active_policy_version,
+    triggerType: "scheduled",
+    artifacts,
+  });
 }

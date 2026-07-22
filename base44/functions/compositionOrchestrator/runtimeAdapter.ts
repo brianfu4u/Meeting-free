@@ -14,6 +14,14 @@ export const PHASE2_RUNTIME_SOURCES = {
   "src/lib/tenant/tenantContext.js": "b7504dcf1c9fb86ff2ec30bc4f0b9a439cf4a82c",
 };
 
+// Deploy-time provenance for Agent v1.1 mirrors. These pins are deliberately
+// separate from the legacy Phase 2 map so older parity contracts stay stable.
+export const AGENT_V11_RUNTIME_SOURCES = {
+  "src/lib/agentV11/attachmentProjection.js": "f9383ef747eb6b61e52cf1b7623ff46b62cc649d",
+  "src/lib/agentV11/authoritativeAttachSaga.js": "d9cb0aab76a06cf967fee98d613f740ef83dfa2d",
+  "src/lib/agentV11/agentAutoAttachSaga.js": "aa048d94e9e1919fab16ceef504f71d6bb54780d",
+};
+
 function byId(items) {
   return new Map((items || []).map((item) => [item.id, item]));
 }

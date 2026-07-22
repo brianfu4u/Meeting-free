@@ -1,8 +1,9 @@
 // GENERATED_PHASE3_RUNTIME
 // sources:
 // src/lib/phase3/commitPlanner.js blob=de527c61941b640cdd83fd83f6b6f8926c461999
-// src/lib/phase3/commitSaga.js blob=efc10bbaa47d4fb9c3a47fbe9345c90497015365
+// src/lib/phase3/commitSaga.js blob=deab30392a2aa683ace60801e300c0d9d6ac1005
 // Keep behavior aligned through src/lib/phase3/__tests__/commitRuntimeParity.test.js.
+import { executeAuthoritativeAttachSaga } from "./authoritativeAttachSaga.js";
 
 class CommitRuntimeError extends Error {
   constructor(code) {
@@ -142,9 +143,24 @@ const pointerMatches = (workflow, intent) => Boolean(
 );
 
 async function projectCommitted(ops, plan, intent, now) {
+  const workflowId = plan.intent_descriptor.target_workflow_id;
+  await executeAuthoritativeAttachSaga({
+    attachment: {
+      clinicId: plan.intent_descriptor.clinic_id, workflowId,
+      artifactIds: plan.snapshot_descriptor.artifact_ids || [],
+      runId: plan.snapshot_descriptor.composition_run_id,
+      hypothesisId: plan.intent_descriptor.selected_hypothesis_id,
+      snapshotId: intent.new_snapshot_id, snapshotVersion: intent.new_snapshot_version,
+      policyVersion: plan.snapshot_descriptor.policy_version ?? null,
+      decisionSource: "manager_manual",
+      decisionActorId: plan.intent_descriptor.manager_decision_id,
+    },
+    ops,
+    now,
+  });
   await ops.updateHypothesis(plan.intent_descriptor.selected_hypothesis_id, { status: "committed" });
   await ops.updateAttention(plan.intent_descriptor.attention_item_id, {
-    committed_workflow_id: plan.intent_descriptor.target_workflow_id,
+    committed_workflow_id: workflowId,
     commit_outcome: "committed",
   });
   await ops.updateManagerDecision(plan.intent_descriptor.manager_decision_id, {

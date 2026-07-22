@@ -64,7 +64,7 @@ const phase3Mirrors = {
   },
   "src/lib/phase3/orchestratorCore.js": {
     mirror: "orchestratorCore.js",
-    blob: "b8e44a223b46a5fd8fe6a15036d3638a4c860bc2",
+    blob: "61cf72d39cb457238475a68a50c9e5d1f61ab205",
   },
 };
 
@@ -80,7 +80,8 @@ describe("Phase 3 generated runtime mirror parity", () => {
       );
       const body = lines.slice(2).join("\n")
         .replaceAll('from "./tenantContext.js";', 'from "../tenant/tenantContext";')
-        .replaceAll('from "./phase3Contract.js";', 'from "./contract";');
+        .replaceAll('from "./phase3Contract.js";', 'from "./contract";')
+        .replaceAll('from "./triggerCore.js";', 'from "../phase4/triggerCore";');
       expect(body).toBe(sourceContent);
     });
   }

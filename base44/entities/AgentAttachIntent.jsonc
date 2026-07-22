@@ -1,0 +1,26 @@
+{
+  "name": "AgentAttachIntent",
+  "type": "object",
+  "properties": {
+    "clinic_id": { "type": "string" },
+    "idempotency_key": { "type": "string", "description": "clinic::hypothesis; stable across CompositionRun restart" },
+    "composition_run_id": { "type": "string" },
+    "workflow_hypothesis_id": { "type": "string" },
+    "target_workflow_id": { "type": "string" },
+    "artifact_ids": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "status": {
+      "type": "string",
+      "enum": ["observed", "pending", "attaching", "cas_retryable", "committed", "compensation_failed"]
+    },
+    "decision_source": { "type": "string", "enum": ["agent_autonomous"], "default": "agent_autonomous" },
+    "expected_snapshot_id": { "type": "string" },
+    "expected_snapshot_version": { "type": "number" },
+    "new_snapshot_id": { "type": "string" },
+    "new_snapshot_version": { "type": "number" },
+    "retry_count": { "type": "number", "default": 0 },
+    "reconciliation": { "type": "object", "additionalProperties": true },
+    "created_at": { "type": "string", "format": "date-time" },
+    "finalized_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["clinic_id", "idempotency_key", "composition_run_id", "workflow_hypothesis_id", "target_workflow_id", "artifact_ids", "status", "decision_source", "created_at"]
+}
