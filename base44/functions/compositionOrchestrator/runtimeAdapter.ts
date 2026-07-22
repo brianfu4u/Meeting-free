@@ -43,7 +43,7 @@ export function collectDeviceIdentityValidationIssues(resolvedCards = [], workfl
   const workflowMap = byId(workflows);
   const issues = [];
   for (const card of resolvedCards) {
-    const observed = deviceSerial(card?.subject_fingerprint?.device_serial);
+    const observed = deviceSerial(card?.device_serial || card?.subject_fingerprint?.device_serial);
     const resolvedCandidateIds = Array.isArray(card?._candidateWorkflowIds)
       ? card._candidateWorkflowIds
       : [];
@@ -57,7 +57,10 @@ export function collectDeviceIdentityValidationIssues(resolvedCards = [], workfl
           .map((workflow) => workflow.id);
     if (!observed || candidateIds.length === 0) continue;
     const declared = candidateIds
-      .map((id) => deviceSerial(workflowMap.get(id)?.subject_fingerprint?.device_serial))
+      .map((id) => {
+        const workflow = workflowMap.get(id);
+        return deviceSerial(workflow?.device_serial || workflow?.subject_fingerprint?.device_serial);
+      })
       .filter(Boolean);
     if (declared.length > 0 && declared.length === candidateIds.length &&
         declared.every((serial) => serial !== observed)) {
