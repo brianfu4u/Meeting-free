@@ -35,6 +35,35 @@ function snapshotForWorkflow(workflow, snapshots) {
   );
 }
 
+function deviceSerial(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function collectDeviceIdentityValidationIssues(resolvedCards = [], workflows = []) {
+  const workflowMap = byId(workflows);
+  const issues = [];
+  for (const card of resolvedCards) {
+    const observed = deviceSerial(card?.subject_fingerprint?.device_serial);
+    const candidateIds = Array.isArray(card?._candidateWorkflowIds)
+      ? card._candidateWorkflowIds
+      : [];
+    if (!observed || candidateIds.length === 0) continue;
+    const declared = candidateIds
+      .map((id) => deviceSerial(workflowMap.get(id)?.subject_fingerprint?.device_serial))
+      .filter(Boolean);
+    if (declared.length > 0 && declared.length === candidateIds.length &&
+        declared.every((serial) => serial !== observed)) {
+      issues.push({
+        type: "device_identity_conflict",
+        semantic_class: "hard_identity_conflict",
+        fact_card_id: card.id || null,
+        candidate_workflow_ids: candidateIds,
+      });
+    }
+  }
+  return issues;
+}
+
 export async function interpretArtifactRuntime({
   artifact,
   policyVersion,
@@ -99,7 +128,10 @@ export async function executeCompositionRuntime({
   });
 
   const hypotheses = [];
-  const validationIssues = [...(clusters.validation_issues || [])];
+  const validationIssues = [
+    ...(clusters.validation_issues || []),
+    ...collectDeviceIdentityValidationIssues(resolvedCards, scopedWorkflows),
+  ];
 
   for (const cluster of clusters.attachTrains || []) {
     const workflow = scopedWorkflows.find((item) => item.id === cluster.workflow_id) || null;
