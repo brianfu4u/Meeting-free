@@ -134,16 +134,30 @@ describe("Phase 3 hypothesis descriptors", () => {
 });
 
 describe("Phase 3 dispatch boundary", () => {
-  it("routes blocking validation to scheduled LLM audit without manager dispatch", () => {
+  it("routes unresolved candidates as ambiguity, not a factual validation block", () => {
     expect(deriveDispatchDecision({
-      guardrailResult: { needsManagerDispatch: false, bestHypothesisId: "h1" },
-      validationIssues: [{ type: "orphan_cluster_overlap" }],
+      guardrailResult: { needsManagerDispatch: true, bestHypothesisId: null },
+      validationIssues: [{ type: "remaining_orphans" }],
     })).toEqual({
       needsManagerDispatch: false,
       bestHypothesisId: null,
       llmAuditRequired: true,
       llmAuditType: "pre_attach_audit",
-      llmAuditReasonCodes: ["validation_block"],
+      llmAuditReasonCodes: ["ambiguous_candidates"],
+      validationBlocked: false,
+    });
+  });
+
+  it("preserves factual identity conflicts as validation blocks", () => {
+    expect(deriveDispatchDecision({
+      guardrailResult: { needsManagerDispatch: true, bestHypothesisId: null },
+      validationIssues: [{ type: "device_identity_conflict" }],
+    })).toEqual({
+      needsManagerDispatch: false,
+      bestHypothesisId: null,
+      llmAuditRequired: true,
+      llmAuditType: "pre_attach_audit",
+      llmAuditReasonCodes: ["ambiguous_candidates", "validation_block"],
       validationBlocked: true,
     });
   });
