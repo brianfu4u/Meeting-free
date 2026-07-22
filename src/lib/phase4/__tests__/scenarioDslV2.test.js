@@ -58,6 +58,7 @@ describe("Agent v1.1 Scenario DSL v2", () => {
     const device = run(`${header}\nS014,设备维护,inventory,device,1,TRUE,TRUE,FALSE,device\n`).scenarios[0];
     const missing = run(`${header}\nS007,验光→医生,patient_care,missing,1,FALSE,FALSE,TRUE,missing\n`).scenarios[0];
     expect(proxy.fixture.fragments[0]).toMatchObject({ is_proxy: true, exception_class: "manager_approved_exception", normal_rule_learning_eligible: false });
+    expect(proxy.execution_support).toEqual({ level: "supported", reason: null });
     expect(device.fixture.workflows[0].device_serial).not.toBe(device.fixture.fragments[0].device_serial);
     expect(missing.fixture.fragments[0].missing_segments).toContain("patient_registration");
   });
