@@ -21,7 +21,7 @@ for (const scenario of input.scenarios) {
   else if (level === "unsupported") unsupported.push({ scenario_id: scenario.scenario_id, reason });
   else throw new Error(`execution_support_invalid:${scenario?.scenario_id || "unknown"}`);
 }
-if (supported.length !== 11) throw new Error(`supported_scenario_count_expected_11_received_${supported.length}`);
+if (supported.length !== 12) throw new Error(`supported_scenario_count_expected_12_received_${supported.length}`);
 const template = await readFile(new URL("./agent-v11-scenario-v2-adapter.template.mjs", import.meta.url), "utf8");
 const marker = "__AGENT_V11_SCENARIO_V2_EXECUTION_PLAN__";
 if (!template.includes(marker)) throw new Error("adapter_template_marker_missing");
