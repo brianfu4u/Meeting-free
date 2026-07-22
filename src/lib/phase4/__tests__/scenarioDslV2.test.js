@@ -23,6 +23,7 @@ describe("Agent v1.1 Scenario DSL v2", () => {
     expect(output.schema_version).toBe("agent-v11-scenario-dsl-v2");
     expect(output.runner_compatibility).toBe("requires_v2_fixture_adapter");
     expect(scenario.fixture.fragments[0].finance_expected_missing).toEqual(["ophthalmic_imaging"]);
+    expect(scenario.execution_support).toEqual({ level: "supported", reason: null });
     expect(scenario.fixture).not.toHaveProperty("expected_eligible");
     expect(scenario.oracle.expected_eligible).toBe(true);
   });
