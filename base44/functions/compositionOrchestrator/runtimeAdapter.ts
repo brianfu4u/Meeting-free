@@ -39,6 +39,63 @@ function deviceSerial(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+const ROLE_BUSINESS_FAMILY = {
+  DOCTOR: "CLINICAL", PHYSICIAN_ASST: "CLINICAL", SURGEON: "CLINICAL",
+  OR_NURSE: "CLINICAL", ANESTHESIOLOGIST: "CLINICAL", NURSE: "CLINICAL",
+  TRIAGE_STAFF: "CLINICAL", OPTOMETRIST: "CLINICAL", OPTICIAN: "CLINICAL",
+  VISION_TRAINER: "CLINICAL", IMAGING_TECH: "CLINICAL", DIAGNOSTIC_STAFF: "CLINICAL",
+  RECEPTION: "CLINICAL", CRM_STAFF: "CLINICAL", PATIENT_GUIDE: "CLINICAL",
+  MARKETING: "MARKETING", CHANNEL_DEV: "MARKETING", SCREENING_TEAM: "MARKETING",
+  CASHIER: "FINANCE", INSURANCE_OFFICER: "FINANCE", ACCOUNTANT: "FINANCE",
+  PHARMACIST: "LOGISTICS", EQUIPMENT_ADMIN: "LOGISTICS", INVENTORY_STAFF: "LOGISTICS",
+  CLINIC_DIRECTOR: "ADMIN", QA_OFFICER: "ADMIN", SANITATION_STAFF: "ADMIN",
+};
+
+const CATEGORY_BUSINESS_FAMILY = {
+  clinical_consultation: "CLINICAL", prescription_order: "CLINICAL",
+  refraction_optometry: "CLINICAL", ok_lens_fitting: "CLINICAL",
+  vision_therapy: "CLINICAL", glasses_dispensing: "CLINICAL",
+  ophthalmic_imaging: "CLINICAL", lab_test: "CLINICAL", surgery_record: "CLINICAL",
+  intraocular_lens: "CLINICAL", minor_procedure: "CLINICAL",
+  triage_precheck: "CLINICAL", nursing_care: "CLINICAL",
+  patient_registration: "CLINICAL", followup_crm: "CLINICAL",
+  school_screening: "MARKETING", mkt_event: "MARKETING", channel_cooperation: "MARKETING",
+  medical_insurance: "FINANCE", retail_invoice: "FINANCE", financial_settlement: "FINANCE",
+  pharmacy_dispensing: "LOGISTICS", supply_purchase: "LOGISTICS", facility_repair: "LOGISTICS",
+  admin_inspection: "ADMIN", quality_control: "ADMIN",
+};
+
+function isDeclaredProxy(artifact) {
+  return artifact?.is_proxy === true ||
+    artifact?.user_interactive_meta?.proxy?.is_proxy === true ||
+    artifact?.user_interactive_meta?.execution_context?.is_proxy === true;
+}
+
+export function collectSourceContextValidationIssues(resolvedCards = [], artifacts = []) {
+  const artifactMap = byId(artifacts);
+  const issues = [];
+  for (const card of resolvedCards) {
+    const artifact = artifactMap.get(card.artifact_id);
+    if (!artifact || isDeclaredProxy(artifact)) continue;
+    const role = String(artifact.source_role || "").toUpperCase();
+    const category = String(artifact.category_id || "").toLowerCase();
+    const roleFamily = ROLE_BUSINESS_FAMILY[role] || null;
+    const categoryFamily = CATEGORY_BUSINESS_FAMILY[category] || null;
+    if (!roleFamily || !categoryFamily || roleFamily === categoryFamily) continue;
+    issues.push({
+      type: categoryFamily === "CLINICAL" ? "source_role_conflict" : "business_family_conflict",
+      semantic_class: "hard_source_context_conflict",
+      artifact_id: artifact.id || card.artifact_id,
+      fact_card_id: card.id || null,
+      source_role: role,
+      role_business_family: roleFamily,
+      category_id: category,
+      category_business_family: categoryFamily,
+    });
+  }
+  return issues;
+}
+
 export function collectDeviceIdentityValidationIssues(resolvedCards = [], workflows = []) {
   const workflowMap = byId(workflows);
   const issues = [];
@@ -141,6 +198,7 @@ export async function executeCompositionRuntime({
   const hypotheses = [];
   const validationIssues = [
     ...(clusters.validation_issues || []),
+    ...collectSourceContextValidationIssues(resolvedCards, artifacts),
     ...collectDeviceIdentityValidationIssues(resolvedCards, scopedWorkflows),
   ];
 
