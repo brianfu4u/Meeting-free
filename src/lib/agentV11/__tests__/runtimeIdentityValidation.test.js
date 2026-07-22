@@ -21,6 +21,27 @@ describe("Agent v1.1 runtime identity validation", () => {
     }]);
   });
 
+  it("uses the open same-family pool when the linker returns no candidates", () => {
+    const issues = collectDeviceIdentityValidationIssues([
+      {
+        id: "fc-1",
+        workflow_family_hint: "patient_care",
+        subject_fingerprint: { device_serial: "DEVICE-C" },
+        _candidateWorkflowIds: [],
+      },
+    ], [
+      { id: "wf-a", workflow_family: "patient_care", status: "active", subject_fingerprint: { device_serial: "DEVICE-A" } },
+      { id: "wf-b", workflow_family: "patient_care", status: "active", subject_fingerprint: { device_serial: "DEVICE-B" } },
+      { id: "wf-other", workflow_family: "finance", status: "active", subject_fingerprint: { device_serial: "DEVICE-C" } },
+    ]);
+    expect(issues).toEqual([{
+      type: "device_identity_conflict",
+      semantic_class: "hard_identity_conflict",
+      fact_card_id: "fc-1",
+      candidate_workflow_ids: ["wf-a", "wf-b"],
+    }]);
+  });
+
   it("does not veto when a candidate matches or lacks declared device evidence", () => {
     expect(collectDeviceIdentityValidationIssues([
       {
