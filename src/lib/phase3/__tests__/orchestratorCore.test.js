@@ -134,21 +134,49 @@ describe("Phase 3 hypothesis descriptors", () => {
 });
 
 describe("Phase 3 dispatch boundary", () => {
-  it("validation issues force manager dispatch and clear best", () => {
+  it("routes blocking validation to scheduled LLM audit without manager dispatch", () => {
     expect(deriveDispatchDecision({
       guardrailResult: { needsManagerDispatch: false, bestHypothesisId: "h1" },
       validationIssues: [{ type: "orphan_cluster_overlap" }],
-    })).toEqual({ needsManagerDispatch: true, bestHypothesisId: null });
+    })).toEqual({
+      needsManagerDispatch: false,
+      bestHypothesisId: null,
+      llmAuditRequired: true,
+      llmAuditType: "pre_attach_audit",
+      llmAuditReasonCodes: ["validation_block"],
+      validationBlocked: true,
+    });
   });
 
-  it("keeps missing segments descriptive and out of manager dispatch", () => {
+  it("routes candidate ambiguity to scheduled LLM audit without manager dispatch", () => {
+    expect(deriveDispatchDecision({
+      guardrailResult: { needsManagerDispatch: true, bestHypothesisId: null },
+      validationIssues: [],
+    })).toEqual({
+      needsManagerDispatch: false,
+      bestHypothesisId: null,
+      llmAuditRequired: true,
+      llmAuditType: "pre_attach_audit",
+      llmAuditReasonCodes: ["ambiguous_candidates"],
+      validationBlocked: false,
+    });
+  });
+
+  it("keeps missing segments descriptive and out of every dispatch queue", () => {
     expect(deriveDispatchDecision({
       guardrailResult: { needsManagerDispatch: false, bestHypothesisId: "h1" },
       validationIssues: [
         { type: "missing_segment", segment: "financial_settlement" },
         { status: "expected_missing", segment: "diagnostic_imaging" },
       ],
-    })).toEqual({ needsManagerDispatch: false, bestHypothesisId: "h1" });
+    })).toEqual({
+      needsManagerDispatch: false,
+      bestHypothesisId: "h1",
+      llmAuditRequired: false,
+      llmAuditType: null,
+      llmAuditReasonCodes: [],
+      validationBlocked: false,
+    });
   });
 });
 
