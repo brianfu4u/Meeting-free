@@ -1,8 +1,42 @@
 import { describe, expect, it } from "vitest";
 import {
   collectDeviceIdentityValidationIssues,
+  collectFinanceExpectedMissingProjections,
   collectSourceContextValidationIssues,
 } from "../../../../base44/functions/compositionOrchestrator/runtimeAdapter.ts";
+
+describe("Agent v1.1 finance reverse inference", () => {
+  it("projects OCT predecessor evidence as expected_missing without creating facts", () => {
+    expect(collectFinanceExpectedMissingProjections([
+      {
+        id: "fc-1",
+        artifact_id: "a-1",
+        fields: [{ field_name: "payment_category", value: "OCT_EXAM_FEE" }],
+      },
+    ], [
+      { id: "a-1", category_id: "financial_settlement" },
+    ])).toEqual([{
+      status: "expected_missing",
+      expected_artifact_type: "ophthalmic_imaging",
+      rule_code: "REVERSE_INFER_FINANCE_01",
+      source_artifact_id: "a-1",
+      source_fact_card_id: "fc-1",
+      evidence_field: "payment_category",
+    }]);
+  });
+
+  it("does not infer from non-financial categories", () => {
+    expect(collectFinanceExpectedMissingProjections([
+      {
+        id: "fc-1",
+        artifact_id: "a-1",
+        fields: [{ field_name: "payment_category", value: "OCT_EXAM_FEE" }],
+      },
+    ], [
+      { id: "a-1", category_id: "clinical_consultation" },
+    ])).toEqual([]);
+  });
+});
 
 describe("Agent v1.1 source-context hard gates", () => {
   it("blocks undeclared logistics uploads of clinical prescriptions", () => {
