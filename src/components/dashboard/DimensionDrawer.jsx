@@ -74,6 +74,10 @@ function PeopleDetail({ theme }) {
   const onDuty = data.filter((s) => s.status === "on_duty" || s.status === "busy").length;
   const available = data.filter((s) => s.status === "on_duty").length;
   const busy = data.filter((s) => s.status === "busy").length;
+  const onBreak = data.filter((s) => s.status === "break").length;
+  const onLeave = data.filter((s) => s.status === "off_duty").length;
+  const padOnline = data.filter((s) => s.pad_online === true).length;
+  const total = data.length;
   const anomalies = data.filter(isAnomaly).length;
 
   // 异常优先，再按在岗→忙碌→待确认→休息→离岗排序
@@ -88,8 +92,12 @@ function PeopleDetail({ theme }) {
     <div>
       <div className="grid grid-cols-4 gap-2 mb-3">
         <Stat theme={theme} value={onDuty} label="在岗" color="#4ade80" />
-        <Stat theme={theme} value={available} label="可调度" color="#00C7D9" />
+        <Stat theme={theme} value={available} label="空闲" color="#00C7D9" />
         <Stat theme={theme} value={busy} label="忙碌" color="#FBBF24" />
+        <Stat theme={theme} value={onBreak} label="休息" color="#94A3B8" />
+        <Stat theme={theme} value={onLeave} label="休假" color="#64748B" />
+        <Stat theme={theme} value={total} label="总人数" color="#cbd5e1" />
+        <Stat theme={theme} value={padOnline} label="终端在线" color="#22d3ee" />
         <Stat theme={theme} value={anomalies} label="异常" color="#f87171" />
       </div>
       <div className="space-y-1.5">
