@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, Bell, Sun, Moon, Network, Play, GitBranch, ClipboardCheck, Crown, Brain, Wrench, Users, UserPlus, BarChart3, Settings, Trophy, FlaskConical } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Activity, Wifi, Bell, Sun, Moon } from "lucide-react";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
+import FeatureLauncher from "@/components/dashboard/FeatureLauncher";
 
 export default function TopBar({ overallHealth, onMenuToggle }) {
   const [time, setTime] = useState(new Date());
@@ -98,148 +98,8 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
 
       {/* Right */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Architecture map link */}
-        <Link
-          to="/architecture"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(0,199,217,0.1)", border: "1px solid rgba(0,199,217,0.25)" }}
-          title="查看 Clinic OS 开发逻辑总图"
-        >
-          <Network size={13} style={{ color: "#00C7D9" }} />
-          <span className="text-xs font-semibold" style={{ color: "#00C7D9", fontSize: "10px" }}>架构图</span>
-        </Link>
-
-        {/* Boot demo link */}
-        <Link
-          to="/boot-demo"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(22,163,74,0.1)", border: "1px solid rgba(22,163,74,0.25)" }}
-          title="系统启动联动演示"
-        >
-          <Play size={13} style={{ color: "#4ade80" }} />
-          <span className="text-xs font-semibold" style={{ color: "#4ade80", fontSize: "10px" }}>启动演示</span>
-        </Link>
-
-        {/* Causal canvas link */}
-        <Link
-          to="/causal-canvas"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.25)" }}
-          title="全景因果链画布"
-        >
-          <GitBranch size={13} style={{ color: "#A78BFA" }} />
-          <span className="text-xs font-semibold" style={{ color: "#A78BFA", fontSize: "10px" }}>因果画布</span>
-        </Link>
-
-        {/* Daily review link */}
-        <Link
-          to="/daily-review"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(217,119,6,0.1)", border: "1px solid rgba(217,119,6,0.25)" }}
-          title="每日经营复盘"
-        >
-          <ClipboardCheck size={13} style={{ color: "#FBBF24" }} />
-          <span className="text-xs font-semibold" style={{ color: "#FBBF24", fontSize: "10px" }}>每日复盘</span>
-        </Link>
-
-        {/* V9 case flow link */}
-        <Link
-          to="/v9-case"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.25)" }}
-          title="V9 案例闭环演练"
-        >
-          <Crown size={13} style={{ color: "#f87171" }} />
-          <span className="text-xs font-semibold" style={{ color: "#f87171", fontSize: "10px" }}>V9演练</span>
-        </Link>
-
-        {/* M3 hub link */}
-        <Link
-          to="/m3-hub"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.25)" }}
-          title="M3 智能中枢 · LLM 技能"
-        >
-          <Brain size={13} style={{ color: "#A78BFA" }} />
-          <span className="text-xs font-semibold" style={{ color: "#A78BFA", fontSize: "10px" }}>智能中枢</span>
-        </Link>
-
-        {/* Dev director link */}
-        <Link
-          to="/dev-director"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.25)" }}
-          title="开发总监 · 智能运营监理"
-        >
-          <Wrench size={13} style={{ color: "#FB923C" }} />
-          <span className="text-xs font-semibold" style={{ color: "#FB923C", fontSize: "10px" }}>开发总监</span>
-        </Link>
-
-        {/* Staff management link */}
-        <Link
-          to="/staff-mgmt"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(100,116,139,0.12)", border: "1px solid rgba(100,116,139,0.25)" }}
-          title="员工管理 · 邀请注册与花名册"
-        >
-          <Users size={13} style={{ color: "#94A3B8" }} />
-          <span className="text-xs font-semibold" style={{ color: "#94A3B8", fontSize: "10px" }}>员工管理</span>
-        </Link>
-
-        {/* Staff onboarding link */}
-        <Link
-          to="/staff-onboarding"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)" }}
-          title="员工入职邀请 · 邀请码与待审核申请"
-        >
-          <UserPlus size={13} style={{ color: "#A855F7" }} />
-          <span className="text-xs font-semibold" style={{ color: "#A855F7", fontSize: "10px" }}>入职邀请</span>
-        </Link>
-
-        {/* Analytics dashboard link */}
-        <Link
-          to="/analytics-dashboard"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(0,199,217,0.1)", border: "1px solid rgba(0,199,217,0.25)" }}
-          title="业务数据分析 · 营收/客流/任务效率"
-        >
-          <BarChart3 size={13} style={{ color: "#00C7D9" }} />
-          <span className="text-xs font-semibold" style={{ color: "#00C7D9", fontSize: "10px" }}>数据分析</span>
-        </Link>
-
-        {/* Performance report link */}
-        <Link
-          to="/performance-report"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)" }}
-          title="工作绩效报告 · 月度效率与AI评分"
-        >
-          <Trophy size={13} style={{ color: "#FBBF24" }} />
-          <span className="text-xs font-semibold" style={{ color: "#FBBF24", fontSize: "10px" }}>绩效报告</span>
-        </Link>
-
-        {/* Clinic settings link */}
-        <Link
-          to="/clinic-settings"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(148,163,184,0.12)", border: "1px solid rgba(148,163,184,0.25)" }}
-          title="系统配置中心 · 基础信息/流程开关/角色权限"
-        >
-          <Settings size={13} style={{ color: "#94A3B8" }} />
-          <span className="text-xs font-semibold" style={{ color: "#94A3B8", fontSize: "10px" }}>配置中心</span>
-        </Link>
-
-        {/* Phase 5 multimodal ingestion smoke entry */}
-        <Link
-          to="/phase5-smoke"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 active:scale-95"
-          style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}
-          title="Phase 5 多模态碎片采集 · 隔离测试入口（mock 模式）"
-        >
-          <FlaskConical size={13} style={{ color: "#4ade80" }} />
-          <span className="text-xs font-semibold" style={{ color: "#4ade80", fontSize: "10px" }}>碎片采集</span>
-        </Link>
+        {/* 功能导航：所有其他板块入口收进下拉框 */}
+        <FeatureLauncher />
 
         {/* Live indicator */}
         <div className="hidden sm:flex items-center gap-1.5">
