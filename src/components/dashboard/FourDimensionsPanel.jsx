@@ -115,6 +115,9 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   const onDuty = staff.filter((s) => s.status === "on_duty" || s.status === "busy").length;
   const available = staff.filter((s) => s.status === "on_duty").length;
   const busy = staff.filter((s) => s.status === "busy").length;
+  // 当天休假 = off_duty（休息 break 不计为休假）；终端在线 = pad_online 实时累计
+  const onLeave = staff.filter((s) => s.status === "off_duty").length;
+  const padOnline = staff.filter((s) => s.pad_online === true).length;
   // 异常：状态待确认 + 在岗类岗位 PAD 离线（休息/离岗不计入）
   const awaiting = staff.filter((s) => s.status === "awaiting_confirm").length;
   const padOffline = staff.filter(
@@ -187,7 +190,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           icon={Users}
           label="人 · STAFF"
           headline={onDuty}
-          headlineSub={`/ ${staff.length} 人 · 可调度 ${available} · 忙碌 ${busy}`}
+          headlineSub={`/ ${staff.length} 人 · 休假 ${onLeave} · 终端在线 ${padOnline}`}
           alerts={anomalies}
           status={staffStatus}
           accent="#4ade80"
