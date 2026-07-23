@@ -209,6 +209,7 @@ export async function executeCompositionRuntime({
   guessPolicy,
   invokeLLM,
   committedArtifactIds = [],
+  undoLinkedGroups = {},
   now = Date.now(),
 }) {
   if (!clinicId) throw new Error("clinicId required");
@@ -252,11 +253,44 @@ export async function executeCompositionRuntime({
   resolvedCards = propagateGroupResolution(resolvedCards, multipageClusters);
   const multipageVetoIssues = buildMultipageVetoIssue(multipageClusters);
 
+  // 次日回流 self_supplement 绑定：linked_undo_artifact_id 标记的车厢
+  // 强制与旧车厢分入同一 new_train cluster，无需 LLM 推断同源性。
+  // 机制类似多页聚合，但触发键是 linked_undo_artifact_id 而非 session_hint。
+  const cardByArtifactId = new Map(resolvedCards.map((c) => [c.artifact_id, c]));
+  const forcedUndoGroups = [];
+  const undoConsumedCardIds = new Set();
+  for (const [oldArtId, newArtIds] of Object.entries(undoLinkedGroups || {})) {
+    const oldCard = cardByArtifactId.get(oldArtId) || null;
+    const newCards = (Array.isArray(newArtIds) ? newArtIds : [])
+      .map((id) => cardByArtifactId.get(id))
+      .filter(Boolean);
+    const members = [oldCard, ...newCards].filter(Boolean);
+    if (members.length < 2) continue; // 仅旧或仅新不构成绑定组
+    forcedUndoGroups.push({
+      cluster_id: `undo-link::${oldArtId}`,
+      fact_card_ids: members.map((c) => c.id).filter(Boolean),
+      artifact_ids: members.map((c) => c.artifact_id).filter(Boolean),
+      workflow_family_hint: members[0]?.workflow_family_hint || null,
+      composition_type: "new_train",
+      alternative_group: null,
+      reason: "undo_self_supplement_binding",
+    });
+    for (const m of members) undoConsumedCardIds.add(m.id);
+  }
+
+  const clusteringCards = undoConsumedCardIds.size > 0
+    ? resolvedCards.filter((c) => !undoConsumedCardIds.has(c.id))
+    : resolvedCards;
+
   const clusters = await buildCompositionClusters({
-    factCards: resolvedCards,
+    factCards: clusteringCards,
     workflows: scopedWorkflows,
     invokeLLM,
   });
+
+  if (forcedUndoGroups.length > 0) {
+    clusters.newTrainCandidates = [...forcedUndoGroups, ...(clusters.newTrainCandidates || [])];
+  }
 
   const hypotheses = [];
   const validationIssues = [

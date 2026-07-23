@@ -547,6 +547,16 @@ function makeOps(svc: any): CompositionOps {
         ...new Set((committed || []).flatMap((item: any) => item.ordered_artifact_ids || [])),
       ];
 
+      // 次日回流 self_supplement 绑定：收集 linked_undo_artifact_id 标记，
+      // 供 executeCompositionRuntime 强制将新旧车厢分入同一 cluster。
+      const undoLinkedGroups = {};
+      for (const artifact of artifacts) {
+        const linked = artifact.linked_undo_artifact_id;
+        if (!linked) continue;
+        if (!undoLinkedGroups[linked]) undoLinkedGroups[linked] = [];
+        undoLinkedGroups[linked].push(artifact.id);
+      }
+
       const pipelineResult = await executeCompositionRuntime({
         clinicId: actor.clinic_id,
         compositionRunId: String(run.id),
@@ -558,6 +568,7 @@ function makeOps(svc: any): CompositionOps {
         guessPolicy: policies?.[0] || {},
         invokeLLM,
         committedArtifactIds,
+        undoLinkedGroups,
         now: Date.now(),
       });
 

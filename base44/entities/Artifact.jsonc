@@ -66,7 +66,9 @@
     },
     "exception_class": {
       "type": "string",
-      "enum": ["manager_approved_exception"],
+      "enum": [
+        "manager_approved_exception"
+      ],
       "description": "Explicit exceptional context isolated from normal assembly and rule learning"
     },
     "normal_rule_learning_eligible": {
@@ -77,6 +79,10 @@
     "source_workflow_id": {
       "type": "string",
       "description": "Phase 3\uff1a\u663e\u5f0f\u7ed1\u5b9a Workflow ID\uff08CandidateFinder explicit_id \u81ea\u52a8\u6302\u63a5\u4f9d\u636e\uff09"
+    },
+    "linked_undo_artifact_id": {
+      "type": "string",
+      "description": "\u6b21\u65e5\u56de\u6d41 self_supplement \u7ed1\u5b9a\uff1a\u672c\u8f66\u53a2\u662f\u5bf9 linked_undo_artifact_id \u6240\u6307\u65e7\u8f66\u53a2\u7684\u4eba\u5de5\u8865\u5145\u8bf4\u660e\u3002\u7f16\u7ec4\u65f6\u5f3a\u5236\u5c06\u4e24\u8005\u5206\u5165\u540c\u4e00 cluster\uff0c\u65e0\u9700 LLM \u63a8\u65ad\u540c\u6e90\u6027\u3002"
     },
     "business_date": {
       "type": "string",

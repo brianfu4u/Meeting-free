@@ -106,7 +106,9 @@ async function resolveUndoItem(base44: any, body: any, actor: any) {
   const now = new Date().toISOString();
 
   if (resolutionType === "self_supplement") {
-    // 强关联：直接写 linked_artifact_id，不经过 Agent 候选匹配
+    // 车厢连车厢：新车厢直接引用旧车厢，两者绑成一组证据，
+    // 交由下次编组重新判断，不涉及任何 workflow 中介。
+    // 孤儿车厢本来就没有 source_workflow_id，不再复制该字段。
     const newArtifactId = body.new_artifact_id;
     if (!isNonEmptyString(newArtifactId)) {
       return makeResponse(400, { error_code: "new_artifact_id_required" });
@@ -116,26 +118,17 @@ async function resolveUndoItem(base44: any, body: any, actor: any) {
     if (newArtifact.clinic_id !== actor.clinic_id) {
       return makeResponse(403, { error_code: "tenant_scope_violation" });
     }
-    // 建议：在新 Artifact 上写 explicit 关联字段，确保下次 run 时
-    // candidateFinder 走 explicit_id 路径直连原车厢。
-    // 仅当原始 Artifact 存在 source_workflow_id 时继承（无可继承则保持现状，由聚类自然匹配）。
-    const originalArtifact = await svc.entities.Artifact.get(item.artifact_id).catch(() => null);
-    const explicitWorkflowId = originalArtifact?.source_workflow_id || null;
-    if (isNonEmptyString(explicitWorkflowId) && newArtifact.source_workflow_id !== explicitWorkflowId) {
-      await svc.entities.Artifact.update(newArtifactId, {
-        source_workflow_id: explicitWorkflowId,
-      });
-    }
+    // 在新车厢上打"引用旧车厢"标记，供下次编组识别为同组证据
+    await svc.entities.Artifact.update(newArtifactId, {
+      linked_undo_artifact_id: item.artifact_id,
+    });
     const updated = await svc.entities.UndoListItem.update(body.undo_item_id, {
       status: "resolved",
       resolution_type: "self_supplement",
       linked_artifact_id: newArtifactId,
       resolved_at: now,
     });
-    return makeResponse(200, {
-      undo_item: updated,
-      explicit_workflow_id_inherited: isNonEmptyString(explicitWorkflowId),
-    });
+    return makeResponse(200, { undo_item: updated });
   }
 
   // handoff：弱关联，只标记状态，不做强制关联。
