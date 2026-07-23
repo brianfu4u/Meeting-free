@@ -190,7 +190,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           icon={Users}
           label="人 · STAFF"
           headline={onDuty}
-          headlineSub={`/ ${staff.length} 人 · 休假 ${onLeave} · 终端在线 ${padOnline}`}
+          headlineSub={`总人数 ${staff.length} · 休假 ${onLeave} · 终端在线 ${padOnline}`}
           alerts={anomalies}
           status={staffStatus}
           accent="#4ade80"
