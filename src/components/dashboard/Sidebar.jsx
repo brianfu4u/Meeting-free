@@ -1,82 +1,89 @@
 import React from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Stethoscope, CircleDollarSign,
-  ConciergeBell, Microscope, Syringe,
-  HeartPulse, Warehouse,
-  Megaphone, Glasses, ShieldCheck, Boxes,
+  LayoutDashboard, Network, Play, GitBranch,
+  Crown, Brain, Wrench, ClipboardCheck,
+  Users, UserPlus, BarChart3, Trophy, Settings, FlaskConical,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift } from "@/lib/clinicTime";
 
-const ICON_MAP = {
-  LayoutDashboard, Stethoscope, CircleDollarSign,
-  ConciergeBell, Microscope, Syringe,
-  HeartPulse, Warehouse,
-  Megaphone, Glasses, ShieldCheck, Boxes,
-};
+// 功能板块（可点击进入对应页面），部门面板不再罗列
+const GROUPS = [
+  {
+    color: "#00C7D9",
+    label: "总览",
+    items: [
+      { to: "/", icon: LayoutDashboard, label: "院长指挥台" },
+    ],
+  },
+  {
+    color: "#16A34A",
+    label: "开发与演示",
+    items: [
+      { to: "/architecture", icon: Network, label: "架构图" },
+      { to: "/boot-demo", icon: Play, label: "启动演示" },
+      { to: "/causal-canvas", icon: GitBranch, label: "因果画布" },
+      { to: "/phase5-smoke", icon: FlaskConical, label: "碎片采集" },
+    ],
+  },
+  {
+    color: "#A78BFA",
+    label: "智能与运营",
+    items: [
+      { to: "/v9-case", icon: Crown, label: "V9演练" },
+      { to: "/m3-hub", icon: Brain, label: "智能中枢" },
+      { to: "/dev-director", icon: Wrench, label: "开发总监" },
+      { to: "/daily-review", icon: ClipboardCheck, label: "每日复盘" },
+    ],
+  },
+  {
+    color: "#FBBF24",
+    label: "管理与配置",
+    items: [
+      { to: "/staff-mgmt", icon: Users, label: "员工管理" },
+      { to: "/staff-onboarding", icon: UserPlus, label: "入职邀请" },
+      { to: "/analytics-dashboard", icon: BarChart3, label: "数据分析" },
+      { to: "/performance-report", icon: Trophy, label: "绩效报告" },
+      { to: "/clinic-settings", icon: Settings, label: "配置中心" },
+    ],
+  },
+];
 
-const STATUS_DOT = { green: "#16A34A", amber: "#D97706", red: "#DC2626" };
-
-// 3 业务族（与 src/lib/departments/registry.js BUSINESS_FAMILIES 对齐）
-const GROUP_COLORS = {
-  clinical:     "#00C7D9",
-  non_clinical: "#16A34A",
-  fallback:     "#D97706",
-};
-
-const GROUP_LABELS = {
-  clinical:     "临床与诊疗",
-  non_clinical: "运营与支持",
-  fallback:     "兜底与例外",
-};
-
-export default function Sidebar({ navItems, activeSection, onNavigate, panelStatuses, isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose }) {
   const { theme } = useTheme();
   const shift = beijingShift();
+  const { pathname } = useLocation();
 
-  // Group nav items
-  const overview = navItems.filter((i) => !i.group);
-  const grouped = {};
-  navItems.filter((i) => i.group).forEach((i) => {
-    if (!grouped[i.group]) grouped[i.group] = [];
-    grouped[i.group].push(i);
-  });
+  const isActive = (to) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
   const renderItem = (item) => {
-    const IconComp = ICON_MAP[item.icon] || LayoutDashboard;
-    const isActive = activeSection === item.id;
-    const panelStatus = item.id !== "overview" ? panelStatuses[item.id] : null;
-    const dotColor = panelStatus ? STATUS_DOT[panelStatus] : null;
-
+    const IconComp = item.icon;
+    const active = isActive(item.to);
     return (
-      <button
-        key={item.id}
-        onClick={() => { onNavigate(item.id); onClose(); }}
+      <Link
+        key={item.to}
+        to={item.to}
+        onClick={onClose}
         className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all duration-150 text-left"
         style={{
-          background: isActive ? "rgba(0,199,217,0.12)" : "transparent",
-          border: isActive ? "1px solid rgba(0,199,217,0.25)" : "1px solid transparent",
+          background: active ? "rgba(0,199,217,0.12)" : "transparent",
+          border: active ? "1px solid rgba(0,199,217,0.25)" : "1px solid transparent",
         }}
       >
         <div
           className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
-          style={{ background: isActive ? "rgba(0,199,217,0.2)" : "rgba(128,128,128,0.08)" }}
+          style={{ background: active ? "rgba(0,199,217,0.2)" : "rgba(128,128,128,0.08)" }}
         >
-          <IconComp size={12} style={{ color: isActive ? "#00C7D9" : theme.textMuted }} />
+          <IconComp size={12} style={{ color: active ? "#00C7D9" : theme.textMuted }} />
         </div>
-        <span className="flex-1 truncate" style={{ color: isActive ? "#00C7D9" : theme.textSub, fontSize: "11px", fontWeight: isActive ? 600 : 400 }}>
+        <span
+          className="flex-1 truncate"
+          style={{ color: active ? "#00C7D9" : theme.textSub, fontSize: "11px", fontWeight: active ? 600 : 400 }}
+        >
           {item.label}
         </span>
-        {dotColor && (
-          <span
-            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-            style={{
-              background: dotColor,
-              animation: panelStatus === "red" ? "pulseRed 1.5s ease-in-out infinite" : "none",
-            }}
-          />
-        )}
-      </button>
+      </Link>
     );
   };
 
@@ -102,19 +109,15 @@ export default function Sidebar({ navItems, activeSection, onNavigate, panelStat
         }}
       >
         <div className="flex-1 overflow-y-auto py-2 px-2">
-          {/* Overview */}
-          {overview.map(renderItem)}
-
-          {/* Grouped sections */}
-          {Object.entries(grouped).map(([groupId, items]) => (
-            <div key={groupId} className="mt-3">
+          {GROUPS.map((group, idx) => (
+            <div key={group.label} className={idx === 0 ? "" : "mt-3"}>
               <div className="flex items-center gap-1.5 px-2 mb-1">
-                <div className="w-1 h-3 rounded-full" style={{ background: GROUP_COLORS[groupId] }} />
-                <span style={{ color: GROUP_COLORS[groupId], fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em" }}>
-                  {GROUP_LABELS[groupId]}
+                <div className="w-1 h-3 rounded-full" style={{ background: group.color }} />
+                <span style={{ color: group.color, fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em" }}>
+                  {group.label}
                 </span>
               </div>
-              {items.map(renderItem)}
+              {group.items.map(renderItem)}
             </div>
           ))}
         </div>
