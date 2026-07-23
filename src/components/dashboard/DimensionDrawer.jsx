@@ -8,6 +8,7 @@ import React, { useEffect } from "react";
 import { X, Users, Activity, TrendingUp, Package, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 import { todayBeijingDate } from "@/lib/clinicTime";
+import { DEPARTMENT_BY_ID, ROLE_LABELS } from "@/lib/departments/registry";
 import {
   usePatientSessions,
   useStaff,
@@ -108,7 +109,7 @@ function PeopleDetail({ theme }) {
             <Row key={s.id} color={st.color} theme={theme}>
               <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "70px" }}>{s.staff_name}</span>
               <span className="text-xs flex-1 truncate" style={{ color: theme.textSub, fontSize: "10px" }}>
-                {s.assigned_zone || "未分配"} · {s.role}
+                {DEPARTMENT_BY_ID[s.department_id]?.name || "未分配部门"} · {ROLE_LABELS[s.role] || s.role}
               </span>
               {anomaly && <AlertTriangle size={11} style={{ color: "#f87171" }} />}
               <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${st.color}1a`, color: st.color, fontSize: "10px" }}>{st.label}</span>
