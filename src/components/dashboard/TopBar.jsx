@@ -3,6 +3,7 @@ import { Activity, Wifi, Bell, Sun, Moon } from "lucide-react";
 import { CLINIC_NAME } from "@/data/mockData";
 import { useTheme } from "@/lib/ThemeContext";
 import FeatureLauncher from "@/components/dashboard/FeatureLauncher";
+import { formatBeijingTime, formatBeijingDate, beijingShift } from "@/lib/clinicTime";
 
 export default function TopBar({ overallHealth, onMenuToggle }) {
   const [time, setTime] = useState(new Date());
@@ -13,18 +14,9 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (date) => {
-    const h = String(date.getHours()).padStart(2, "0");
-    const m = String(date.getMinutes()).padStart(2, "0");
-    const s = String(date.getSeconds()).padStart(2, "0");
-    return `${h}:${m}:${s}`;
-  };
-
-  const formatDate = (date) => {
-    const days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-    const d = days[date.getDay()];
-    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${d}`;
-  };
+  const formatTime = (date) => formatBeijingTime(date);
+  const formatDate = (date) => formatBeijingDate(date);
+  const shift = beijingShift(time);
 
   const healthColor =
     overallHealth >= 85 ? "#4ade80" : overallHealth >= 70 ? "#fbbf24" : "#f87171";
@@ -88,10 +80,10 @@ export default function TopBar({ overallHealth, onMenuToggle }) {
         <div className="flex items-center gap-1.5 mt-0.5">
           <span
             className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "#16A34A", animation: "pulseGreen 3s ease-in-out infinite" }}
+            style={{ background: shift.color, animation: "pulseGreen 3s ease-in-out infinite" }}
           />
-          <span className="text-xs font-medium" style={{ color: "#4ade80" }}>
-            上午班 进行中
+          <span className="text-xs font-medium" style={{ color: shift.color }}>
+            {shift.label} 进行中
           </span>
         </div>
       </div>

@@ -22,6 +22,7 @@ import {
   deriveHealthScore,
 } from "@/hooks/useClinicData";
 import { useLiveOpsFeed } from "@/hooks/useLiveOpsFeed";
+import { formatBeijingTimeShort } from "@/lib/clinicTime";
 
 // 将 AuditLog 实体映射为 EventStream 所需的展示结构
 function mapAuditToEvent(entry) {
@@ -44,7 +45,7 @@ function mapAuditToEvent(entry) {
   if (parts.length === 0) parts.push(entry.trigger_type || "事件");
   return {
     id: entry.id || entry.event_id,
-    time: new Date(entry.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+    time: formatBeijingTimeShort(new Date(entry.timestamp)),
     type,
     icon: "FileText",
     message: parts.join(" · "),

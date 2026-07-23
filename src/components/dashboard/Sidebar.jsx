@@ -6,6 +6,7 @@ import {
   Megaphone, Glasses, ShieldCheck, Boxes,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
+import { beijingShift } from "@/lib/clinicTime";
 
 const ICON_MAP = {
   LayoutDashboard, Stethoscope, CircleDollarSign,
@@ -31,6 +32,7 @@ const GROUP_LABELS = {
 
 export default function Sidebar({ navItems, activeSection, onNavigate, panelStatuses, isOpen, onClose }) {
   const { theme } = useTheme();
+  const shift = beijingShift();
 
   // Group nav items
   const overview = navItems.filter((i) => !i.group);
@@ -124,11 +126,11 @@ export default function Sidebar({ navItems, activeSection, onNavigate, panelStat
           <div className="text-xs font-semibold mb-1.5" style={{ color: "#00C7D9", fontSize: "10px", letterSpacing: "0.05em" }}>
             当前班次
           </div>
-          <div className="text-xs font-bold" style={{ color: theme.text }}>上午班</div>
-          <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>08:00 – 13:00</div>
+          <div className="text-xs font-bold" style={{ color: theme.text }}>{shift.label}</div>
+          <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>{shift.range}</div>
           <div className="mt-2 flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#16A34A" }} />
-            <span className="text-xs" style={{ color: "#4ade80", fontSize: "10px" }}>进行中</span>
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: shift.color }} />
+            <span className="text-xs" style={{ color: shift.color, fontSize: "10px" }}>进行中</span>
           </div>
         </div>
       </aside>

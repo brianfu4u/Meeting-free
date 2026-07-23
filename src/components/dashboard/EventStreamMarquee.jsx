@@ -20,7 +20,7 @@ const STAFF_SELF_DONE = new Set(["completed", "exception"]);
 
 function todayBusinessDate() {
   try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   } catch { return new Date().toISOString().slice(0, 10); }
 }
 

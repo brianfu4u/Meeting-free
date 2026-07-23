@@ -7,23 +7,18 @@
  * 仅用于前端"今日看板/今日待办"展示过滤，不修改任何原始数据。
  */
 
+import { todayBeijingDate, beijingYMD } from "@/lib/clinicTime";
+
 export function isToday(ts) {
   if (!ts) return false;
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  return beijingYMD(d) === todayBeijingDate();
 }
 
 export function isBeforeToday(ts) {
   if (!ts) return false;
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return false;
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  return d.getTime() < start.getTime();
+  return beijingYMD(d) < todayBeijingDate();
 }
