@@ -514,31 +514,20 @@ function makeOps(svc: any): CompositionOps {
           Number(item.ingestion_seq) <= Number(request.cutoff_event_seq)
       );
 
+      // 仅就绪证据卡（assembly_eligible=true）进入编组。
+      // 无卡或未就绪→跳过，等待解析站产出合格卡后由后续 run 取货。
+      // run 内不自行解析 Artifact（解析职责归解析站，见 agentHandoffContract）。
       const factCards = [];
       for (const artifact of artifacts) {
-        let rows = await svc.entities.EvidenceFactCard.filter({
+        const rows = await svc.entities.EvidenceFactCard.filter({
           clinic_id: actor.clinic_id,
           artifact_id: artifact.id,
           stale: false,
         });
-        let card = rows?.[0] || null;
-        if (!card) {
-          const interpreted = await interpretArtifactRuntime({
-            artifact,
-            policyVersion: request.policy_version,
-            invokeLLM,
-          });
-          card = await svc.entities.EvidenceFactCard.create({
-            ...interpreted,
-            clinic_id: actor.clinic_id,
-            artifact_id: artifact.id,
-          });
-          await svc.entities.Artifact.update(artifact.id, {
-            interpreted: true,
-            evidence_fact_card_id: card.id,
-          });
+        const card = rows?.[0] || null;
+        if (card && card.assembly_eligible === true) {
+          factCards.push(card);
         }
-        factCards.push(card);
       }
 
       const [workflows, snapshots, policies, committed] = await Promise.all([
