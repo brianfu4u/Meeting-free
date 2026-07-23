@@ -3,6 +3,11 @@ import { resolveWorkflowLink } from "./runtime/candidateFinder.js";
 import { buildCompositionClusters } from "./runtime/clustering.js";
 import { assembleWorkflow } from "./runtime/workflowAssembly.js";
 import { validateHypotheses } from "./runtime/guardrailValidator.js";
+import {
+  clusterMultiPage,
+  propagateGroupResolution,
+  buildMultipageVetoIssue,
+} from "./runtime/factCardCluster.js";
 
 export const PHASE2_RUNTIME_SOURCES = {
   "src/lib/composition/prompts.js": "92d7d741dffc41e6859e2a4bbf4ecbced327c559",
@@ -212,7 +217,7 @@ export async function executeCompositionRuntime({
 
   const artifactMap = byId(artifacts);
   const scopedWorkflows = (workflows || []).filter((item) => item.clinic_id === clinicId);
-  const resolvedCards = [];
+  let resolvedCards = [];
 
   for (const card of factCards || []) {
     if (card.clinic_id !== clinicId) throw new Error("fact_card_cross_tenant");
@@ -225,14 +230,27 @@ export async function executeCompositionRuntime({
       invokeLLM,
       clinicId,
     });
+    // V11 FactCardCluster：注入 session_hint（来自 Artifact.original_metadata），
+    // 供 candidateFinder 之后的聚合同源分组使用。零回归：无 hint 时为 null。
+    const sessionHint =
+      artifact?.original_metadata?.patient_session_id_hint || null;
     resolvedCards.push({
       ...card,
       _resolvedWorkflowId: link.linkedWorkflowId,
       _linkMethod: link.method,
       _candidateWorkflowIds: link.candidates.map((item) => item.workflow_id),
       _invalidCandidates: link.invalid_candidates || [],
+      _session_hint: sessionHint,
     });
   }
+
+  // V11 多页证据聚合：同 session_hint + business_date 的卡片识别为同一事件。
+  // 一票否决合并 alignment_status，最小值合并 confidence；纯内存态，不改 FactCard 实体。
+  const multipageResult = clusterMultiPage(resolvedCards);
+  const multipageClusters = multipageResult.clusters || [];
+  // 组内传播已解析 workflow，使同组卡片归入同一 attach train（候选匹配增强）。
+  resolvedCards = propagateGroupResolution(resolvedCards, multipageClusters);
+  const multipageVetoIssues = buildMultipageVetoIssue(multipageClusters);
 
   const clusters = await buildCompositionClusters({
     factCards: resolvedCards,
@@ -243,6 +261,7 @@ export async function executeCompositionRuntime({
   const hypotheses = [];
   const validationIssues = [
     ...(clusters.validation_issues || []),
+    ...multipageVetoIssues,
     ...collectSourceContextValidationIssues(resolvedCards, artifacts),
     ...collectManagerExceptionValidationIssues(resolvedCards, artifacts),
     ...collectDeviceIdentityValidationIssues(resolvedCards, scopedWorkflows),
@@ -311,5 +330,7 @@ export async function executeCompositionRuntime({
     expectedMissingProjections,
     artifactIds: [...new Set(hypotheses.flatMap((item) => item.ordered_artifact_ids || []))],
     factCardIds: resolvedCards.map((item) => item.id).filter(Boolean),
+    // V11 多页证据聚合结果（纯内存态，供看板/审计展示，不落库）
+    multipageClusters,
   };
 }
