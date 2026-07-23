@@ -602,6 +602,7 @@ async function run(
         idempotent: true,
         run: recoveredRun,
         authoritative_attachment,
+        multipage_clusters: [],
       });
     }
 
@@ -652,6 +653,7 @@ async function run(
           idempotent: true,
           run: recoveredRun,
           authoritative_attachment,
+          multipage_clusters: [],
         });
       }
       persistedRun = await ops.createRun({
@@ -850,6 +852,9 @@ async function run(
       review,
       dispatch,
       authoritative_attachment,
+      // V11 多页证据聚合（纯内存态，不落库）：供 observe 采集脚本直接读取
+      // "某 session 下几张 FactCard 被聚成一组"。单页场景为空数组，零回归。
+      multipage_clusters: pipeline.multipageClusters || [],
       reverse_inference: {
         projections: expectedMissingProjections,
         expected_missing_segments: expectedMissingSegments,
