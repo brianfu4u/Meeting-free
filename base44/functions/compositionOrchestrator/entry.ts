@@ -547,7 +547,7 @@ function makeOps(svc: any): CompositionOps {
         ...new Set((committed || []).flatMap((item: any) => item.ordered_artifact_ids || [])),
       ];
 
-      return executeCompositionRuntime({
+      const pipelineResult = await executeCompositionRuntime({
         clinicId: actor.clinic_id,
         compositionRunId: String(run.id),
         policyVersion: Number(request.policy_version),
@@ -560,6 +560,46 @@ function makeOps(svc: any): CompositionOps {
         committedArtifactIds,
         now: Date.now(),
       });
+
+      // 次日回流：对本次 run 未产出有效 hypothesis 的就绪 FactCard，
+      // 逐个生成 pending UndoListItem 供员工次日补充/移交。
+      // 不催、不过期：无 due_date，pending 可无限期挂着，直至员工 resolve 或 attachment reconciliation 自动 resolve。
+      const processedArtifactIds = new Set(
+        (pipelineResult.artifactIds || []).filter((id: any) => typeof id === "string" && id)
+      );
+      const artifactById = new Map((artifacts || []).map((a: any) => [a.id, a]));
+      const undoDispatch = deriveDispatchDecision({
+        guardrailResult: pipelineResult.guardrailResult,
+        validationIssues: (pipelineResult.validationIssues || []),
+      });
+      const unmatchedReasonCodes = undoDispatch.llmAuditReasonCodes || [];
+      const undoItemsCreated: string[] = [];
+      for (const card of factCards) {
+        if (processedArtifactIds.has(card.artifact_id)) continue;
+        const existing = await svc.entities.UndoListItem.filter({
+          clinic_id: actor.clinic_id,
+          artifact_id: card.artifact_id,
+          status: "pending",
+        });
+        if (existing && existing.length > 0) continue;
+        const artifact = artifactById.get(card.artifact_id);
+        const created = await svc.entities.UndoListItem.create({
+          clinic_id: actor.clinic_id,
+          artifact_id: card.artifact_id,
+          original_uploader_id: artifact?.source_staff_id || null,
+          idempotency_key: `${actor.clinic_id}::${card.artifact_id}`,
+          business_date: request.business_date,
+          bounced_at: new Date().toISOString(),
+          bounce_reason: "not_assembled_by_cutoff",
+          status: "pending",
+          fact_card_id: card.id,
+          unmatched_reason_codes: unmatchedReasonCodes,
+          created_by_run_id: String(run.id),
+        });
+        undoItemsCreated.push(String(created.id));
+      }
+
+      return { ...pipelineResult, undoItemsCreated };
     },
     createHypotheses: async (descriptors) => {
       const created = [];

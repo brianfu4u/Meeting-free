@@ -32,6 +32,7 @@ import {
 import { runAdapter } from "./adapters.ts";
 import { alignExtraction, evaluateAlignment } from "./alignment.ts";
 import { reconstruct } from "../../shared/semanticReconstructionSkill.ts";
+import { resolveClinicActor } from "../../shared/clinicActor.ts";
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -69,28 +70,10 @@ async function handleRequest(base44, body) {
 }
 
 async function resolveActor(base44, user, requestedClinicId) {
-  if (!isNonEmptyString(requestedClinicId)) return null;
-  const svc = base44.asServiceRole;
-  const staffRows = await svc.entities.Staff.filter({ user_id: user.id });
-  const staff = (staffRows || []).find((s) =>
-    s && s.clinic_id === requestedClinicId && s.status !== "off_duty"
-  );
-  if (!staff) {
-    if (user.role === "admin") {
-      const configs = await svc.entities.ClinicConfig.filter({ clinic_id: requestedClinicId });
-      const config = configs?.[0];
-      if (config && config.manager_id === user.id) {
-        return { user_id: user.id, clinic_id: requestedClinicId, staff_id: user.id, role: "admin" };
-      }
-    }
-    return null;
-  }
-  return {
-    user_id: user.id,
-    clinic_id: requestedClinicId,
-    staff_id: staff.id,
-    role: "admin",
-  };
+  return resolveClinicActor(base44.asServiceRole, user, requestedClinicId, {
+    requireOnDuty: true,
+    staffRole: "admin",
+  });
 }
 
 function buildDeps(base44) {

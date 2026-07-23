@@ -2,29 +2,101 @@
   "name": "UndoListItem",
   "type": "object",
   "properties": {
-    "clinic_id": { "type": "string", "description": "Strict tenant scope" },
-    "artifact_id": { "type": "string", "description": "Artifact without an authoritative Workflow attachment" },
-    "original_uploader_id": { "type": "string", "description": "Staff owner of the Undo List item" },
-    "idempotency_key": { "type": "string", "description": "clinic_id::artifact_id; one durable item per Artifact" },
-    "business_date": { "type": "string", "format": "date" },
-    "bounced_at": { "type": "string", "format": "date-time", "description": "Cutoff reconciliation record time" },
+    "clinic_id": {
+      "type": "string",
+      "description": "Strict tenant scope"
+    },
+    "artifact_id": {
+      "type": "string",
+      "description": "Artifact without an authoritative Workflow attachment"
+    },
+    "original_uploader_id": {
+      "type": "string",
+      "description": "Staff owner of the Undo List item\uff08\u5373\u539f\u59cb\u4e0a\u4f20\u5458\u5de5 Staff ID\uff0c\u6b21\u65e5\u56de\u6d41\u5f52\u5c5e\u4eba\uff09"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "clinic_id::artifact_id; one durable item per Artifact"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "bounced_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cutoff reconciliation record time\uff08\u4ea6\u4e3a\u672c\u6761\u76ee\u521b\u5efa\u65f6\u523b\uff09"
+    },
     "bounce_reason": {
       "type": "string",
-      "enum": ["not_assembled_by_cutoff"],
+      "enum": [
+        "not_assembled_by_cutoff"
+      ],
       "description": "Factual state only; no alarm or evaluative meaning"
     },
     "status": {
       "type": "string",
-      "enum": ["pending", "resolved", "manager_cleared"],
+      "enum": [
+        "pending",
+        "resolved",
+        "manager_cleared"
+      ],
       "default": "pending",
-      "description": "resolved requires an authoritative WorkflowArtifactLink; manager clear never deletes the record"
+      "description": "resolved requires an authoritative WorkflowArtifactLink \u6216\u5458\u5de5 self_supplement/handoff \u56de\u6d41\u5904\u7406\uff1bmanager clear never deletes the record"
     },
-    "resolved_at": { "type": "string", "format": "date-time" },
-    "resolved_into_workflow_id": { "type": "string" },
-    "resolved_by_link_id": { "type": "string" },
-    "cleared_by_manager_id": { "type": "string" },
-    "cleared_at": { "type": "string", "format": "date-time" },
-    "created_by_run_id": { "type": "string" }
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_into_workflow_id": {
+      "type": "string"
+    },
+    "resolved_by_link_id": {
+      "type": "string"
+    },
+    "cleared_by_manager_id": {
+      "type": "string"
+    },
+    "cleared_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by_run_id": {
+      "type": "string"
+    },
+    "fact_card_id": {
+      "type": "string",
+      "description": "\u6b21\u65e5\u56de\u6d41\u6eaf\u6e90\uff1a\u672c\u672a\u5339\u914d Artifact \u5bf9\u5e94\u7684 EvidenceFactCard ID\uff08run \u6536\u5c3e\u751f\u6210\u65f6\u5199\u5165\uff09"
+    },
+    "unmatched_reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u672c\u6b21 run \u672a\u5339\u914d\u539f\u56e0\u7801\uff08ambiguous_candidates / validation_block \u7b49\uff0c\u6765\u81ea deriveDispatchDecision.llmAuditReasonCodes\uff09"
+    },
+    "resolution_type": {
+      "type": "string",
+      "enum": [
+        "self_supplement",
+        "handoff"
+      ],
+      "description": "\u5458\u5de5\u6b21\u65e5\u56de\u6d41\u5904\u7406\u65b9\u5f0f\uff1aself_supplement=\u81ea\u884c\u8865\u5145\u5f3a\u5173\u8054\uff1bhandoff=\u79fb\u4ea4\u540c\u4e8b\u5f31\u5173\u8054\u3002\u4ec5\u5458\u5de5\u4e3b\u52a8 resolve \u65f6\u5199\u5165\uff1battachment reconciliation \u8def\u5f84\u4fdd\u6301 null\u3002"
+    },
+    "linked_artifact_id": {
+      "type": "string",
+      "description": "\u4ec5 resolution_type=self_supplement \u65f6\u5199\u5165\uff1a\u5458\u5de5\u5173\u8054\u7684\u65b0\u8865\u5145 Artifact ID\uff08\u5f3a\u5173\u8054\uff0c\u4e0d\u7ecf\u8fc7 Agent \u5019\u9009\u5339\u914d\uff09\u3002handoff \u65f6\u4fdd\u6301 null\u3002"
+    }
   },
-  "required": ["clinic_id", "artifact_id", "original_uploader_id", "idempotency_key", "business_date", "bounced_at", "bounce_reason", "status"]
+  "required": [
+    "clinic_id",
+    "artifact_id",
+    "original_uploader_id",
+    "idempotency_key",
+    "business_date",
+    "bounced_at",
+    "bounce_reason",
+    "status"
+  ]
 }
