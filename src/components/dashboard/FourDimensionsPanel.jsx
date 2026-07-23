@@ -8,11 +8,13 @@
 import React from "react";
 import { Users, Activity, TrendingUp, Package, AlertTriangle, ChevronRight, RefreshCw } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
+import { beijingShift, todayBeijingDate } from "@/lib/clinicTime";
 import {
   usePatientSessions,
   useStaff,
   useInventory,
   useRevenueTargets,
+  useClinicConfig,
 } from "@/hooks/useClinicData";
 
 const STATUS_LEVEL = {
@@ -99,35 +101,72 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   const sessionsQ = usePatientSessions();
   const inventoryQ = useInventory();
   const revenueQ = useRevenueTargets();
+  const configQ = useClinicConfig();
 
   const loading = staffQ.isLoading || sessionsQ.isLoading;
   const staff = staffQ.data || [];
   const sessions = sessionsQ.data || [];
   const inventory = inventoryQ.data || [];
   const revenue = revenueQ.data || [];
+  const config = configQ.data || null;
 
   // ── 人：员工在岗态势 ──
+  // 在岗 = on_duty + busy；可调度 = on_duty（在岗且不忙）；忙碌 = busy
   const onDuty = staff.filter((s) => s.status === "on_duty" || s.status === "busy").length;
+  const available = staff.filter((s) => s.status === "on_duty").length;
   const busy = staff.filter((s) => s.status === "busy").length;
-  const anomalies = staff.filter((s) => s.status === "awaiting_confirm" || (s.pad_online === false && s.status !== "off_duty")).length;
-  const staffStatus = anomalies > 0 ? "red" : busy >= onDuty * 0.8 ? "amber" : "green";
+  // 异常：状态待确认 + 在岗类岗位 PAD 离线（休息/离岗不计入）
+  const awaiting = staff.filter((s) => s.status === "awaiting_confirm").length;
+  const padOffline = staff.filter(
+    (s) => (s.status === "on_duty" || s.status === "busy" || s.status === "awaiting_confirm") && s.pad_online === false
+  ).length;
+  const anomalies = awaiting + padOffline;
+  const shift = beijingShift();
+  const businessHours = shift.label !== "非营业";
+  // 营业时段无人到岗→红；有异常→红；忙碌占比≥80%→黄；否则绿
+  const staffStatus =
+    onDuty === 0
+      ? businessHours ? "red" : "green"
+      : anomalies > 0
+        ? "red"
+        : onDuty > 0 && busy >= onDuty * 0.8
+          ? "amber"
+          : "green";
 
-  // ── 流：患者流转 ──
-  const waiting = sessions.filter((s) => s.status === "seated" || s.status === "arrived").length;
-  const inProgress = sessions.filter((s) => s.status === "in_progress").length;
-  const stalled = sessions.filter((s) => s.status === "stalled").length;
-  const flowStatus = stalled > 0 ? "red" : waiting >= 8 ? "amber" : "green";
-  const flowAlerts = stalled + (waiting >= 8 ? 1 : 0);
+  // ── 流：患者流转（仅活跃会话，排除已完成，避免历史污染）──
+  const ACTIVE_SESSION = new Set(["arrived", "seated", "in_progress", "stalled"]);
+  const activeSessions = sessions.filter((s) => ACTIVE_SESSION.has(s.status));
+  const waiting = activeSessions.filter((s) => s.status === "seated" || s.status === "arrived").length;
+  const inProgress = activeSessions.filter((s) => s.status === "in_progress").length;
+  const stalled = activeSessions.filter((s) => s.status === "stalled").length;
+  // 最长候诊时长（分钟）：到店/候诊患者中最大等待
+  const nowMs = Date.now();
+  const waitMinutes = activeSessions
+    .filter((s) => s.status === "seated" || s.status === "arrived")
+    .map((s) => {
+      const t = s.seated_time || s.arrival_time;
+      return t ? (nowMs - new Date(t).getTime()) / 60000 : 0;
+    });
+  const maxWaitMin = waitMinutes.length ? Math.round(Math.max(...waitMinutes)) : 0;
+  const yellowWait = config?.wait_timeout_yellow_minutes ?? 15;
+  const redWait = config?.wait_timeout_red_minutes ?? 30;
+  const waitRed = maxWaitMin >= redWait;
+  const waitAmber = maxWaitMin >= yellowWait;
+  const flowStatus = stalled > 0 || waitRed ? "red" : waiting >= 8 || waitAmber ? "amber" : "green";
+  const flowAlerts = stalled + (waitRed ? 1 : 0) + (waiting >= 8 && !waitRed ? 1 : 0);
 
-  // ── 钱：营收达成 ──
-  const totalTarget = revenue.reduce((s, r) => s + (r.target_amount || 0), 0);
-  const totalActual = revenue.reduce((s, r) => s + (r.actual_amount || 0), 0);
+  // ── 钱：今日营收达成（仅今日 target_date，避免多日目标混算）──
+  const todayDate = todayBeijingDate();
+  const todayRevenue = revenue.filter((r) => r.target_date === todayDate);
+  const totalTarget = todayRevenue.reduce((s, r) => s + (r.target_amount || 0), 0);
+  const totalActual = todayRevenue.reduce((s, r) => s + (r.actual_amount || 0), 0);
   const achievementRate = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
-  const moneyStatus = achievementRate < 40 ? "red" : achievementRate < 60 ? "amber" : "green";
+  const moneyStatus = totalTarget === 0 ? "green" : achievementRate < 40 ? "red" : achievementRate < 60 ? "amber" : "green";
 
-  // ── 物：库存水位 ──
-  const lowStock = inventory.filter((i) => i.below_threshold).length;
-  const thingStatus = lowStock >= 3 ? "red" : lowStock > 0 ? "amber" : "green";
+  // ── 物：库存水位（按数量/阈值实时计算，不依赖可能过期的 below_threshold 标记）──
+  const lowStock = inventory.filter((i) => i.threshold > 0 && i.quantity < i.threshold).length;
+  const nearLow = inventory.filter((i) => i.threshold > 0 && i.quantity >= i.threshold && i.quantity < i.threshold * 1.2).length;
+  const thingStatus = lowStock >= 3 ? "red" : lowStock > 0 || nearLow > 0 ? "amber" : "green";
 
   return (
     <div>
@@ -148,7 +187,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           icon={Users}
           label="人 · STAFF"
           headline={onDuty}
-          headlineSub={`/ ${staff.length} 人 · 忙碌 ${busy}`}
+          headlineSub={`/ ${staff.length} 人 · 可调度 ${available} · 忙碌 ${busy}`}
           alerts={anomalies}
           status={staffStatus}
           accent="#4ade80"
@@ -159,7 +198,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           icon={Activity}
           label="流 · FLOW"
           headline={waiting}
-          headlineSub={`候诊 · 诊疗 ${inProgress}`}
+          headlineSub={`候诊 · 诊疗 ${inProgress} · 最长等 ${maxWaitMin}分`}
           alerts={flowAlerts}
           status={flowStatus}
           accent="#00C7D9"
@@ -169,9 +208,9 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
         <DimensionCard
           icon={TrendingUp}
           label="钱 · REVENUE"
-          headline={`${achievementRate}%`}
-          headlineSub={`¥${totalActual.toLocaleString()} / 目标`}
-          alerts={achievementRate < 60 ? 1 : 0}
+          headline={totalTarget > 0 ? `${achievementRate}%` : "—"}
+          headlineSub={totalTarget > 0 ? `¥${totalActual.toLocaleString()} / ¥${totalTarget.toLocaleString()}` : "今日未设目标"}
+          alerts={totalTarget > 0 && achievementRate < 60 ? 1 : 0}
           status={moneyStatus}
           accent="#FBBF24"
           theme={theme}
@@ -181,7 +220,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           icon={Package}
           label="物 · SUPPLY"
           headline={lowStock}
-          headlineSub={`/ ${inventory.length} 项低水位`}
+          headlineSub={`/ ${inventory.length} 项 · 预警 ${nearLow}`}
           alerts={lowStock}
           status={thingStatus}
           accent="#A78BFA"
