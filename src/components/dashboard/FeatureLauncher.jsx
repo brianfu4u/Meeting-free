@@ -1,31 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
-  LayoutGrid, ChevronDown, Network, Play, GitBranch,
-  ClipboardCheck, Crown, Brain, Wrench, Users, UserPlus,
-  BarChart3, Settings, Trophy, FlaskConical,
+  LayoutGrid, ChevronDown, ClipboardCheck,
+  Users, UserPlus, BarChart3, Settings, Trophy,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 
 const FEATURE_GROUPS = [
   {
-    label: "开发与演示",
-    accent: "#00C7D9",
+    label: "运营分析",
+    accent: "#FBBF24",
     items: [
-      { to: "/architecture", icon: Network, label: "架构图", color: "#00C7D9" },
-      { to: "/boot-demo", icon: Play, label: "启动演示", color: "#4ade80" },
-      { to: "/causal-canvas", icon: GitBranch, label: "因果画布", color: "#A78BFA" },
-      { to: "/v9-case", icon: Crown, label: "V9演练", color: "#f87171" },
-      { to: "/phase5-smoke", icon: FlaskConical, label: "碎片采集", color: "#4ade80" },
-    ],
-  },
-  {
-    label: "智能与运营",
-    accent: "#A78BFA",
-    items: [
-      { to: "/m3-hub", icon: Brain, label: "智能中枢", color: "#A78BFA" },
-      { to: "/dev-director", icon: Wrench, label: "开发总监", color: "#FB923C" },
       { to: "/daily-review", icon: ClipboardCheck, label: "每日复盘", color: "#FBBF24" },
+      { to: "/analytics-dashboard", icon: BarChart3, label: "数据分析", color: "#00C7D9" },
+      { to: "/performance-report", icon: Trophy, label: "绩效报告", color: "#FBBF24" },
     ],
   },
   {
@@ -34,8 +22,6 @@ const FEATURE_GROUPS = [
     items: [
       { to: "/staff-mgmt", icon: Users, label: "员工管理", color: "#94A3B8" },
       { to: "/staff-onboarding", icon: UserPlus, label: "入职邀请", color: "#A855F7" },
-      { to: "/analytics-dashboard", icon: BarChart3, label: "数据分析", color: "#00C7D9" },
-      { to: "/performance-report", icon: Trophy, label: "绩效报告", color: "#FBBF24" },
       { to: "/clinic-settings", icon: Settings, label: "配置中心", color: "#94A3B8" },
     ],
   },
