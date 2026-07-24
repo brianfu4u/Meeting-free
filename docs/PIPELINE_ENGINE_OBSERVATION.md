@@ -3,7 +3,7 @@
 **状态：** 疑似废弃代码，观察中（DEPRECATED · UNDER OBSERVATION）  
 **建观察日期：** 2026-07-24  
 **观察窗口：** 2026-07-24 → 2026-08-23（30 天）  
-**关联 Bug：** `pipelineEngine/entry.ts:263` — `arrival_time` 缺失时回退 `Date.now()`，导致 `totalElapsedMinutes≈0`、`isStalled` 恒为 false，卡诊检测静默失效。
+**关联 Bug：** `pipelineEngine/entry.ts` — `arrival_time` 缺失时回退 `Date.now()`，导致 `totalElapsedMinutes≈0`、`isStalled` 恒为 false，卡诊检测静默失效。
 
 ---
 
@@ -15,13 +15,11 @@
 
 ## 二、唯一未确认的路径
 
-扫码终端固件 / PDA 设备是否绕过本仓库、直接对 pipelineEngine 的 HTTP endpoint 发 POST 请求。  
-此路径**无法通过代码或现有日志排除**——它发生在 Base44 平台外部，需平台控制台侧（Logs Explorer 调用日志 / Function URL + Integrations 比对 / 外部 curl 验证）才能确认，上述控制台操作本轮均无法由代码侧完成。
+扫码终端固件 / PDA 设备是否绕过本仓库、直接对 pipelineEngine 的 HTTP endpoint 发 POST 请求。此路径发生在 Base44 平台外部，需平台控制台侧（Logs Explorer 调用日志 / Function URL + Integrations 比对 / 外部 curl 验证）才能确认。
 
 ## 三、观察机制：方案 B（已落实 2026-07-24）
 
-在 `pipelineEngine/entry.ts` 的 `Deno.serve` 首行、`auth.me()` 之前，加一行**无条件探针**：每次 HTTP 命中即写一条 `source_agent="PipelineEngine_PROBE"`、`clinic_id="__pipeline_engine_probe__"` 的 AuditLog（鉴权前执行，认证通过 / 401 / 500 均会记录）。  
-再以 AuditLog 实体自动化监听该探针记录的创建，触发 `pipelineEngineCallAlert` 通知函数，在 manager Dashboard 的 AttentionQueue 生成红色告警项。
+在 `pipelineEngine/entry.ts` 的 `Deno.serve` 首行、`auth.me()` 之前，加一行**无条件探针**：每次 HTTP 命中即写一条 `source_agent="PipelineEngine_PROBE"`、`clinic_id="__pipeline_engine_probe__"` 的 AuditLog（鉴权前执行，认证通过 / 401 / 500 均会记录）。再以 AuditLog 实体自动化监听该探针记录的创建，触发 `pipelineEngineCallAlert` 通知函数，在 manager Dashboard 的 AttentionQueue 生成红色告警项。
 
 - ✅ 覆盖所有命中路径（含无登录态的外部直连），30 天观察窗口有意义。
 - ✅ 探针仅做观测记录，不改任何业务逻辑，不碰 `arrival_time` 回退 bug。
@@ -33,9 +31,7 @@
 
 ## 四、Bug 修复原则（暂不动代码）
 
-已定通用原则：**"缺失"必须能被系统识别并展示为独立状态，不得随便挑一个看似安全的默认值顶替。**  
-因此 `arrival_time` 缺失时回退 `Date.now()` 这一行的修复，需按此原则重新设计（如回退 `seated_time`、再缺则标记为"到达时间未知"独立态并转店长关注），不是现场想一个新兜底值了事。  
-**在观察期结束、调用情况明确前，不改动 pipelineEngine 任何业务逻辑代码。**（本次仅加观测探针，不属业务逻辑改动。）
+已定通用原则：**"缺失"必须能被系统识别并展示为独立状态，不得随便挑一个看似安全的默认值顶替。** 因此 `arrival_time` 缺失时回退 `Date.now()` 这一行的修复，需按此原则重新设计，不是现场想一个新兜底值了事。**在观察期结束、调用情况明确前，不改动 pipelineEngine 任何业务逻辑代码。**（本次仅加观测探针，不属业务逻辑改动。）
 
 ## 五、观察期结论模板（30 天后填写）
 

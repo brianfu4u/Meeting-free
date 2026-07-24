@@ -242,4 +242,21 @@ Stream 进入
 
 ---
 
-*本文件为 Clinic OS V10 的最高执行依据。任何代码与本文件冲突时，以本文件为准，直至新 ADR 取代。*
+---
+
+## V12 状态标记（Phase 0 照抄，不再单独判断）
+
+> 以下状态标记由 `docs/CLINIC_OS_V12.md` 的 V12.1 处置表与 V12.3 状态表直接抄录。V10 各条款自此携带且仅携带一个状态标记。
+
+| 条款 | 处置 | 状态 | 执行 artifact / 缺口 |
+| :--- | :--- | :--- | :--- |
+| V10.1 AI 永不改变诊所状态 | INCORPORATED | enforced | manager 确认路径 |
+| V10.2 推理不触碰原始证据（Evidence Normalizer） | INCORPORATED | enforced | ingestion 层的 normalizer |
+| V10.3 只展示值得关注的内容 | INCORPORATED | enforced | — |
+| V10.4 每条建议须可解释 | INCORPORATED | 建议部分 enforced，new_train 部分 declared-not-enforced | new_train 假设携带血缘但无持久记录，enforcing artifact：临时工作流状态（Phase 3） |
+| V10.5 AI 建议、人类决策（三种 manager 动作） | INCORPORATED | enforced | — |
+| V10.6 AttentionItem 实体 | INCORPORATED | enforced | — |
+| V10.7 终端隔离，禁止 agent 对 agent 握手 | INCORPORATED | enforced | — |
+| V10.8 三秒感知达标标准 | INCORPORATED（重新归类） | declared-not-enforced | 尚无任何测量存在，enforcing artifact：延迟断言（Phase 6） |
+
+*本文件为 Clinic OS V10 的最高执行依据。任何代码与本文件冲突时，以本文件为准，直至新 ADR 取代。V10 条款状态以 V12 处置表与状态表为准。*
