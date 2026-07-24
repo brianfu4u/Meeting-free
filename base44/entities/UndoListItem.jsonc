@@ -39,10 +39,11 @@
       "enum": [
         "pending",
         "resolved",
-        "manager_cleared"
+        "manager_cleared",
+        "accepted_orphan"
       ],
       "default": "pending",
-      "description": "resolved requires an authoritative WorkflowArtifactLink \u6216\u5458\u5de5 self_supplement/handoff \u56de\u6d41\u5904\u7406\uff1bmanager clear never deletes the record"
+      "description": "resolved \u9700\u6743\u5a01 WorkflowArtifactLink \u6216\u5458\u5de5 self_supplement/handoff \u56de\u6d41\uff1bmanager_cleared \u4e0d\u5220\u8bb0\u5f55\uff1baccepted_orphan=Phase 2b \u7ec8\u6001\uff0c\u5e97\u957f\u786e\u8ba4\u6c38\u4e45\u5b64\u513f\uff08V9.L4 enforcing artifact\uff09\uff0c\u4e0d\u53ef\u9006\uff0creconcile \u7684 pending \u5b88\u536b\u5929\u7136\u8df3\u8fc7\u3002"
     },
     "resolved_at": {
       "type": "string",
@@ -55,11 +56,13 @@
       "type": "string"
     },
     "cleared_by_manager_id": {
-      "type": "string"
+      "type": "string",
+      "description": "\u5e97\u957f\u7ed3\u6848/\u6e05\u7406\u4eba ID\uff1baccepted_orphan \u4e0e manager_cleared \u5171\u7528"
     },
     "cleared_at": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "\u5e97\u957f\u7ed3\u6848/\u6e05\u7406\u65f6\u95f4\uff1baccepted_orphan \u7ec8\u6001\u5199\u5165"
     },
     "created_by_run_id": {
       "type": "string"
@@ -82,7 +85,7 @@
         "self_supplement",
         "handoff"
       ],
-      "description": "\u5458\u5de5\u6b21\u65e5\u56de\u6d41\u5904\u7406\u65b9\u5f0f\uff1aself_supplement=\u81ea\u884c\u8865\u5145\u5f3a\u5173\u8054\uff1bhandoff=\u79fb\u4ea4\u540c\u4e8b\u5f31\u5173\u8054\u3002\u4ec5\u5458\u5de5\u4e3b\u52a8 resolve \u65f6\u5199\u5165\uff1battachment reconciliation \u8def\u5f84\u4fdd\u6301 null\u3002"
+      "description": "\u5458\u5de5\u6b21\u65e5\u56de\u6d41\u5904\u7406\u65b9\u5f0f\uff1aself_supplement=\u81ea\u884c\u8865\u5145\u5f3a\u5173\u8054\uff1bhandoff=\u79fb\u4ea4\u540c\u4e8b\u5f31\u5173\u8054\u3002\u4ec5\u5458\u5de5\u4e3b\u52a8 resolve \u65f6\u5199\u5165\uff1battachment reconciliation \u8def\u5f84\u4e0e accepted_orphan \u7ec8\u6001\u4fdd\u6301 null\u3002"
     },
     "linked_artifact_id": {
       "type": "string",

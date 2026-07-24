@@ -4,8 +4,12 @@
 // UndoListItem 的生成由 compositionOrchestrator run 收尾负责。
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { resolveClinicActor } from "../../shared/clinicActor.ts";
+import {
+  buildAcceptedOrphanUndoPatch,
+  buildAcceptOrphanManagerDecision,
+} from "../../shared/phase1Instrumentation.ts";
 
-const ACTIONS = new Set(["list_undo_items", "resolve_undo_item"]);
+const ACTIONS = new Set(["list_undo_items", "resolve_undo_item", "accept_orphan"]);
 const RESOLUTION_TYPES = new Set(["self_supplement", "handoff"]);
 
 function makeResponse(http_status: number, body: Record<string, unknown>) {
@@ -50,6 +54,7 @@ async function handleRequest(base44: any, body: any) {
 
   if (action === "list_undo_items") return listUndoItems(base44, body, actor);
   if (action === "resolve_undo_item") return resolveUndoItem(base44, body, actor);
+  if (action === "accept_orphan") return acceptOrphan(base44, body, actor);
   return makeResponse(400, { error_code: "action_invalid" });
 }
 
@@ -139,4 +144,52 @@ async function resolveUndoItem(base44: any, body: any, actor: any) {
     resolved_at: now,
   });
   return makeResponse(200, { undo_item: updated, explicit_workflow_id_inherited: false });
+}
+
+// Phase 2b：accepted_orphan 终结状态（V9.L4 enforcing artifact）。
+// 店长一键确认永久孤儿，终态不可逆。仅店长可执行（ClinicConfig.manager_id 显式判定，
+// 不依赖 resolveClinicActor 的 role 信号——后者对"有 Staff 行的店长"返回 staff）。
+async function acceptOrphan(base44: any, body: any, actor: any) {
+  if (!isNonEmptyString(body.undo_item_id)) {
+    return makeResponse(400, { error_code: "undo_item_id_required" });
+  }
+
+  const svc = base44.asServiceRole;
+
+  // 店长判定：ClinicConfig.manager_id 匹配 user_id 或 staff_id（兼容 Staff 行与 legacy 直存）。
+  const configs = await svc.entities.ClinicConfig.filter({ clinic_id: actor.clinic_id });
+  const config = configs?.[0];
+  const isManager = !!config && (
+    config.manager_id === actor.user_id || config.manager_id === actor.staff_id
+  );
+  if (!isManager) return makeResponse(403, { error_code: "manager_only" });
+
+  const item = await svc.entities.UndoListItem.get(body.undo_item_id).catch(() => null);
+  if (!item) return makeResponse(404, { error_code: "undo_item_not_found" });
+  if (item.clinic_id !== actor.clinic_id) {
+    return makeResponse(403, { error_code: "tenant_scope_violation" });
+  }
+  // 仅 pending 可流转为 accepted_orphan；resolved/manager_cleared/accepted_orphan 不可再动。
+  if (item.status !== "pending") {
+    return makeResponse(409, { error_code: "undo_item_not_pending" });
+  }
+
+  const now = new Date().toISOString();
+  const updated = await svc.entities.UndoListItem.update(
+    body.undo_item_id,
+    buildAcceptedOrphanUndoPatch({ managerId: actor.staff_id, now })
+  );
+
+  // V9.L4 锚点：ManagerDecision 复用 artifact_exception（异常隔离，不进正常规则学习）。
+  const decision = await svc.entities.ManagerDecision.create(
+    buildAcceptOrphanManagerDecision({
+      clinicId: actor.clinic_id,
+      managerId: actor.staff_id,
+      artifactId: item.artifact_id,
+      now,
+      note: isNonEmptyString(body.note) ? body.note : null,
+    })
+  );
+
+  return makeResponse(200, { undo_item: updated, manager_decision: decision });
 }

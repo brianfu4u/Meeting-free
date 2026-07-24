@@ -285,3 +285,63 @@ export function buildPreAttachConflictAttention(input: {
     evidence_fact_card_ids: input.evidenceFactCardIds || [],
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 2b：accepted_orphan 终结状态（V9.L4 enforcing artifact）
+// 店长手动确认永久孤儿，终态不可逆；复用 artifact_exception 作 ManagerDecision 锚点。
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * buildAcceptedOrphanUndoPatch：店长 accept 后写回 UndoListItem 的补丁。
+ * 终态不可逆；复用既有 cleared_by_manager_id / cleared_at 审计字段，无需新增字段。
+ */
+export function buildAcceptedOrphanUndoPatch(input: {
+  managerId: string;
+  now: string;
+}) {
+  return {
+    status: "accepted_orphan",
+    cleared_by_manager_id: input.managerId,
+    cleared_at: input.now,
+  };
+}
+
+/**
+ * buildAcceptOrphanManagerDecision：V9.L4 锚点决策记录。
+ * 复用 artifact_exception（异常隔离，normal_rule_learning_eligible=false），
+ * target_id=artifact_id 与既有 findManagerExceptionDecision(artifactId) 查询口径一致。
+ */
+export function buildAcceptOrphanManagerDecision(input: {
+  clinicId: string;
+  managerId: string;
+  artifactId: string;
+  now: string;
+  note?: string | null;
+}) {
+  return {
+    clinic_id: input.clinicId,
+    manager_id: input.managerId,
+    target_type: "artifact_exception",
+    target_id: input.artifactId,
+    decision: "approved",
+    decision_note: input.note ?? "accepted_orphan: 永久孤儿结案",
+    decided_at: input.now,
+    decision_scope: "exception_archive_only",
+    exception_class: "manager_approved_exception",
+    normal_rule_learning_eligible: false,
+  };
+}
+
+/**
+ * isArtifactAcceptedOrphan：该 artifact 是否已有 accepted_orphan 终态项。
+ * 供 executePipeline 跳过已结案孤儿，避免重复 bounce。
+ */
+export function isArtifactAcceptedOrphan(
+  undoItems: any[],
+  artifactId: string
+): boolean {
+  if (!Array.isArray(undoItems) || !artifactId) return false;
+  return undoItems.some(
+    (item) => item && item.artifact_id === artifactId && item.status === "accepted_orphan"
+  );
+}

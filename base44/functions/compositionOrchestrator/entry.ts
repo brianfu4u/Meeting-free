@@ -601,12 +601,16 @@ function makeOps(svc: any): CompositionOps {
       const undoItemsCreated: string[] = [];
       for (const card of factCards) {
         if (processedArtifactIds.has(card.artifact_id)) continue;
+        // Phase 2b：已有 pending（待补）或 accepted_orphan（店长已结案）的 artifact 不重复 bounce。
+        // accepted_orphan 为终态，下一 run 不再为其创建新 pending（V9.L4 终态语义）。
         const existing = await svc.entities.UndoListItem.filter({
           clinic_id: actor.clinic_id,
           artifact_id: card.artifact_id,
-          status: "pending",
         });
-        if (existing && existing.length > 0) continue;
+        const hasBlocking = (existing || []).some(
+          (item: any) => item.status === "pending" || item.status === "accepted_orphan"
+        );
+        if (hasBlocking) continue;
         const artifact = artifactById.get(card.artifact_id);
         const created = await svc.entities.UndoListItem.create({
           clinic_id: actor.clinic_id,
