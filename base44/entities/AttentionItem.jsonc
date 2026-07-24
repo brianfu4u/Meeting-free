@@ -18,9 +18,10 @@
         "contradiction",
         "resource_risk",
         "wait_timeout",
-        "staff_unresponsive"
+        "staff_unresponsive",
+        "pre_attach_conflict"
       ],
-      "description": "\u6ce8\u610f\u529b\u7c7b\u578b"
+      "description": "\u6ce8\u610f\u529b\u7c7b\u578b\u3002pre_attach_conflict=Phase 1b interim A1 \u5b89\u5168\u8def\u7531\uff1allm_audit_required=true \u7684\u4e8b\u5b9e\u5361\u88ab\u8def\u7531\u6210\u7684\u5f85\u5e97\u957f\u88c1\u51b3\u9879\u3002"
     },
     "urgency": {
       "type": "string",

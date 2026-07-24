@@ -1,0 +1,44 @@
+{
+  "name": "NegativeConstraint",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "workflow_id": {
+      "type": "string",
+      "description": "\u7981\u6b62\u518d\u6302\u63a5\u7684\u76ee\u6807\u5de5\u4f5c\u6d41 ID"
+    },
+    "artifact_id": {
+      "type": "string",
+      "description": "\u7981\u6b62\u518d\u6302\u63a5\u7684 Artifact\uff08\u4e8b\u5b9e\u5361\uff09ID"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "clinic_id::workflow_id::artifact_id\uff1b\u540c\u4e00\u5bf9\u7ec4\u5408\u53ea\u4fdd\u7559\u4e00\u6761 active \u8bb0\u5f55"
+    },
+    "source_link_id": {
+      "type": "string",
+      "description": "\u4ea7\u751f\u672c\u8d1f\u7ea6\u675f\u7684\u64a4\u9500\u94fe\u63a5 ID\uff08CorrectionCapture.link_id\uff09"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u662f\u5426\u751f\u6548\u3002\u5f15\u64ce\u8bfb\u53d6 active=true \u7684\u8bb0\u5f55\u6291\u5236\u8be5\u5bf9\u7ec4\u5408\u7684\u518d\u6b21\u6302\u63a5\u63d0\u8bae\u3002"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u8d1f\u7ea6\u675f\u5efa\u7acb\u65f6\u95f4\u6233"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "workflow_id",
+    "artifact_id",
+    "idempotency_key",
+    "active",
+    "created_at"
+  ]
+}

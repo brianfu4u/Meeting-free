@@ -1,0 +1,49 @@
+{
+  "name": "HardLinkShareLedger",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "link_id": {
+      "type": "string",
+      "description": "\u5bf9\u5e94\u7684 WorkflowArtifactLink ID\uff1b\u5e42\u7b49\u952e\uff0c\u4e00\u4e2a\u94fe\u63a5\u4ea7\u751f\u4e00\u6761 ledger \u884c"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u94fe\u63a5\u521b\u5efa\u7684\u4e1a\u52a1\u65e5\u671f"
+    },
+    "branch": {
+      "type": "string",
+      "description": "\u4e1a\u52a1\u5206\u652f\uff08workflow.business_line / workflow_family\uff09"
+    },
+    "domain": {
+      "type": "string",
+      "description": "\u6765\u6e90\u57df\uff08artifact.source_region\uff09"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "hard",
+        "soft"
+      ],
+      "description": "hard=\u81ea\u6211\u8865\u5145\uff08self_supplement\uff09\u786c\u94fe\u63a5\uff1bsoft=\u5176\u4f59\uff08\u81ea\u4e3b/\u624b\u5de5/\u4ea4\u63a5\uff09\u3002\u5360\u6bd4 = hard / (hard+soft)\u3002"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ledger \u884c\u8bb0\u5f55\u65f6\u95f4\u6233\uff08\u94fe\u63a5 attached_at\uff09"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "link_id",
+    "business_date",
+    "branch",
+    "domain",
+    "kind",
+    "created_at"
+  ]
+}

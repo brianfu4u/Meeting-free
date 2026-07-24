@@ -342,6 +342,20 @@ function makeOps(svc: any): CompositionOps {
     buildAttention: buildAttentionDescriptor,
     buildFailure: buildRunFailure,
 
+    // Phase 1a 负约束抑制：读取本店 active 负约束，供 service.ts 过滤已被 un-attach 的对
+    listActiveNegativeConstraints: async (clinicId: string) => {
+      try {
+        const rows = await svc.entities.NegativeConstraint.filter(
+          { clinic_id: clinicId, active: true },
+          "-created_at",
+          500
+        );
+        return rows || [];
+      } catch {
+        return [];
+      }
+    },
+
     getArtifact: async (id) => {
       try {
         return await svc.entities.Artifact.get(id);

@@ -1,3 +1,4 @@
+import { isSuppressed } from "../../shared/phase1Instrumentation.ts";
 // Keep deploy-time types local: Base44 may misclassify cross-file `import type`
 type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
 type ServiceRequest = Record<string, any>;
@@ -677,7 +678,17 @@ async function run(
       hypotheses: pipeline.hypotheses,
       guardrailResult: pipeline.guardrailResult,
     });
-    const hypotheses = await ops.createHypotheses(hypothesisDescriptors);
+    // Phase 1a 负约束抑制：已被店长 un-attach 的 (artifact, workflow) 对不再被提议挂接
+    let suppressedDescriptors = hypothesisDescriptors;
+    if (typeof ops.listActiveNegativeConstraints === "function") {
+      const activeNeg = await ops.listActiveNegativeConstraints(actor.clinic_id);
+      if (Array.isArray(activeNeg) && activeNeg.length > 0) {
+        suppressedDescriptors = hypothesisDescriptors.filter(
+          (h) => !isSuppressed(h, activeNeg)
+        );
+      }
+    }
+    const hypotheses = await ops.createHypotheses(suppressedDescriptors);
     const dispatch = ops.deriveDispatch({
       guardrailResult: pipeline.guardrailResult,
       validationIssues: pipeline.validationIssues || [],

@@ -1,0 +1,96 @@
+{
+  "name": "AttachDecisionLog",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u5baa\u6cd5\u7ea7\u7269\u7406\u9694\u79bb\u5b57\u6bb5"
+    },
+    "composition_run_id": {
+      "type": "string",
+      "description": "\u672c\u6b21 composition \u51b3\u7b56\u5bf9\u5e94\u7684 CompositionRun ID\uff1b\u5e42\u7b49\u952e\uff0c\u4e00\u4e2a run \u4ea7\u751f\u4e00\u884c\u51b3\u7b56\u65e5\u5fd7"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u4e1a\u52a1\u65e5\u671f"
+    },
+    "branch": {
+      "type": "string",
+      "description": "\u4e1a\u52a1\u5206\u652f\uff08workflow_family / business_line\uff0c\u5982 optometry/medical/vision_training\uff09"
+    },
+    "domain": {
+      "type": "string",
+      "description": "\u6765\u6e90\u57df\uff08department / source_region\uff0c\u5982 reception/optometry/medical\uff09"
+    },
+    "track_scores": {
+      "type": "object",
+      "description": "\u6bcf\u6761\u63a8\u7406\u8f68\u9053\u7684\u5206\u6570\u5feb\u7167\uff1a{ track_id: { supporting, opposing, net } }\u3002\u5f53\u524d\u67b6\u6784\u4e3a\u63a8\u7406\u534f\u8bae\u800c\u975e\u52a0\u6743\u6253\u5206\uff0cnet = supporting - opposing\uff1bnumeric aggregate/threshold/margin \u7559\u5f85 Phase 7\u3002",
+      "additionalProperties": true
+    },
+    "aggregate_score": {
+      "type": "number",
+      "description": "\u805a\u5408\u5206\u6570\u3002\u5f53\u524d\u67b6\u6784\u4e0d\u4ea7\u51fa\u6570\u503c\u805a\u5408\uff0cPhase 1 \u8bb0\u5f55\u4e3a null\uff1bPhase 7 \u9608\u503c\u8c03\u4f18\u65f6\u586b\u5145\u3002"
+    },
+    "threshold": {
+      "type": "number",
+      "description": "\u5224\u5b9a\u9608\u503c\u3002\u5f53\u524d\u4e3a null\uff0cPhase 7 \u586b\u5145\u3002"
+    },
+    "margin": {
+      "type": "number",
+      "description": "\u8ddd\u9608\u503c\u7684 margin\u3002\u5f53\u524d\u4e3a null\uff0cPhase 7 \u586b\u5145\u3002"
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "attach",
+        "new_train",
+        "orphan",
+        "blocked"
+      ],
+      "description": "\u672c\u6b21\u51b3\u7b56\u7ed3\u679c\uff1aattach=\u6302\u8f7d\u65e2\u6709\u706b\u8f66\uff0cnew_train=\u65b0\u5de5\u4f5c\u6d41\uff0corphan=\u5b64\u7acb\u8f66\u53a2\uff0cblocked=\u88ab\u786c\u62a4\u680f/\u5ba1\u8ba1\u95e8\u62e6\u622a"
+    },
+    "best_hypothesis_id": {
+      "type": "string",
+      "description": "\u6700\u4f73\u5047\u8bbe ID\uff08auto_attach_hypothesis_id\uff09"
+    },
+    "auto_attach_eligible": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u672c\u6b21\u51b3\u7b56\u662f\u5426\u901a\u8fc7\u81ea\u52a8\u6302\u63a5\u95e8"
+    },
+    "auto_attach_gate_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u81ea\u52a8\u6302\u63a5\u95e8\u62e6\u622a\u539f\u56e0\u7801\uff08manager_dispatch_required/llm_audit_required/validation_blocks_present/unique_best_missing/...\uff09"
+    },
+    "llm_audit_required": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u672c\u6b21\u51b3\u7b56\u662f\u5426\u8fdb\u5165 LLM \u9884\u5ba1\u961f\u5217"
+    },
+    "llm_audit_reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "\u8fdb\u5165\u9884\u5ba1\u961f\u5217\u7684\u539f\u56e0\u7801\uff08ambiguous_candidates/validation_block\uff09"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u51b3\u7b56\u65e5\u5fd7\u8bb0\u5f55\u65f6\u95f4\u6233"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "composition_run_id",
+    "business_date",
+    "result",
+    "timestamp"
+  ]
+}
