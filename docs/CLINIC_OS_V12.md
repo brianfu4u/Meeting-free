@@ -107,7 +107,7 @@ Clinic OS 是一个没有运营权限的实时见证者。两个此前被混为�
 | :--- | :--- | :--- |
 | V9.0 触发锚点要求 | enforced | 核心决策引擎中已有的触发验证 |
 | V9.A1 交叉验证冲突检测 | 检测部分 enforced，裁决部分 declared-not-enforced | 检测生效，但被拦截的卡片没有下游消费者，见 Phase 1b |
-| V9.A2 序列追踪 | 捕获部分 enforced，违规语义部分 deprecated | QR 捕获生效，违规分类已被移除，见 V12.5、Phase 6 |
+| V9.A2 序列追踪 | 捕获部分 enforced，违规语义部分 deprecated | QR 捕获生效；"process violation/处理违规/流程违规"全仓库 grep 零命中（Codex），违规分类无代码实现，仅文档措辞待按 V12.5 改为 sequence_anomaly 语义，见 Phase 6 |
 | V9.A3 系统逻辑触发 | enforced | 定时扫描已在运行 |
 | V9.L1 无触发不行动 | enforced | — |
 | V9.L2 无闭环不留存 | deprecated | 于 Phase 3 上线时移除，见 V12.7 |
@@ -136,7 +136,8 @@ Clinic OS 是一个没有运营权限的实时见证者。两个此前被混为�
 | V11.2 证据化可追溯 | enforced | — |
 | V11.3 仲裁架构 | enforced | — |
 | V11.4 两阶段异步协议 | enforced | Ingestion/Composition 解耦已在生产环境运行 |
-| V11.5 needs_manager_dispatch=false 门 | declared-not-enforced 且暂停 | 没有队列实体、消费者或状态机；由 V12.4 的 interim 规则暂停，enforcing artifact：审计队列完整状态机（Phase 5） |
+| V11.5a guardrail 判断逻辑（needs_manager_dispatch 贯穿 guardrailValidator→orchestratorCore→service） | enforced | 真实决定 autoAttachGateReasons、review.required 等下游判断；23 处测试验证，artifact：orchestratorCore.test.js 等测试套件 |
+| V11.5b 预审队列消费者（队列实体/消费者/状态机） | declared-not-enforced | 无队列实体、消费者、状态机；由 V12.4 interim 规则暂停，enforcing artifact：审计队列完整状态机（Phase 5） |
 | V11.6 硬链接回流 | enforced | — |
 | V11.6b 软链接交接回流 | enforced | 代码中已 enforced，但 V11 文档从未记载；纯属文档缺陷，已写入 V12 |
 | V11.7 每日截止 undo 触发 | declared-not-enforced | 目前任何失败运行都会触发，包括班次中途，enforcing artifact：undo 队列时序修复（Phase 2a） |
