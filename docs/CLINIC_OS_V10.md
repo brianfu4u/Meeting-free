@@ -1,5 +1,7 @@
 # Clinic OS V10 — 架构升级宪法
 
+> **V12 状态通知（2026-07-24）：** 本文保留为历史原文。V12 已对 V10 条款逐条作出 `INCORPORATED` 或 `INCORPORATED, reframed` 处置；冲突处以 [`docs/v12-constitution.md`](./v12-constitution.md) 为准。以下标注仅新增状态，不删除或改写原文。  
+
 **升级日期：** 2026-07-17  
 **基础哲学文件：** ClinicOSSystemPhilosophy.pdf (2026-07-17)  
 **版本变更原因：** V9 存在 AI 越权与推理层直接操作原始证据两大宪法冲突，V10 进行根本性修正。
@@ -7,6 +9,8 @@
 ---
 
 ## 与哲学文件的差异对照（V9 vs V10）
+
+> **V12 条款标注：** V10.1 `INCORPORATED`（V12 §2 权限轴）；V10.2 `INCORPORATED`（Phase 4 扩展字段置信度）；V10.3 `INCORPORATED`（只约束信息量，不授权延迟）；V10.4 `INCORPORATED`（Phase 3 扩展 `hypothesis_id` 血缘）；V10.5 `INCORPORATED`。下表原文保留。
 
 | 哲学原则 | V9 违规点 | V10 修正 |
 |---------|----------|---------|
@@ -45,6 +49,8 @@
 ---
 
 ## V10 核心实体变更
+
+> **V12 条款标注 — V10.6：`INCORPORATED`。** V12 将扩展新的 `attention_type` 值；当前原始枚举保留为历史记录，不因本次文档发布而修改 schema。
 
 ### 新增：AttentionItem（注意力队列项）
 
@@ -94,6 +100,8 @@
 ```
 
 ---
+
+> **V12 条款标注 — V10.7：`INCORPORATED`。** 终端隔离及禁止 Agent 直接握手继续有效。
 
 ## V10 终端执行模型（Sub-Agent Isolation & Stream Processing）
 
@@ -217,6 +225,8 @@ Stream 进入
 - ❌ 展示没有溯源链的建议
 
 ---
+
+> **V12 条款标注 — V10.8：`INCORPORATED, reframed`。** “3 秒”仅是 V12 §2 的时延指标，不代表机器获得运营权限；当前状态为 `declared-not-enforced`，待 Phase 6 的 Attention Queue 时延断言落地后转为 `enforced`。
 
 ## V10 成功标准（继承哲学文件）
 
