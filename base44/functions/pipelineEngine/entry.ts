@@ -25,6 +25,22 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+
+    // ── 观察期探针（2026-07-24 起，30 天观察窗口至 2026-08-23）────────────
+    // 无条件记录每次 HTTP 命中，在鉴权前执行；仅观测，不改任何业务逻辑，不碰 arrival_time 回退 bug。
+    // 配合 AuditLog 实体自动化 → pipelineEngineCallAlert 通知函数，实现"被调用即告警"。
+    try {
+      await base44.asServiceRole.entities.AuditLog.create({
+        clinic_id: "__pipeline_engine_probe__",
+        event_id: `pipeline-engine/probe/${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date().toISOString(),
+        source_agent: "PipelineEngine_PROBE",
+        trigger_type: "PIPELINE_PROBE",
+        payload: { method: req.method, url: req.url, note: "观察期探针：endpoint 被命中（鉴权前无条件记录）" },
+      });
+    } catch { /* 探针失败不得阻断主流程 */ }
+    // ────────────────────────────────────────────────────────────────────
+
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: "未登录" }, { status: 401 });
 
