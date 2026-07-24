@@ -11,7 +11,7 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { GitBranch, Clock, CheckCircle2, AlertCircle, ChevronRight, Loader2, X } from "lucide-react";
+import { GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 const CLINIC_ID = "clinic-001";
 

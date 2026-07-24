@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft, Play, Pause, RotateCcw, ChevronRight, ChevronLeft,
+  ArrowLeft, Play, RotateCcw, ChevronRight,
   ScanLine, Camera, Stethoscope, Glasses, Pill, Receipt, CreditCard,
   Building2, Activity, Brain, Workflow, ShieldCheck, Crown,
-  CheckCircle2, AlertTriangle, Zap, Clock, User, Package,
+  CheckCircle2, AlertTriangle, Zap, Clock, User,
 } from "lucide-react";
 
 const C = {

@@ -4,8 +4,10 @@
  * 基于 React Query 自动轮询刷新，驱动看板实时联动。
  */
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 
 export const CLINIC_ID = "clinic-001";
 const POLL_MS = 15000;
@@ -144,4 +146,30 @@ export function deriveHealthScore(sessions, tasks, alerts, inventory) {
     score -= lowStock * 4;
   }
   return Math.max(0, Math.min(100, score));
+}
+
+// Phase 2b：孤儿待结案（UndoListItem pending）— 供 AttentionQueue 店长一键 accept_orphan。
+export function usePendingUndoItems() {
+  return useQuery({
+    queryKey: ["pendingUndoItems", CLINIC_ID],
+    queryFn: async () => {
+      const list = await base44.entities.UndoListItem.filter({ clinic_id: CLINIC_ID, status: "pending" }, "-bounced_at", 30);
+      return list;
+    },
+    refetchInterval: 15000,
+  });
+}
+
+// 店长判定：ClinicConfig.manager_id 匹配当前 user.id（legacy 直存）或其 Staff.id。
+// 与后端 accept_orphan 的 ClinicConfig.manager_id 显式比对口径一致。
+export function useIsClinicManager() {
+  const { user } = useAuth();
+  const { data: config } = useClinicConfig();
+  const { data: staffList = [] } = useStaff();
+  return useMemo(() => {
+    if (!user?.id || !config?.manager_id) return false;
+    if (config.manager_id === user.id) return true;
+    const myStaff = (staffList || []).find((s) => s.user_id === user.id);
+    return !!myStaff && myStaff.id === config.manager_id;
+  }, [user, config, staffList]);
 }

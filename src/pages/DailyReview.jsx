@@ -2,10 +2,10 @@ import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft, ClipboardCheck, AlertTriangle, CheckCircle2, Clock,
-  TrendingUp, Activity, GitBranch, FileText, Filter, ChevronDown,
+  TrendingUp, Activity, GitBranch, FileText,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 const C = {

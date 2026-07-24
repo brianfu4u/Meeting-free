@@ -20,7 +20,7 @@ describe("Agent v1.1 Batch 1 schemas", () => {
     expect(schema.required).toEqual(expect.arrayContaining([
       "clinic_id", "artifact_id", "original_uploader_id", "idempotency_key", "status",
     ]));
-    expect(schema.properties.status.enum).toEqual(["pending", "resolved", "manager_cleared"]);
+    expect(schema.properties.status.enum).toEqual(["pending", "resolved", "manager_cleared", "accepted_orphan"]);
     expect(schema.properties).toHaveProperty("resolved_by_link_id");
   });
 

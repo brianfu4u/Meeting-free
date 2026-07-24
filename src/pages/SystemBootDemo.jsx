@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Play, RotateCcw, Power, Zap, Activity, Brain, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Play, RotateCcw, Power, Zap, Activity, Brain, CheckCircle2 } from "lucide-react";
 
 const C = {
   cyan: "#00C7D9", green: "#16A34A", amber: "#D97706", red: "#DC2626",

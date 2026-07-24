@@ -16,7 +16,7 @@ import { ROLE_TO_DEPARTMENT } from "@/lib/departments/registry";
 import { buildUserInteractiveMeta, validateUserInteractiveMeta } from "@/lib/phase5/metaPayload";
 import { captureFragment, computeChecksum, newClientRequestId } from "@/lib/phase5/ingestionClient";
 import { base44 } from "@/api/base44Client";
-import { X, Send, Loader, CheckCircle2, Paperclip, Image as ImageIcon, FileText, Mic, Square, Tag } from "lucide-react";
+import { X, Send, Loader, CheckCircle2, Paperclip, Image as ImageIcon, FileText, Mic, Tag } from "lucide-react";
 
 const ATT_ICON = { image: ImageIcon, file: FileText, voice: Mic };
 const ATT_LABEL = { image: "照片", file: "文件", voice: "语音" };

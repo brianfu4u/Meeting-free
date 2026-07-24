@@ -129,7 +129,7 @@ export function propagateGroupResolution(resolvedCards, multipageClusters) {
       return {
         ...card,
         _resolvedWorkflowId: inherited,
-        _linkMethod: card._linkMethod || "multipage_inherited",
+        _linkMethod: "multipage_inherited",
       };
     }
     return card;

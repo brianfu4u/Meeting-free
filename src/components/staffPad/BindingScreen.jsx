@@ -2,7 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useClinicId } from "@/lib/ClinicContext";
 import { useTheme } from "@/lib/ThemeContext";
-import { ROLE_LABELS, ROLE_GROUPS, ROLE_TO_DEPARTMENT, DEPARTMENT_BY_ID } from "@/lib/staffPad/useStaffSelf";
+import { ROLE_GROUPS, ROLE_TO_DEPARTMENT, DEPARTMENT_BY_ID } from "@/lib/staffPad/useStaffSelf";
 import { DEPARTMENTS, BUSINESS_FAMILIES } from "@/lib/departments/registry";
 import { UserPlus, Loader } from "lucide-react";
 

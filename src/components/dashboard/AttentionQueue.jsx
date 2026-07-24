@@ -11,7 +11,9 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { AlertTriangle, ChevronDown, ChevronUp, CheckCircle2, XCircle, ArrowUpCircle, Clock, Link2, Eye } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { useIsClinicManager, usePendingUndoItems } from "@/hooks/useClinicData";
+import { AlertTriangle, ChevronDown, ChevronUp, CheckCircle2, XCircle, ArrowUpCircle, Clock, Link2, Eye, Archive } from "lucide-react";
 
 const CLINIC_ID = "clinic-001";
 
@@ -156,6 +158,10 @@ function AttentionCard({ item, onDecision }) {
 
 export default function AttentionQueue() {
   const qc = useQueryClient();
+  const { toast } = useToast();
+  const isManager = useIsClinicManager();
+  const [acceptingId, setAcceptingId] = useState(null);
+  const undoQ = usePendingUndoItems();
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["attentionItems", CLINIC_ID],
     queryFn: () => base44.entities.AttentionItem.filter({ clinic_id: CLINIC_ID, status: "open" }, "-generated_at", 30),
@@ -164,6 +170,24 @@ export default function AttentionQueue() {
 
   const redItems = items.filter((i) => i.urgency === "red");
   const yellowItems = items.filter((i) => i.urgency === "yellow");
+
+  // Phase 2b：店长一键 accept_orphan → undoListService → UndoListItem.accepted_orphan + ManagerDecision 锚点。
+  const handleAcceptOrphan = async (undoItemId) => {
+    setAcceptingId(undoItemId);
+    try {
+      await base44.functions.invoke("undoListService", {
+        action: "accept_orphan",
+        clinic_id: CLINIC_ID,
+        undo_item_id: undoItemId,
+      });
+      toast({ title: "已结案为永久孤儿", description: "UndoListItem → accepted_orphan，已写 ManagerDecision 锚点" });
+      qc.invalidateQueries({ queryKey: ["pendingUndoItems", CLINIC_ID] });
+    } catch (e) {
+      toast({ title: "结案失败", description: String(e?.message || e), variant: "destructive" });
+    } finally {
+      setAcceptingId(null);
+    }
+  };
 
   const handleDecision = async (id, action) => {
     const statusMap = { execute: "executed", ignore: "ignored", escalate: "escalated" };
@@ -237,6 +261,61 @@ export default function AttentionQueue() {
           </>
         )}
       </div>
+
+      {isManager && (
+        <OrphanAcceptSection
+          items={undoQ.data || []}
+          loading={undoQ.isLoading}
+          onAccept={handleAcceptOrphan}
+          acceptingId={acceptingId}
+        />
+      )}
+    </div>
+  );
+}
+
+// Phase 2b：孤儿待结案区。仅店长可见（外层 isManager 守卫）；后端 accept_orphan 二次鉴权。
+function OrphanAcceptSection({ items, loading, onAccept, acceptingId }) {
+  const [expanded, setExpanded] = useState(true);
+  if (loading || !items || items.length === 0) return null;
+  return (
+    <div className="border-t" style={{ borderColor: C.border }}>
+      <button
+        onClick={() => setExpanded((p) => !p)}
+        className="flex items-center gap-2 w-full px-4 py-2.5"
+      >
+        <Archive size={13} style={{ color: C.amber }} />
+        <span className="text-xs font-bold" style={{ color: C.text }}>孤儿待结案（Undo List）</span>
+        <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold tag-amber">{items.length} 待处理</span>
+        <span className="ml-auto text-[9.5px]" style={{ color: C.faint }}>仅店长可结案 · 终态不可逆</span>
+        {expanded ? <ChevronUp size={13} style={{ color: C.faint }} /> : <ChevronDown size={13} style={{ color: C.faint }} />}
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2 max-h-[280px] overflow-y-auto">
+          {items.map((u) => (
+            <div key={u.id} className="rounded-lg p-2.5" style={{ background: C.canvas, border: `1px solid ${C.border}` }}>
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-[10px] font-mono" style={{ color: C.sub }}>
+                  {(u.artifact_id || "").slice(0, 12)}…
+                </span>
+                <span className="text-[9px]" style={{ color: C.faint }}>{u.business_date}</span>
+                {u.unmatched_reason_codes?.length > 0 && (
+                  <span className="text-[9px] tag-amber px-1.5 py-0.5 rounded">{u.unmatched_reason_codes.join(", ")}</span>
+                )}
+              </div>
+              <button
+                onClick={() => onAccept(u.id)}
+                disabled={acceptingId === u.id}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold disabled:opacity-50 transition-all active:scale-95"
+                style={{ background: "rgba(217,119,6,0.12)", color: "#fbbf24", border: "1px solid rgba(217,119,6,0.3)" }}
+              >
+                {acceptingId === u.id ? <Clock size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                接受为永久孤儿
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
