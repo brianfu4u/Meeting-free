@@ -24,6 +24,13 @@ function todayBusinessDate() {
   } catch { return new Date().toISOString().slice(0, 10); }
 }
 
+function fmtHHmm(ts) {
+  if (!ts) return "";
+  try {
+    return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
+  } catch { return ""; }
+}
+
 function marqueeLabel(task) {
   if (task.ai_parsed?.marquee_label) return task.ai_parsed.marquee_label;
   if (task.ai_parsed?.summary) return task.ai_parsed.summary;
@@ -53,6 +60,7 @@ function Carriage({ item, theme }) {
           <span className="text-[11px] font-bold truncate" style={{ color: "#00C7D9" }}>{item.staffName}</span>
         </div>
         <div className="text-[11px] mt-0.5 truncate" style={{ color: theme.textSub }}>{item.label}</div>
+        <div className="text-[9px] mt-0.5 tabular-nums" style={{ color: theme.textMuted }}>{item.time}</div>
         {/* 车轮 */}
         <div className="flex justify-between mt-1 px-1">
           <span className="w-2 h-2 rounded-full" style={{ background: theme.textFaint, border: `1px solid ${theme.borderSubtle}` }} />
@@ -110,6 +118,7 @@ export default function EventStreamMarquee() {
       label: marqueeLabel(t),
       dot: PRIORITY_COLOR[t.priority] || "#64748B",
       staffName: t.dispatched_by === "manager" ? "店长" : resolveName(t.assignee_staff_id),
+      time: fmtHHmm(t.created_date),
     }));
 
   const factItems = (fc.data || [])
@@ -121,6 +130,7 @@ export default function EventStreamMarquee() {
       label: f.marquee_label,
       dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A",
       staffName: resolveName(artifactStaff[f.artifact_id]),
+      time: fmtHHmm(f.extracted_at),
     }));
 
   const items = [...factItems, ...taskItems];
