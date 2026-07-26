@@ -99,7 +99,7 @@ export const MODAL_CHIPS_BY_DEPARTMENT = {
     ],
   },
   supplemental: {
-    role_name: "兜底与特殊上下文",
+    role_name: "其他部门",
     chips: [
       { id: "other_supplemental", label: "其他补充（代理录入/追溯标记）", is_default: true },
     ],
