@@ -125,69 +125,63 @@ function PeopleDetail({ theme }) {
 function FlowDetail({ theme }) {
   const { data: sessions = [] } = usePatientSessions();
   const { data: regCards = [] } = useRegistrationFactCards();
-  const { data: config = null } = useClinicConfig();
   if (regCards.length === 0) return <Empty theme={theme} />;
 
-  const nowMs = Date.now();
-  const yellowWait = config?.wait_timeout_yellow_minutes ?? 15;
-  const redWait = config?.wait_timeout_red_minutes ?? 30;
-
-  // 挂号解析卡 → 就诊目的；session_id join PatientSession → 当前就诊状态
+  // 挂号解析卡 → 就诊目的 + 新客/老客；session_id join PatientSession → 当前就诊状态
   const sessionById = new Map(sessions.map((s) => [s.id, s]));
-  const purposeOf = (card) => (card.fields || []).find((f) => f.field_name === "visit_purpose")?.value || "—";
+  const fieldOf = (card, name) => (card.fields || []).find((f) => f.field_name === name)?.value;
 
   const rows = regCards.map((c) => {
     const sess = c.session_id ? sessionById.get(c.session_id) : null;
     const status = sess?.status || "arrived";
     const st = PATIENT_STATUS_LABEL[status] || PATIENT_STATUS_LABEL.arrived;
-    const waitMin = (() => {
-      const t = sess?.seated_time || sess?.arrival_time;
-      return t ? Math.round((nowMs - new Date(t).getTime()) / 60000) : 0;
-    })();
     return {
       id: c.id,
       name: c.subject_fingerprint?.name || "未登记",
-      purpose: purposeOf(c),
+      purpose: fieldOf(c, "visit_purpose") || "—",
+      customerType: fieldOf(c, "customer_type"),
       line: sess?.business_line || "—",
       node: sess?.current_node || "—",
       status,
       st,
-      wait: (status === "seated" || status === "arrived") ? waitMin : null,
     };
   });
 
-  // 卡滞优先，再按等待时长降序
+  // 卡滞优先，其余按状态自然序
   const sorted = [...rows].sort((a, b) => {
     const sa = a.status === "stalled" ? 0 : 1, sb = b.status === "stalled" ? 0 : 1;
-    if (sa !== sb) return sa - sb;
-    return (b.wait || 0) - (a.wait || 0);
+    return sa - sb;
   });
 
   const waiting = rows.filter((r) => r.status === "seated" || r.status === "arrived").length;
   const inProgress = rows.filter((r) => r.status === "in_progress").length;
   const stalled = rows.filter((r) => r.status === "stalled").length;
-  const maxWait = Math.max(0, ...rows.filter((r) => r.wait != null).map((r) => r.wait || 0));
+  const newCount = rows.filter((r) => r.customerType === "新客").length;
+  const oldCount = rows.filter((r) => r.customerType === "老客").length;
 
   return (
     <div>
-      <div className="grid grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-5 gap-2 mb-3">
         <Stat theme={theme} value={rows.length} label="来院人次" color="#00C7D9" />
-        <Stat theme={theme} value={waiting} label="候诊" color="#FBBF24" />
+        <Stat theme={theme} value={newCount} label="新客" color="#4ade80" />
+        <Stat theme={theme} value={oldCount} label="老客" color="#A78BFA" />
         <Stat theme={theme} value={inProgress} label="诊疗中" color="#00C7D9" />
         <Stat theme={theme} value={stalled} label="卡滞" color="#f87171" />
       </div>
       <div className="space-y-1.5">
         {sorted.map((r) => {
-          const waitColor = r.wait != null && r.wait >= redWait ? "#f87171" : r.wait != null && r.wait >= yellowWait ? "#FBBF24" : null;
+          const isNew = r.customerType === "新客";
+          const tagColor = isNew ? "#4ade80" : "#A78BFA";
+          const tagBg = isNew ? "rgba(74,222,128,0.15)" : "rgba(167,139,250,0.15)";
           return (
             <div key={r.id} className="px-3 py-2 rounded-lg" style={{ background: theme.canvas, border: `1px solid ${theme.border}`, borderLeft: `3px solid ${r.st.color}` }}>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "64px" }}>{r.name}</span>
-                <span className="text-xs flex-shrink-0" style={{ color: theme.textMuted, fontSize: "10px" }}>{BUSINESS_LINE_LABEL[r.line] || "—"}</span>
-                {r.wait != null && (
-                  <span className="text-xs flex-shrink-0 ml-auto" style={{ color: waitColor || theme.textMuted, fontSize: "10px" }}>等 {r.wait}分</span>
+                {r.customerType && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 font-semibold" style={{ background: tagBg, color: tagColor, border: `1px solid ${tagColor}40` }}>{r.customerType}</span>
                 )}
-                <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${r.st.color}1a`, color: r.st.color, fontSize: "10px" }}>{r.st.label}</span>
+                <span className="text-xs flex-shrink-0" style={{ color: theme.textMuted, fontSize: "10px" }}>{BUSINESS_LINE_LABEL[r.line] || "—"}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0 ml-auto" style={{ background: `${r.st.color}1a`, color: r.st.color, fontSize: "10px" }}>{r.st.label}</span>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[10px] flex-shrink-0" style={{ color: theme.textMuted }}>就诊目的</span>

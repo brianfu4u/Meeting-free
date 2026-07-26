@@ -207,7 +207,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           icon={Activity}
           label="流 · FLOW"
           headline={totalVisitors}
-          headlineSub={`来院人次 · 候诊 ${waiting} · 诊疗 ${inProgress} · 最长等 ${maxWaitMin}分`}
+          headlineSub={`来院人次 · 候诊 ${waiting} · 诊疗 ${inProgress}`}
           alerts={flowAlerts}
           status={flowStatus}
           accent="#00C7D9"
