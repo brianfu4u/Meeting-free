@@ -12,6 +12,23 @@ import { useAuth } from "@/lib/AuthContext";
 export const CLINIC_ID = "clinic-001";
 const POLL_MS = 15000;
 
+// 挂号单解析结果：今日来院患者登记事实卡（就诊目的来源）
+export function useRegistrationFactCards() {
+  return useQuery({
+    queryKey: ["registrationFactCards", CLINIC_ID],
+    queryFn: async () => {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const list = await base44.entities.EvidenceFactCard.filter(
+        { clinic_id: CLINIC_ID, business_date: today, workflow_family_hint: "patient_registration" },
+        "-extracted_at",
+        100
+      );
+      return list;
+    },
+    refetchInterval: POLL_MS,
+  });
+}
+
 export function usePatientSessions() {
   return useQuery({
     queryKey: ["patientSessions", CLINIC_ID],

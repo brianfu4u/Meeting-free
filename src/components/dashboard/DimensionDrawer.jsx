@@ -11,6 +11,7 @@ import { todayBeijingDate } from "@/lib/clinicTime";
 import { DEPARTMENT_BY_ID, ROLE_LABELS, ROLE_TO_DEPARTMENT } from "@/lib/departments/registry";
 import {
   usePatientSessions,
+  useRegistrationFactCards,
   useStaff,
   useInventory,
   useRevenueTargets,
@@ -122,57 +123,78 @@ function PeopleDetail({ theme }) {
 }
 
 function FlowDetail({ theme }) {
-  const { data = [] } = usePatientSessions();
+  const { data: sessions = [] } = usePatientSessions();
+  const { data: regCards = [] } = useRegistrationFactCards();
   const { data: config = null } = useClinicConfig();
-  if (data.length === 0) return <Empty theme={theme} />;
-
-  const ACTIVE = new Set(["arrived", "seated", "in_progress", "stalled"]);
-  const active = data.filter((s) => ACTIVE.has(s.status));
-  if (active.length === 0) return <Empty theme={theme} />;
+  if (regCards.length === 0) return <Empty theme={theme} />;
 
   const nowMs = Date.now();
-  const waitMin = (s) => {
-    const t = s.seated_time || s.arrival_time;
-    return t ? Math.round((nowMs - new Date(t).getTime()) / 60000) : 0;
-  };
   const yellowWait = config?.wait_timeout_yellow_minutes ?? 15;
   const redWait = config?.wait_timeout_red_minutes ?? 30;
 
-  const waiting = active.filter((s) => s.status === "seated" || s.status === "arrived").length;
-  const inProgress = active.filter((s) => s.status === "in_progress").length;
-  const stalled = active.filter((s) => s.status === "stalled").length;
-  const maxWait = Math.max(0, ...active.filter((s) => s.status === "seated" || s.status === "arrived").map(waitMin));
+  // 挂号解析卡 → 就诊目的；session_id join PatientSession → 当前就诊状态
+  const sessionById = new Map(sessions.map((s) => [s.id, s]));
+  const purposeOf = (card) => (card.fields || []).find((f) => f.field_name === "visit_purpose")?.value || "—";
+
+  const rows = regCards.map((c) => {
+    const sess = c.session_id ? sessionById.get(c.session_id) : null;
+    const status = sess?.status || "arrived";
+    const st = PATIENT_STATUS_LABEL[status] || PATIENT_STATUS_LABEL.arrived;
+    const waitMin = (() => {
+      const t = sess?.seated_time || sess?.arrival_time;
+      return t ? Math.round((nowMs - new Date(t).getTime()) / 60000) : 0;
+    })();
+    return {
+      id: c.id,
+      name: c.subject_fingerprint?.name || "未登记",
+      purpose: purposeOf(c),
+      line: sess?.business_line || "—",
+      node: sess?.current_node || "—",
+      status,
+      st,
+      wait: (status === "seated" || status === "arrived") ? waitMin : null,
+    };
+  });
 
   // 卡滞优先，再按等待时长降序
-  const sorted = [...active].sort((a, b) => {
+  const sorted = [...rows].sort((a, b) => {
     const sa = a.status === "stalled" ? 0 : 1, sb = b.status === "stalled" ? 0 : 1;
     if (sa !== sb) return sa - sb;
-    return waitMin(b) - waitMin(a);
+    return (b.wait || 0) - (a.wait || 0);
   });
+
+  const waiting = rows.filter((r) => r.status === "seated" || r.status === "arrived").length;
+  const inProgress = rows.filter((r) => r.status === "in_progress").length;
+  const stalled = rows.filter((r) => r.status === "stalled").length;
+  const maxWait = Math.max(0, ...rows.filter((r) => r.wait != null).map((r) => r.wait || 0));
 
   return (
     <div>
       <div className="grid grid-cols-4 gap-2 mb-3">
+        <Stat theme={theme} value={rows.length} label="来院人次" color="#00C7D9" />
         <Stat theme={theme} value={waiting} label="候诊" color="#FBBF24" />
         <Stat theme={theme} value={inProgress} label="诊疗中" color="#00C7D9" />
         <Stat theme={theme} value={stalled} label="卡滞" color="#f87171" />
-        <Stat theme={theme} value={maxWait} label="最长等(分)" color={maxWait >= redWait ? "#f87171" : maxWait >= yellowWait ? "#FBBF24" : "#4ade80"} />
       </div>
       <div className="space-y-1.5">
-        {sorted.map((s) => {
-          const st = PATIENT_STATUS_LABEL[s.status] || PATIENT_STATUS_LABEL.arrived;
-          const w = (s.status === "seated" || s.status === "arrived") ? waitMin(s) : null;
-          const waitColor = w != null && w >= redWait ? "#f87171" : w != null && w >= yellowWait ? "#FBBF24" : null;
+        {sorted.map((r) => {
+          const waitColor = r.wait != null && r.wait >= redWait ? "#f87171" : r.wait != null && r.wait >= yellowWait ? "#FBBF24" : null;
           return (
-            <Row key={s.id} color={st.color} theme={theme}>
-              <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "70px" }}>{s.patient_name || "未登记"}</span>
-              <span className="text-xs flex-shrink-0" style={{ color: theme.textMuted, fontSize: "10px" }}>{BUSINESS_LINE_LABEL[s.business_line] || "—"}</span>
-              <span className="text-xs flex-1 truncate" style={{ color: theme.textSub, fontSize: "10px" }}>{s.current_node || "—"}</span>
-              {w != null && (
-                <span className="text-xs flex-shrink-0" style={{ color: waitColor || theme.textMuted, fontSize: "10px" }}>等 {w}分</span>
-              )}
-              <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${st.color}1a`, color: st.color, fontSize: "10px" }}>{st.label}</span>
-            </Row>
+            <div key={r.id} className="px-3 py-2 rounded-lg" style={{ background: theme.canvas, border: `1px solid ${theme.border}`, borderLeft: `3px solid ${r.st.color}` }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "64px" }}>{r.name}</span>
+                <span className="text-xs flex-shrink-0" style={{ color: theme.textMuted, fontSize: "10px" }}>{BUSINESS_LINE_LABEL[r.line] || "—"}</span>
+                {r.wait != null && (
+                  <span className="text-xs flex-shrink-0 ml-auto" style={{ color: waitColor || theme.textMuted, fontSize: "10px" }}>等 {r.wait}分</span>
+                )}
+                <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${r.st.color}1a`, color: r.st.color, fontSize: "10px" }}>{r.st.label}</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-[10px] flex-shrink-0" style={{ color: theme.textMuted }}>就诊目的</span>
+                <span className="text-xs truncate" style={{ color: theme.textSub, fontSize: "11px" }}>{r.purpose}</span>
+                <span className="text-[10px] ml-auto flex-shrink-0" style={{ color: theme.textFaint }}>{r.node}</span>
+              </div>
+            </div>
           );
         })}
       </div>

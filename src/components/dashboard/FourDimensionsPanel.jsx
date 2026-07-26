@@ -11,6 +11,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift, todayBeijingDate } from "@/lib/clinicTime";
 import {
   usePatientSessions,
+  useRegistrationFactCards,
   useStaff,
   useInventory,
   useRevenueTargets,
@@ -99,6 +100,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   const { theme } = useTheme();
   const staffQ = useStaff();
   const sessionsQ = usePatientSessions();
+  const regQ = useRegistrationFactCards();
   const inventoryQ = useInventory();
   const revenueQ = useRevenueTargets();
   const configQ = useClinicConfig();
@@ -137,7 +139,10 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           ? "amber"
           : "green";
 
-  // ── 流：患者流转（仅活跃会话，排除已完成，避免历史污染）──
+  // ── 流：患者流转 ──
+  // 人流 = 截止到目前为止的来院病人总数（数据来源：挂号单解析结果）
+  const regCards = regQ.data || [];
+  const totalVisitors = regCards.length;
   const ACTIVE_SESSION = new Set(["arrived", "seated", "in_progress", "stalled"]);
   const activeSessions = sessions.filter((s) => ACTIVE_SESSION.has(s.status));
   const waiting = activeSessions.filter((s) => s.status === "seated" || s.status === "arrived").length;
@@ -201,8 +206,8 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
         <DimensionCard
           icon={Activity}
           label="流 · FLOW"
-          headline={waiting}
-          headlineSub={`候诊 · 诊疗 ${inProgress} · 最长等 ${maxWaitMin}分`}
+          headline={totalVisitors}
+          headlineSub={`来院人次 · 候诊 ${waiting} · 诊疗 ${inProgress} · 最长等 ${maxWaitMin}分`}
           alerts={flowAlerts}
           status={flowStatus}
           accent="#00C7D9"
