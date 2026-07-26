@@ -76,8 +76,8 @@ export default function BindingScreen({ user, onBound }) {
           </div>
         )}
 
-        <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>所属区域（选填）</label>
-        <input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="如：检查区3号位"
+        <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>工位编号（选填）</label>
+        <input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="如：3号检查位"
           className="w-full rounded-lg px-3 py-2.5 text-sm mb-4 outline-none"
           style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }} />
 

@@ -5,6 +5,7 @@ import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { useStaffSelf, ROLE_LABELS, STAFF_STATUS_LABELS, STAFF_STATUS_COLORS } from "@/lib/staffPad/useStaffSelf";
 import { useOperationalTasks } from "@/hooks/useClinicData";
 import { isToday } from "@/lib/clinicDate";
+import { DEPARTMENT_BY_ID, ROLE_TO_DEPARTMENT } from "@/lib/departments/registry";
 import BindingScreen from "@/components/staffPad/BindingScreen";
 import ClockBar from "@/components/staffPad/ClockBar";
 import TaskList from "@/components/staffPad/TaskList";
@@ -110,7 +111,7 @@ function StaffPadInner() {
           </div>
           {view === "home" && (
             <div className="text-xs truncate" style={{ color: theme.textMuted }}>
-              {clinicId} · {staff.assigned_zone || "未分配区域"}
+              {clinicId} · {DEPARTMENT_BY_ID[staff.department_id || ROLE_TO_DEPARTMENT[staff.role]]?.name || "未分配部门"}
             </div>
           )}
         </div>
