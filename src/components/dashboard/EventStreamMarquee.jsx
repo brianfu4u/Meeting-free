@@ -16,7 +16,7 @@ import { isToday } from "@/lib/clinicDate";
 const CLINIC_ID = "clinic-001";
 const PRIORITY_COLOR = { P1: "#DC2626", P2: "#D97706", P3: "#00C7D9", P4: "#64748B" };
 const URGENCY_COLOR = { green: "#16A34A", yellow: "#D97706", red: "#DC2626" };
-const STAFF_SELF_DONE = new Set(["completed", "exception"]);
+
 
 function todayBusinessDate() {
   try {
@@ -51,7 +51,6 @@ function Carriage({ item, theme }) {
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: accent }} />
           <span className="text-[11px] font-bold truncate" style={{ color: "#00C7D9" }}>{item.staffName}</span>
-          <span className="text-[9px] px-1 rounded flex-shrink-0" style={{ background: `${accent}1a`, color: accent }}>{item.tail.replace(/^·/, "")}</span>
         </div>
         <div className="text-[11px] mt-0.5 truncate" style={{ color: theme.textSub }}>{item.label}</div>
         {/* 车轮 */}
@@ -110,7 +109,6 @@ export default function EventStreamMarquee() {
       id: t.id,
       label: marqueeLabel(t),
       dot: PRIORITY_COLOR[t.priority] || "#64748B",
-      tail: STAFF_SELF_DONE.has(t.status) ? "·已归档" : "·待核销",
       staffName: t.dispatched_by === "manager" ? "店长" : resolveName(t.assignee_staff_id),
     }));
 
@@ -122,7 +120,6 @@ export default function EventStreamMarquee() {
       id: f.id,
       label: f.marquee_label,
       dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A",
-      tail: "·解析",
       staffName: resolveName(artifactStaff[f.artifact_id]),
     }));
 
