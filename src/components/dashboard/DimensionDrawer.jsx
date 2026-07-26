@@ -12,6 +12,7 @@ import { DEPARTMENT_BY_ID, ROLE_LABELS, ROLE_TO_DEPARTMENT } from "@/lib/departm
 import {
   usePatientSessions,
   useRegistrationFactCards,
+  usePaymentFactCards,
   useStaff,
   useInventory,
   useRevenueTargets,
@@ -196,41 +197,100 @@ function FlowDetail({ theme }) {
   );
 }
 
+// 眼科收费目录（固定类目，按此归类展示）
+const FEE_CATEGORIES = [
+  { key: "挂号费", color: "#94A3B8" },
+  { key: "诊疗费", color: "#00C7D9" },
+  { key: "检测费", color: "#60A5FA" },
+  { key: "治疗费", color: "#A78BFA" },
+  { key: "手术费", color: "#f87171" },
+  { key: "配镜费", color: "#FBBF24" },
+  { key: "预付款", color: "#34d399" },
+  { key: "药费", color: "#f472b6" },
+  { key: "材料费", color: "#c084fc" },
+];
+
 function MoneyDetail({ theme }) {
-  const { data = [] } = useRevenueTargets();
-  const today = todayBeijingDate();
-  const todayData = data.filter((r) => r.target_date === today);
-  if (todayData.length === 0) {
-    return <div className="text-xs py-8 text-center" style={{ color: theme.textMuted }}>今日未设营收目标</div>;
+  const { data: cards = [] } = usePaymentFactCards();
+  if (cards.length === 0) {
+    return <div className="text-xs py-8 text-center" style={{ color: theme.textMuted }}>今日暂无收款记录</div>;
   }
-  const totalTarget = todayData.reduce((s, r) => s + (r.target_amount || 0), 0);
-  const totalActual = todayData.reduce((s, r) => s + (r.actual_amount || 0), 0);
-  const rate = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
+  const fieldOf = (c, name) => (c.fields || []).find((f) => f.field_name === name)?.value;
+  const fmt = (n) => "¥" + n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const rows = cards.map((c) => {
+    const amt = parseFloat(fieldOf(c, "amount") || "0") || 0;
+    return {
+      id: c.id,
+      name: c.subject_fingerprint?.name || fieldOf(c, "patient_name") || "—",
+      category: fieldOf(c, "fee_category") || "其他",
+      amount: amt,
+      time: c.extracted_at,
+    };
+  });
+
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  // 按收费类目汇总
+  const catMap = new Map();
+  for (const r of rows) {
+    const e = catMap.get(r.category) || { category: r.category, total: 0, count: 0 };
+    e.total += r.amount; e.count += 1;
+    catMap.set(r.category, e);
+  }
+  const catColor = (k) => FEE_CATEGORIES.find((c) => c.key === k)?.color || "#64748B";
+  const catRows = [...catMap.values()].sort((a, b) => b.total - a.total);
+
+  const fmtTime = (t) => {
+    try { return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(t)); }
+    catch { return ""; }
+  };
+  const sortedRows = [...rows].sort((a, b) => new Date(b.time) - new Date(a.time));
+
   return (
     <div>
+      {/* 总收款 */}
       <div className="rounded-xl p-4 mb-3" style={{ background: theme.canvas, border: `1px solid ${theme.border}` }}>
-        <div className="flex items-baseline justify-between mb-2">
-          <span className="text-xs" style={{ color: theme.textMuted }}>今日达成率</span>
-          <span className="text-2xl font-bold" style={{ color: rate >= 60 ? "#4ade80" : rate >= 40 ? "#FBBF24" : "#f87171" }}>{rate}%</span>
+        <div className="flex items-baseline justify-between mb-1">
+          <span className="text-xs" style={{ color: theme.textMuted }}>今日累计收款</span>
+          <span className="text-2xl font-bold tabular-nums" style={{ color: "#FBBF24" }}>{fmt(total)}</span>
         </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(148,163,184,0.15)" }}>
-          <div style={{ height: "100%", width: `${Math.min(rate, 100)}%`, background: rate >= 60 ? "#4ade80" : rate >= 40 ? "#FBBF24" : "#f87171", transition: "width 0.5s ease" }} />
-        </div>
-        <div className="flex justify-between mt-2 text-xs" style={{ color: theme.textMuted, fontSize: "10px" }}>
-          <span>实际 ¥{totalActual.toLocaleString()}</span>
-          <span>目标 ¥{totalTarget.toLocaleString()}</span>
-        </div>
+        <div className="text-[10px]" style={{ color: theme.textFaint }}>共 {rows.length} 笔 · 数据来自收银台小票解析</div>
       </div>
-      <div className="space-y-1.5">
-        {todayData.map((r) => {
-          const rRate = r.target_amount > 0 ? Math.round((r.actual_amount / r.target_amount) * 100) : 0;
-          const color = rRate >= 60 ? "#4ade80" : rRate >= 40 ? "#FBBF24" : "#f87171";
+
+      {/* 按收费类目汇总 */}
+      <div className="text-[11px] font-bold mb-1.5" style={{ color: theme.textSub }}>按收费类目</div>
+      <div className="space-y-1.5 mb-3">
+        {catRows.map((c) => {
+          const color = catColor(c.category);
+          const pct = total > 0 ? Math.round((c.total / total) * 100) : 0;
           return (
-            <Row key={r.id} color={color} theme={theme}>
-              <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "50px" }}>{BUSINESS_LINE_LABEL[r.business_line] || "—"}</span>
-              <span className="text-xs flex-1" style={{ color: theme.textSub, fontSize: "10px" }}>¥{r.actual_amount?.toLocaleString()} / ¥{r.target_amount?.toLocaleString()}</span>
-              <span className="text-xs font-bold flex-shrink-0" style={{ color, fontSize: "11px" }}>{rRate}%</span>
-            </Row>
+            <div key={c.category} className="px-3 py-2 rounded-lg" style={{ background: theme.canvas, border: `1px solid ${theme.border}`, borderLeft: `3px solid ${color}` }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "56px" }}>{c.category}</span>
+                <span className="text-[10px] flex-shrink-0" style={{ color: theme.textMuted }}>{c.count} 笔</span>
+                <span className="text-xs font-bold tabular-nums ml-auto" style={{ color: color }}>{fmt(c.total)}</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden mt-1.5" style={{ background: "rgba(148,163,184,0.12)" }}>
+                <div style={{ height: "100%", width: `${pct}%`, background: color, transition: "width 0.4s ease" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 收款明细 */}
+      <div className="text-[11px] font-bold mb-1.5" style={{ color: theme.textSub }}>收款明细</div>
+      <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+        {sortedRows.map((r) => {
+          const color = catColor(r.category);
+          return (
+            <div key={r.id} className="px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: theme.canvas, border: `1px solid ${theme.border}` }}>
+              <span className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${color}1a`, color, fontSize: "10px" }}>{r.category}</span>
+              <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "56px" }}>{r.name}</span>
+              <span className="text-[10px] flex-shrink-0 ml-auto tabular-nums" style={{ color: theme.textFaint }}>{fmtTime(r.time)}</span>
+              <span className="text-xs font-bold tabular-nums flex-shrink-0" style={{ color: "#FBBF24" }}>{fmt(r.amount)}</span>
+            </div>
           );
         })}
       </div>

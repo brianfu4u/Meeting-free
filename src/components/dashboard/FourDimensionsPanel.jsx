@@ -12,6 +12,7 @@ import { beijingShift, todayBeijingDate } from "@/lib/clinicTime";
 import {
   usePatientSessions,
   useRegistrationFactCards,
+  usePaymentFactCards,
   useStaff,
   useInventory,
   useRevenueTargets,
@@ -145,13 +146,14 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   const flowStatus = stalled > 0 || waitRed ? "red" : waiting >= 8 || waitAmber ? "amber" : "green";
   const flowAlerts = stalled + (waitRed ? 1 : 0) + (waiting >= 8 && !waitRed ? 1 : 0);
 
-  // ── 钱：今日营收达成（仅今日 target_date，避免多日目标混算）──
-  const todayDate = todayBeijingDate();
-  const todayRevenue = revenue.filter((r) => r.target_date === todayDate);
-  const totalTarget = todayRevenue.reduce((s, r) => s + (r.target_amount || 0), 0);
-  const totalActual = todayRevenue.reduce((s, r) => s + (r.actual_amount || 0), 0);
-  const achievementRate = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
-  const moneyStatus = totalTarget === 0 ? "green" : achievementRate < 40 ? "red" : achievementRate < 60 ? "amber" : "green";
+  // ── 钱：截止现在总收款（数据来源：收银台上传小票解析结果）──
+  const payQ = usePaymentFactCards();
+  const payCards = payQ.data || [];
+  const totalCollected = payCards.reduce((s, c) => {
+    const v = (c.fields || []).find((f) => f.field_name === "amount")?.value;
+    return s + (v ? parseFloat(v) || 0 : 0);
+  }, 0);
+  const fmtYuan = (n) => "¥" + n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // ── 物：库存水位（按数量/阈值实时计算，不依赖可能过期的 below_threshold 标记）──
   const lowStock = inventory.filter((i) => i.threshold > 0 && i.quantity < i.threshold).length;
@@ -194,8 +196,8 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
         <DimensionCard
           icon={TrendingUp}
           label="钱 · REVENUE"
-          headline={totalTarget > 0 ? `${achievementRate}%` : "—"}
-          headlineSub={totalTarget > 0 ? `¥${totalActual.toLocaleString()} / ¥${totalTarget.toLocaleString()}` : "今日未设目标"}
+          headline={fmtYuan(totalCollected)}
+          headlineSub={`今日收款 · ${payCards.length} 笔`}
           accent="#FBBF24"
           theme={theme}
           onClick={() => onOpenDimension("money")}
