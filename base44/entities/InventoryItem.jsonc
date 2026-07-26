@@ -19,11 +19,11 @@
         "consumable",
         "equipment"
       ],
-      "description": "\u7c7b\u522b\uff1a\u955c\u7247/\u955c\u67b6/\u836f\u54c1/\u8017\u6750/\u5668\u68b0"
+      "description": "\u7c7b\u522b\uff1a\u955c\u7247/\u955c\u67b6/\u836f\u54c1/\u8017\u6750/\u5668\u68b0\u3002equipment=\u56fa\u5b9a\u8d44\u4ea7\u4eea\u5668\u8bbe\u5907\uff08\u89d2\u819c\u5730\u5f62\u56fe/\u773c\u538b\u8ba1/OCT\u7b49\uff09\uff0c\u7528\u4e8e\u300c\u7269\u300d\u7ef4\u5ea6\u4f7f\u7528\u73b0\u72b6\u7edf\u8ba1\u3002"
     },
     "sku": {
       "type": "string",
-      "description": "SKU\u7f16\u7801"
+      "description": "\u8bbe\u5907\u5e8f\u5217\u53f7/SKU\u3002equipment \u7c7b\u522b\u4e0b\u4e0e EvidenceFactCard.device_serial \u5bf9\u5e94\uff0c\u7528\u4e8e\u5339\u914d\u5f53\u65e5\u7279\u68c0\u62a5\u544a\u5355\u636e\u5e76\u8ba1\u8bbe\u5907\u4f7f\u7528\u6b21\u6570\u3002"
     },
     "quantity": {
       "type": "number",
@@ -38,6 +38,11 @@
     "unit": {
       "type": "string",
       "description": "\u5355\u4f4d"
+    },
+    "purchase_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u8d2d\u7f6e\u65e5\u671f\uff08\u4ec5 equipment \u7c7b\u522b\u4f7f\u7528\uff09\u3002\u7528\u4e8e\u8ba1\u7b97\u56fa\u5b9a\u8d44\u4ea7\u4f7f\u7528\u5e74\u9650\uff1a\u8ddd\u4eca\u5e74\u6570\u3002"
     },
     "last_check_time": {
       "type": "string",

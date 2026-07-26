@@ -94,10 +94,29 @@ export function useInventory() {
   return useQuery({
     queryKey: ["inventory", CLINIC_ID],
     queryFn: async () => {
-      const list = await base44.entities.InventoryItem.filter({ clinic_id: CLINIC_ID }, "-updated_date", 50);
+      const list = await base44.entities.InventoryItem.filter({ clinic_id: CLINIC_ID }, "-updated_date", 100);
       return list;
     },
     refetchInterval: 30000,
+  });
+}
+
+// 今日特检报告单据（来源 diagnostics 部门）。每张单据算一次设备使用。
+// 通过 Artifact.source_region="diagnostics" join EvidenceFactCard 识别；设备序号 device_serial 用于归属具体设备。
+export function useExamReportFactCards() {
+  return useQuery({
+    queryKey: ["examReportFactCards", CLINIC_ID],
+    queryFn: async () => {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const [cards, artifacts] = await Promise.all([
+        base44.entities.EvidenceFactCard.filter({ clinic_id: CLINIC_ID, business_date: today }, "-extracted_at", 200),
+        base44.entities.Artifact.filter({ clinic_id: CLINIC_ID, business_date: today }, "-created_date", 200),
+      ]);
+      const regionByArt = {};
+      for (const a of artifacts) regionByArt[a.id] = a.source_region;
+      return cards.filter((c) => regionByArt[c.artifact_id] === "diagnostics");
+    },
+    refetchInterval: POLL_MS,
   });
 }
 

@@ -13,6 +13,7 @@ import {
   usePatientSessions,
   useRegistrationFactCards,
   usePaymentFactCards,
+  useExamReportFactCards,
   useStaff,
   useInventory,
   useRevenueTargets,
@@ -155,10 +156,12 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   }, 0);
   const fmtYuan = (n) => "¥" + n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // ── 物：库存水位（按数量/阈值实时计算，不依赖可能过期的 below_threshold 标记）──
-  const lowStock = inventory.filter((i) => i.threshold > 0 && i.quantity < i.threshold).length;
-  const nearLow = inventory.filter((i) => i.threshold > 0 && i.quantity >= i.threshold && i.quantity < i.threshold * 1.2).length;
-  const thingStatus = lowStock >= 3 ? "red" : lowStock > 0 || nearLow > 0 ? "amber" : "green";
+  // ── 物：固定资产设备使用现状（非库存）──
+  // 设备清单来自 InventoryItem(category=equipment)；今日使用次数 = 今日特检报告单据数（每张算一次）
+  const equipment = inventory.filter((i) => i.category === "equipment");
+  const examQ = useExamReportFactCards();
+  const examCards = examQ.data || [];
+  const totalEquipUsage = examCards.length;
 
   return (
     <div>
@@ -204,9 +207,9 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
         />
         <DimensionCard
           icon={Package}
-          label="物 · SUPPLY"
-          headline={lowStock}
-          headlineSub={`/ ${inventory.length} 项 · 预警 ${nearLow}`}
+          label="物 · EQUIP"
+          headline={totalEquipUsage}
+          headlineSub={`今日设备使用 · 在册 ${equipment.length} 台`}
           accent="#A78BFA"
           theme={theme}
           onClick={() => onOpenDimension("things")}

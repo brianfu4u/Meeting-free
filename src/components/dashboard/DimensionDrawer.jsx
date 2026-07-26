@@ -13,6 +13,7 @@ import {
   usePatientSessions,
   useRegistrationFactCards,
   usePaymentFactCards,
+  useExamReportFactCards,
   useStaff,
   useInventory,
   useRevenueTargets,
@@ -23,7 +24,7 @@ const DIM_META = {
   people: { icon: Users,    label: "人 · 员工在岗态势", accent: "#4ade80" },
   flow:   { icon: Activity, label: "流 · 患者诊疗流转", accent: "#00C7D9" },
   money:  { icon: TrendingUp, label: "钱 · 营收达成进度", accent: "#FBBF24" },
-  things: { icon: Package,  label: "物 · 库存与设备水位", accent: "#A78BFA" },
+  things: { icon: Package,  label: "物 · 固定设备使用现状", accent: "#A78BFA" },
 };
 
 const STAFF_STATUS_LABEL = {
@@ -298,45 +299,76 @@ function MoneyDetail({ theme }) {
   );
 }
 
+// 计算固定资产使用年限（购置日期→今天），返回保留1位小数的年数字符串
+function yearsInService(purchaseDate) {
+  if (!purchaseDate) return null;
+  const ms = Date.now() - new Date(purchaseDate).getTime();
+  if (isNaN(ms) || ms < 0) return null;
+  return (ms / (365.25 * 24 * 3600 * 1000)).toFixed(1);
+}
+
+// 特检报告单据归属具体设备：设备序号(sku)匹配单据 device_serial；否则按设备名匹配单据字段值
+function matchDeviceCount(equipment, examCards) {
+  return examCards.filter((c) => {
+    if (equipment.sku && c.device_serial && c.device_serial === equipment.sku) return true;
+    const vals = (c.fields || []).map((f) => f.value).filter(Boolean);
+    return vals.some((v) => v === equipment.item_name);
+  }).length;
+}
+
 function ThingsDetail({ theme }) {
-  const { data = [] } = useInventory();
-  if (data.length === 0) return <Empty theme={theme} />;
+  const { data: inventory = [] } = useInventory();
+  const { data: examCards = [] } = useExamReportFactCards();
+  const equipment = inventory.filter((i) => i.category === "equipment");
+  if (equipment.length === 0) return <Empty theme={theme} />;
 
-  // 实时按数量/阈值计算水位，不依赖可能过期的 below_threshold 标记
-  const level = (i) => {
-    if (i.threshold > 0 && i.quantity < i.threshold) return "low";
-    if (i.threshold > 0 && i.quantity < i.threshold * 1.2) return "near";
-    return "ok";
-  };
-  const low = data.filter((i) => level(i) === "low").length;
-  const near = data.filter((i) => level(i) === "near").length;
-  const ok = data.filter((i) => level(i) === "ok").length;
+  const rows = equipment.map((e) => ({
+    id: e.id,
+    name: e.item_name,
+    sku: e.sku,
+    usage: matchDeviceCount(e, examCards),
+    years: yearsInService(e.purchase_date),
+  }));
+  // 今日有使用的设备优先，其次按使用年限降序（老设备靠前）
+  const sorted = [...rows].sort((a, b) => {
+    if ((b.usage > 0 ? 1 : 0) !== (a.usage > 0 ? 1 : 0)) return (b.usage > 0 ? 1 : 0) - (a.usage > 0 ? 1 : 0);
+    return (parseFloat(b.years) || 0) - (parseFloat(a.years) || 0);
+  });
 
-  const ord = { low: 0, near: 1, ok: 2 };
-  const sorted = [...data].sort((a, b) => ord[level(a)] - ord[level(b)]);
-  const COLOR = { low: "#f87171", near: "#FBBF24", ok: "#4ade80" };
-  const LABEL = { low: "低水位", near: "预警", ok: "正常" };
+  const totalUsage = examCards.length;
+  const usedToday = rows.filter((r) => r.usage > 0).length;
+  const withYears = rows.filter((r) => r.years !== null);
 
   return (
     <div>
       <div className="grid grid-cols-3 gap-2 mb-3">
-        <Stat theme={theme} value={low} label="低水位" color="#f87171" />
-        <Stat theme={theme} value={near} label="预警" color="#FBBF24" />
-        <Stat theme={theme} value={ok} label="正常" color="#4ade80" />
+        <Stat theme={theme} value={totalUsage} label="今日使用次数" color="#A78BFA" />
+        <Stat theme={theme} value={usedToday} label="启用设备" color="#4ade80" />
+        <Stat theme={theme} value={equipment.length} label="在册设备" color="#cbd5e1" />
+      </div>
+      <div className="text-[10px] mb-3 px-1" style={{ color: theme.textFaint }}>
+        数据来源：特检技师上传的检验结果单据（每张单据算一次设备使用）
       </div>
       <div className="space-y-1.5">
-        {sorted.map((i) => {
-          const lv = level(i);
-          const color = COLOR[lv];
+        {sorted.map((r) => {
+          const hasUsage = r.usage > 0;
+          const color = hasUsage ? "#A78BFA" : "#64748B";
           return (
-            <Row key={i.id} color={color} theme={theme}>
-              <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "80px" }}>{i.item_name}</span>
-              <span className="text-xs flex-1" style={{ color: theme.textSub, fontSize: "10px" }}>
-                {i.quantity} / 阈值 {i.threshold} {i.unit}
-              </span>
-              {lv !== "ok" && <AlertTriangle size={11} style={{ color }} />}
-              <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${color}1a`, color, fontSize: "10px" }}>{LABEL[lv]}</span>
-            </Row>
+            <div key={r.id} className="px-3 py-2 rounded-lg" style={{ background: theme.canvas, border: `1px solid ${theme.border}`, borderLeft: `3px solid ${color}` }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "92px" }}>{r.name}</span>
+                {r.sku && <span className="text-[10px] flex-shrink-0" style={{ color: theme.textFaint }}>#{r.sku}</span>}
+                <span className="text-xs font-bold tabular-nums ml-auto flex-shrink-0" style={{ color: hasUsage ? "#A78BFA" : theme.textMuted }}>
+                  {r.usage}<span className="text-[10px] font-normal" style={{ color: theme.textMuted }}> 次</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-[10px] flex-shrink-0" style={{ color: theme.textMuted }}>使用年限</span>
+                <span className="text-xs tabular-nums" style={{ color: r.years !== null ? theme.textSub : theme.textFaint, fontSize: "11px" }}>
+                  {r.years !== null ? `${r.years} 年` : "未登记购置日期"}
+                </span>
+              </div>
+            </div>
           );
         })}
       </div>
