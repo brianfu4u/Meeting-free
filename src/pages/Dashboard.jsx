@@ -4,7 +4,6 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
 import FourDimensionsPanel from "@/components/dashboard/FourDimensionsPanel";
 import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
-import AttentionQueue from "@/components/dashboard/AttentionQueue";
 import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
 import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
@@ -120,19 +119,14 @@ function DashboardInner() {
             </div>
           </div>
 
-          {/* 事件流走马灯 — 待核销事件循环播放 */}
-          <div className="mb-4">
-            <EventStreamMarquee />
-          </div>
-
           {/* 四维现实空间指挥台 */}
           <div className="mb-4">
             <FourDimensionsPanel onOpenDimension={setActiveDimension} />
           </div>
 
-          {/* V10 双层架构：注意力队列（战术）+ 工作流快照（战略）*/}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            <AttentionQueue />
+          {/* V10 双层架构：事件流走马灯（战术）+ 工作流快照（战略）*/}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4" style={{ minHeight: "200px" }}>
+            <EventStreamMarquee />
             <WorkflowSnapshotPanel />
           </div>
 

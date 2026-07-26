@@ -1,16 +1,16 @@
 /**
- * Clinic OS V10 — 事件流走马灯（Event Stream Marquee）
+ * Clinic OS V10 — 事件流走马灯（火车车厢版）
  *
- * 采集今日 OperationalTask + EvidenceFactCard，按时间顺序，以解析压缩的重点短句循环滚动播报，
- * 告诉店长今天发生了什么事件（含已归档的新事件记录）。
- * 摘要优先取 LLM 产出的 ai_parsed.marquee_label（如"前台完成新挂号"）。
+ * 取代注意力队列位置：以一列火车车厢从右向左滚动，
+ * 每节车厢展示「提交员工注册名 + 事件概要」。
+ * 数据源：今日 OperationalTask（assignee_staff_id）+ EvidenceFactCard（artifact.source_staff_id）。
  */
 
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
-import { Radio, Loader } from "lucide-react";
+import { Radio, Loader, Train, Link2 } from "lucide-react";
 import { isToday } from "@/lib/clinicDate";
 
 const CLINIC_ID = "clinic-001";
@@ -25,9 +25,43 @@ function todayBusinessDate() {
 }
 
 function marqueeLabel(task) {
-  if (task.ai_parsed && task.ai_parsed.marquee_label) return task.ai_parsed.marquee_label;
-  if (task.ai_parsed && task.ai_parsed.summary) return task.ai_parsed.summary;
-  return (task.description || "事件流").slice(0, 24);
+  if (task.ai_parsed?.marquee_label) return task.ai_parsed.marquee_label;
+  if (task.ai_parsed?.summary) return task.ai_parsed.summary;
+  return (task.description || "事件流").slice(0, 28);
+}
+
+function Carriage({ item, theme }) {
+  const accent = item.dot;
+  return (
+    <div className="inline-flex items-stretch flex-shrink-0">
+      {/* 车厢连接器 */}
+      <div className="flex items-center px-1" style={{ color: theme.textFaint }}>
+        <span className="block w-3 h-0.5 rounded" style={{ background: theme.borderSubtle }} />
+        <Link2 size={12} style={{ color: theme.textFaint }} />
+        <span className="block w-3 h-0.5 rounded" style={{ background: theme.borderSubtle }} />
+      </div>
+      {/* 车厢本体 */}
+      <div
+        className="relative rounded-lg px-3 py-2 flex flex-col justify-center min-w-[180px] max-w-[280px]"
+        style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderTop: `2px solid ${accent}` }}
+      >
+        {/* 车顶条纹 */}
+        <div className="absolute left-2 right-2 top-0.5 h-px" style={{ background: `repeating-linear-gradient(90deg, ${theme.borderSubtle} 0 4px, transparent 4px 8px)` }} />
+        {/* 员工名 + 概要 */}
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: accent }} />
+          <span className="text-[11px] font-bold truncate" style={{ color: "#00C7D9" }}>{item.staffName}</span>
+          <span className="text-[9px] px-1 rounded flex-shrink-0" style={{ background: `${accent}1a`, color: accent }}>{item.tail.replace(/^·/, "")}</span>
+        </div>
+        <div className="text-[11px] mt-0.5 truncate" style={{ color: theme.textSub }}>{item.label}</div>
+        {/* 车轮 */}
+        <div className="flex justify-between mt-1 px-1">
+          <span className="w-2 h-2 rounded-full" style={{ background: theme.textFaint, border: `1px solid ${theme.borderSubtle}` }} />
+          <span className="w-2 h-2 rounded-full" style={{ background: theme.textFaint, border: `1px solid ${theme.borderSubtle}` }} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function EventStreamMarquee() {
@@ -42,6 +76,30 @@ export default function EventStreamMarquee() {
     queryFn: () => base44.entities.EvidenceFactCard.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-extracted_at", 100),
     refetchInterval: 8000,
   });
+  const staffQ = useQuery({
+    queryKey: ["marquee", "staff", CLINIC_ID],
+    queryFn: () => base44.entities.Staff.filter({ clinic_id: CLINIC_ID }, "-created_date", 60),
+    refetchInterval: 30000,
+  });
+  const artQ = useQuery({
+    queryKey: ["marquee", "artifacts", CLINIC_ID],
+    queryFn: () => base44.entities.Artifact.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-created_date", 200),
+    refetchInterval: 15000,
+  });
+
+  const staffMap = React.useMemo(() => {
+    const m = {};
+    for (const s of (staffQ.data || [])) m[s.id] = s.staff_name;
+    return m;
+  }, [staffQ.data]);
+
+  const artifactStaff = React.useMemo(() => {
+    const m = {};
+    for (const a of (artQ.data || [])) m[a.id] = a.source_staff_id;
+    return m;
+  }, [artQ.data]);
+
+  const resolveName = (id) => (id && staffMap[id]) || "员工";
 
   const taskItems = (q.data || [])
     .filter((t) => isToday(t.created_date))
@@ -53,51 +111,61 @@ export default function EventStreamMarquee() {
       label: marqueeLabel(t),
       dot: PRIORITY_COLOR[t.priority] || "#64748B",
       tail: STAFF_SELF_DONE.has(t.status) ? "·已归档" : "·待核销",
+      staffName: t.dispatched_by === "manager" ? "店长" : resolveName(t.assignee_staff_id),
     }));
 
   const factItems = (fc.data || [])
     .filter((f) => f.marquee_label)
     .sort((a, b) => new Date(a.extracted_at) - new Date(b.extracted_at))
-    .map((f) => ({ kind: "fact", id: f.id, label: f.marquee_label, dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A", tail: "·解析" }));
+    .map((f) => ({
+      kind: "fact",
+      id: f.id,
+      label: f.marquee_label,
+      dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A",
+      tail: "·解析",
+      staffName: resolveName(artifactStaff[f.artifact_id]),
+    }));
 
   const items = [...factItems, ...taskItems];
 
-  if (q.isLoading && fc.isLoading) {
-    return (
-      <div className="rounded-xl px-4 py-2 flex items-center gap-2 text-xs" style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, color: theme.textFaint }}>
-        <Loader className="animate-spin" size={12} /> 事件流加载中…
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="rounded-xl px-4 py-2 flex items-center gap-2" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
-        <Radio size={13} style={{ color: "#16A34A" }} />
-        <span className="text-xs" style={{ color: theme.textSub }}>今日无事件流</span>
-      </div>
-    );
-  }
-
-  const loop = [...items, ...items];
+  const isLoading = q.isLoading && fc.isLoading;
 
   return (
-    <div className="rounded-xl overflow-hidden flex items-center" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
-      <div className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0" style={{ background: "rgba(0,199,217,0.1)", borderRight: `1px solid ${theme.border}` }}>
-        <Radio size={13} style={{ color: "#00C7D9" }} />
-        <span className="text-xs font-bold" style={{ color: "#00C7D9" }}>事件流</span>
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: "rgba(220,38,38,0.15)", color: "#f87171" }}>{items.length}</span>
-      </div>
-      <div className="flex-1 overflow-hidden">
-        <div className="marquee-track flex items-center gap-6 whitespace-nowrap py-2" style={{ width: "max-content" }}>
-          {loop.map((it, i) => (
-              <span key={it.kind + "-" + it.id + "-" + i} className="inline-flex items-center gap-1.5 text-xs" style={{ color: theme.textMsg }}>
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: it.dot }} />
-                {it.label}
-                <span className="text-[10px]" style={{ color: theme.textFaint }}>{it.tail}</span>
-              </span>
-            ))}
+    <div className="rounded-xl overflow-hidden flex flex-col h-full" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
+      {/* 面板头 */}
+      <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0" style={{ borderBottom: `1px solid ${theme.borderSubtle}`, background: "rgba(0,199,217,0.06)" }}>
+        <div className="flex items-center gap-2">
+          <Train size={15} style={{ color: "#00C7D9" }} />
+          <span className="text-sm font-bold" style={{ color: theme.text }}>事件流走马灯</span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: "rgba(220,38,38,0.15)", color: "#f87171" }}>{items.length}</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <Radio size={12} style={{ color: "#16A34A" }} />
+          <span className="text-[10px]" style={{ color: theme.textMuted }}>实时滚动</span>
+        </div>
+      </div>
+
+      {/* 轨道 */}
+      <div className="flex-1 flex items-center overflow-hidden" style={{ background: theme.canvas }}>
+        {isLoading ? (
+          <div className="w-full flex items-center justify-center gap-2 text-xs" style={{ color: theme.textFaint }}>
+            <Loader className="animate-spin" size={14} /> 事件流加载中…
+          </div>
+        ) : items.length === 0 ? (
+          <div className="w-full flex items-center justify-center gap-2 text-xs" style={{ color: theme.textSub }}>
+            <Radio size={13} style={{ color: "#16A34A" }} /> 今日无事件流
+          </div>
+        ) : (
+          <div className="marquee-track flex items-center whitespace-nowrap py-2" style={{ width: "max-content" }}>
+            {/* 火车头 */}
+            <div className="inline-flex items-center justify-center flex-shrink-0 px-2.5 py-2 rounded-l-lg" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>
+              <Train size={20} />
+            </div>
+            {[...items, ...items].map((it, i) => (
+              <Carriage key={it.kind + "-" + it.id + "-" + i} item={it} theme={theme} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
