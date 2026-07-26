@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import { Users, Activity, TrendingUp, Package, AlertTriangle, ChevronRight, RefreshCw } from "lucide-react";
+import { Users, Activity, TrendingUp, Package, ChevronRight, RefreshCw } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift, todayBeijingDate } from "@/lib/clinicTime";
 import {
@@ -34,27 +34,16 @@ const PATIENT_STATUS = {
   completed: "#4ade80", stalled: "#f87171",
 };
 
-function DimensionCard({ icon: Icon, label, headline, headlineSub, alerts, status, onClick, theme, accent }) {
-  const lvl = STATUS_LEVEL[status] || STATUS_LEVEL.green;
-  const hasAlert = alerts > 0;
+function DimensionCard({ icon: Icon, label, headline, headlineSub, onClick, theme, accent }) {
   return (
     <button
       onClick={onClick}
       className="group text-left rounded-2xl p-4 md:p-5 transition-all duration-200 active:scale-[0.98] relative overflow-hidden"
       style={{
         background: theme.cardBg,
-        border: `1px solid ${hasAlert ? lvl.border : theme.border}`,
-        boxShadow: hasAlert ? `0 0 24px ${lvl.glow}` : "none",
+        border: `1px solid ${theme.border}`,
       }}
     >
-      {/* Pulse ring for red alerts */}
-      {status === "red" && (
-        <span
-          className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full"
-          style={{ background: lvl.color, animation: "pulseRed 1.5s ease-in-out infinite" }}
-        />
-      )}
-
       {/* Header */}
       <div className="flex items-center gap-2.5 mb-3">
         <div
@@ -67,14 +56,6 @@ function DimensionCard({ icon: Icon, label, headline, headlineSub, alerts, statu
           <div className="text-xs font-bold tracking-widest" style={{ color: theme.textMuted, fontSize: "10px", letterSpacing: "0.12em" }}>
             {label}
           </div>
-          {hasAlert && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <AlertTriangle size={10} style={{ color: lvl.color }} />
-              <span className="text-xs font-semibold" style={{ color: lvl.color, fontSize: "10px" }}>
-                {alerts} 项告警
-              </span>
-            </div>
-          )}
         </div>
         <ChevronRight
           size={15}
@@ -197,8 +178,6 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           label="人 · STAFF"
           headline={onDuty}
           headlineSub={`总${staff.length} · 忙${busy} · 闲${available} · 休${onBreak} · 假${onLeave} · 端${padOnline}`}
-          alerts={anomalies}
-          status={staffStatus}
           accent="#4ade80"
           theme={theme}
           onClick={() => onOpenDimension("people")}
@@ -208,8 +187,6 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           label="流 · FLOW"
           headline={totalVisitors}
           headlineSub={`来院人次 · 候诊 ${waiting} · 诊疗 ${inProgress}`}
-          alerts={flowAlerts}
-          status={flowStatus}
           accent="#00C7D9"
           theme={theme}
           onClick={() => onOpenDimension("flow")}
@@ -219,8 +196,6 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           label="钱 · REVENUE"
           headline={totalTarget > 0 ? `${achievementRate}%` : "—"}
           headlineSub={totalTarget > 0 ? `¥${totalActual.toLocaleString()} / ¥${totalTarget.toLocaleString()}` : "今日未设目标"}
-          alerts={totalTarget > 0 && achievementRate < 60 ? 1 : 0}
-          status={moneyStatus}
           accent="#FBBF24"
           theme={theme}
           onClick={() => onOpenDimension("money")}
@@ -230,8 +205,6 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
           label="物 · SUPPLY"
           headline={lowStock}
           headlineSub={`/ ${inventory.length} 项 · 预警 ${nearLow}`}
-          alerts={lowStock}
-          status={thingStatus}
           accent="#A78BFA"
           theme={theme}
           onClick={() => onOpenDimension("things")}
