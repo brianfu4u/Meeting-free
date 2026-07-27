@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ClipboardCheck, BarChart3, Trophy,
-  Users, UserPlus, Settings, Inbox, GitBranch, Archive,
+  Users, UserPlus, Settings, Inbox, GitBranch, Archive, FileBarChart,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift } from "@/lib/clinicTime";
@@ -42,7 +42,7 @@ const GROUPS = [
   },
 ];
 
-export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, onOpenReconcile, onOpenSnapshot, onOpenClosure }) {
+export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, onOpenReconcile, onOpenSnapshot, onOpenClosure, onOpenReport }) {
   const { theme } = useTheme();
   const shift = beijingShift();
   const { pathname } = useLocation();
@@ -167,6 +167,20 @@ export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, on
               <span className="flex-1 truncate text-left"
                 style={{ color: "#c4b5fd", fontSize: "11px", fontWeight: 500 }}>
                 工作流闭环
+              </span>
+            </button>
+            <button
+              onClick={() => { onClose?.(); onOpenReport?.(); }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all duration-150 text-left"
+              style={{ border: "1px solid transparent" }}
+            >
+              <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+                style={{ background: "rgba(251,191,36,0.15)" }}>
+                <FileBarChart size={12} style={{ color: "#FBBF24" }} />
+              </div>
+              <span className="flex-1 truncate text-left"
+                style={{ color: "#fbbf24", fontSize: "11px", fontWeight: 600 }}>
+                经营报告中心
               </span>
             </button>
           </div>

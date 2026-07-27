@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { GitBranch, Archive } from "lucide-react";
+import { GitBranch, Archive, BarChart3 } from "lucide-react";
 import TopBar from "@/components/dashboard/TopBar";
 import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
@@ -12,6 +12,7 @@ import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import WorkflowTodaySummary from "@/components/dashboard/WorkflowTodaySummary";
 import ManagerPanelDrawer from "@/components/dashboard/ManagerPanelDrawer";
 import ReconcileBatchDrawer from "@/components/dashboard/ReconcileBatchDrawer";
+import ReportHub from "@/components/dashboard/reports/ReportHub";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
 import {
@@ -62,6 +63,7 @@ function DashboardInner() {
   const [reconcileOpen, setReconcileOpen] = React.useState(false);
   const [snapshotOpen, setSnapshotOpen] = React.useState(false);
   const [closureOpen, setClosureOpen] = React.useState(false);
+  const [reportOpen, setReportOpen] = React.useState(false);
 
   // 真实数据：事件流 + 健康分构成
   const auditQ = useAuditLog(20);
@@ -102,6 +104,7 @@ function DashboardInner() {
         onOpenReconcile={() => setReconcileOpen(true)}
         onOpenSnapshot={() => setSnapshotOpen(true)}
         onOpenClosure={() => setClosureOpen(true)}
+        onOpenReport={() => setReportOpen(true)}
       />
 
       {/* Main layout */}
@@ -172,6 +175,19 @@ function DashboardInner() {
 
       {/* 闭环工作流批量核销入库抽屉 */}
       <ReconcileBatchDrawer open={reconcileOpen} onClose={() => setReconcileOpen(false)} />
+
+      {/* 经营报告中心：人/流/钱/物 四维度统计，支持日/周/月/季 */}
+      {reportOpen && (
+        <ManagerPanelDrawer
+          title="经营报告中心"
+          subtitle="店长/投资人 · 人 流 钱 物"
+          icon={BarChart3}
+          accent="#FBBF24"
+          onClose={() => setReportOpen(false)}
+        >
+          <ReportHub />
+        </ManagerPanelDrawer>
+      )}
 
       {/* 店长工作区：工作流快照完整视图（操作 + 历史） */}
       {snapshotOpen && (
