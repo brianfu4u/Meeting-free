@@ -120,6 +120,22 @@ export function useExamReportFactCards() {
   });
 }
 
+// V10.1 已闭环但尚未核销入库的工作流快照（status=closed 且 reconciled !== true）
+export function usePendingReconcileSnapshots() {
+  return useQuery({
+    queryKey: ["pendingReconcileSnapshots", CLINIC_ID],
+    queryFn: async () => {
+      const list = await base44.entities.WorkflowSnapshot.filter(
+        { clinic_id: CLINIC_ID, status: "closed" },
+        "-manager_closed_at",
+        100
+      );
+      return list.filter((s) => !s.reconciled);
+    },
+    refetchInterval: 15000,
+  });
+}
+
 export function useRevenueTargets() {
   return useQuery({
     queryKey: ["revenueTargets", CLINIC_ID],

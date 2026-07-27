@@ -1,4 +1,5 @@
 import React, { useCallback } from "react";
+import { Inbox, ChevronRight } from "lucide-react";
 import TopBar from "@/components/dashboard/TopBar";
 import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
@@ -9,6 +10,7 @@ import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
 import CompositionReviewPanel from "@/components/dashboard/CompositionReviewPanel";
 import EventStreamMarquee from "@/components/dashboard/EventStreamMarquee";
+import ReconcileBatchDrawer from "@/components/dashboard/ReconcileBatchDrawer";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
 import {
@@ -19,6 +21,7 @@ import {
   useAlerts,
   useInventory,
   deriveHealthScore,
+  usePendingReconcileSnapshots,
 } from "@/hooks/useClinicData";
 import { useLiveOpsFeed } from "@/hooks/useLiveOpsFeed";
 import { formatBeijingTimeShort } from "@/lib/clinicTime";
@@ -55,6 +58,7 @@ function DashboardInner() {
   const { theme } = useTheme();
   const [activeDimension, setActiveDimension] = React.useState(null);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [reconcileOpen, setReconcileOpen] = React.useState(false);
 
   // 真实数据：事件流 + 健康分构成
   const auditQ = useAuditLog(20);
@@ -65,6 +69,8 @@ function DashboardInner() {
   const inventoryQ = useInventory();
 
   const liveEvents = (auditQ.data || []).map(mapAuditToEvent);
+  const reconcileQ = usePendingReconcileSnapshots();
+  const pendingReconcileCount = (reconcileQ.data || []).length;
   const overallHealth = deriveHealthScore(
     sessionsQ.data,
     tasksQ.data,
@@ -124,6 +130,33 @@ function DashboardInner() {
             <FourDimensionsPanel onOpenDimension={setActiveDimension} />
           </div>
 
+          {/* 闭环工作流核销入库 — 指挥台独立入口 */}
+          <div className="mb-4">
+            <button
+              onClick={() => setReconcileOpen(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all active:scale-[0.99]"
+              style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.35)" }}>
+                <Inbox size={17} style={{ color: "#A78BFA" }} />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="text-sm font-bold" style={{ color: theme.text }}>闭环工作流 · 核销入库</div>
+                <div className="text-xs" style={{ color: theme.textMuted }}>
+                  批量审批已闭环工作流，单条同意或勾选一键入库
+                </div>
+              </div>
+              {pendingReconcileCount > 0 && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0"
+                  style={{ background: "rgba(167,139,250,0.18)", color: "#A78BFA", border: "1px solid rgba(167,139,250,0.4)" }}>
+                  待核销 {pendingReconcileCount}
+                </span>
+              )}
+              <ChevronRight size={16} style={{ color: theme.textFaint }} />
+            </button>
+          </div>
+
           {/* V10 双层架构：事件流走马灯（战术）+ 工作流快照（战略）*/}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4" style={{ minHeight: "200px" }}>
             <EventStreamMarquee />
@@ -159,6 +192,9 @@ function DashboardInner() {
           onClose={() => setActiveDimension(null)}
         />
       )}
+
+      {/* 闭环工作流批量核销入库抽屉 */}
+      <ReconcileBatchDrawer open={reconcileOpen} onClose={() => setReconcileOpen(false)} />
     </div>
   );
 }
