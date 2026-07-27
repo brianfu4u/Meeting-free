@@ -4,8 +4,6 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
 import FourDimensionsPanel from "@/components/dashboard/FourDimensionsPanel";
 import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
-import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
-import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
 import EventStreamMarquee from "@/components/dashboard/EventStreamMarquee";
 import ReconcileBatchDrawer from "@/components/dashboard/ReconcileBatchDrawer";
@@ -130,15 +128,9 @@ function DashboardInner() {
             <FourDimensionsPanel onOpenDimension={setActiveDimension} />
           </div>
 
-          {/* V10 双层架构：事件流走马灯（战术）+ 工作流快照（战略）*/}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4" style={{ minHeight: "200px" }}>
-            <EventStreamMarquee />
-            <WorkflowSnapshotPanel />
-          </div>
-
-          {/* 工作流闭环视图 — 全宽，店长闭环决策入口 */}
+          {/* 事件流走马灯 — 战术层实时播报（当日）*/}
           <div className="mb-4">
-            <WorkflowClosureView />
+            <EventStreamMarquee />
           </div>
 
           {/* 日结复盘 — 全宽，下班前一键总览 */}
@@ -147,7 +139,7 @@ function DashboardInner() {
           </div>
 
           {/* 系统事件流 — 全宽，按时间滚动 */}
-          <div style={{ height: "calc(100vh - 760px)", minHeight: "260px" }}>
+          <div style={{ height: "calc(100vh - 520px)", minHeight: "260px" }}>
             <EventStream events={liveEvents} loading={auditQ.isLoading} />
           </div>
         </div>
