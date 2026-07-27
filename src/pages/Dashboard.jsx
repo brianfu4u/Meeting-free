@@ -1,4 +1,5 @@
 import React, { useCallback } from "react";
+import { GitBranch, Archive } from "lucide-react";
 import TopBar from "@/components/dashboard/TopBar";
 import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
@@ -6,6 +7,10 @@ import FourDimensionsPanel from "@/components/dashboard/FourDimensionsPanel";
 import DimensionDrawer from "@/components/dashboard/DimensionDrawer";
 import DailyReviewPanel from "@/components/dashboard/DailyReviewPanel";
 import EventStreamMarquee from "@/components/dashboard/EventStreamMarquee";
+import WorkflowSnapshotPanel from "@/components/dashboard/WorkflowSnapshotPanel";
+import WorkflowClosureView from "@/components/dashboard/WorkflowClosureView";
+import WorkflowTodaySummary from "@/components/dashboard/WorkflowTodaySummary";
+import ManagerPanelDrawer from "@/components/dashboard/ManagerPanelDrawer";
 import ReconcileBatchDrawer from "@/components/dashboard/ReconcileBatchDrawer";
 import { ThemeProvider, useTheme } from "@/lib/ThemeContext";
 import { NAV_ITEMS } from "@/data/mockData";
@@ -55,6 +60,8 @@ function DashboardInner() {
   const [activeDimension, setActiveDimension] = React.useState(null);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [reconcileOpen, setReconcileOpen] = React.useState(false);
+  const [snapshotOpen, setSnapshotOpen] = React.useState(false);
+  const [closureOpen, setClosureOpen] = React.useState(false);
 
   // 真实数据：事件流 + 健康分构成
   const auditQ = useAuditLog(20);
@@ -93,6 +100,8 @@ function DashboardInner() {
         onClose={() => setSidebarOpen(false)}
         pendingReconcileCount={pendingReconcileCount}
         onOpenReconcile={() => setReconcileOpen(true)}
+        onOpenSnapshot={() => setSnapshotOpen(true)}
+        onOpenClosure={() => setClosureOpen(true)}
       />
 
       {/* Main layout */}
@@ -133,6 +142,14 @@ function DashboardInner() {
             <EventStreamMarquee />
           </div>
 
+          {/* 工作流今日摘要 — 当天只读态势，点击进入店长工作区查看完整操作与历史 */}
+          <div className="mb-4">
+            <WorkflowTodaySummary
+              onOpenSnapshot={() => setSnapshotOpen(true)}
+              onOpenClosure={() => setClosureOpen(true)}
+            />
+          </div>
+
           {/* 日结复盘 — 全宽，下班前一键总览 */}
           <div className="mb-4">
             <DailyReviewPanel />
@@ -155,6 +172,32 @@ function DashboardInner() {
 
       {/* 闭环工作流批量核销入库抽屉 */}
       <ReconcileBatchDrawer open={reconcileOpen} onClose={() => setReconcileOpen(false)} />
+
+      {/* 店长工作区：工作流快照完整视图（操作 + 历史） */}
+      {snapshotOpen && (
+        <ManagerPanelDrawer
+          title="工作流快照"
+          subtitle="店长工作区 · 闭环操作与历史"
+          icon={GitBranch}
+          accent="#8B5CF6"
+          onClose={() => setSnapshotOpen(false)}
+        >
+          <WorkflowSnapshotPanel />
+        </ManagerPanelDrawer>
+      )}
+
+      {/* 店长工作区：工作流闭环视图完整版（操作 + 归档历史） */}
+      {closureOpen && (
+        <ManagerPanelDrawer
+          title="工作流闭环视图"
+          subtitle="店长工作区 · 闭环决策与归档"
+          icon={Archive}
+          accent="#A78BFA"
+          onClose={() => setClosureOpen(false)}
+        >
+          <WorkflowClosureView />
+        </ManagerPanelDrawer>
+      )}
     </div>
   );
 }

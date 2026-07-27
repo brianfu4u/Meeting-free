@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ClipboardCheck, BarChart3, Trophy,
-  Users, UserPlus, Settings, Inbox,
+  Users, UserPlus, Settings, Inbox, GitBranch, Archive,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift } from "@/lib/clinicTime";
@@ -42,7 +42,7 @@ const GROUPS = [
   },
 ];
 
-export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, onOpenReconcile }) {
+export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, onOpenReconcile, onOpenSnapshot, onOpenClosure }) {
   const { theme } = useTheme();
   const shift = beijingShift();
   const { pathname } = useLocation();
@@ -140,6 +140,34 @@ export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, on
                   {pendingReconcileCount}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => { onClose?.(); onOpenSnapshot?.(); }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all duration-150 text-left"
+              style={{ border: "1px solid transparent" }}
+            >
+              <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+                style={{ background: "rgba(139,92,246,0.15)" }}>
+                <GitBranch size={12} style={{ color: "#8B5CF6" }} />
+              </div>
+              <span className="flex-1 truncate text-left"
+                style={{ color: "#c4b5fd", fontSize: "11px", fontWeight: 500 }}>
+                工作流快照
+              </span>
+            </button>
+            <button
+              onClick={() => { onClose?.(); onOpenClosure?.(); }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all duration-150 text-left"
+              style={{ border: "1px solid transparent" }}
+            >
+              <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+                style={{ background: "rgba(167,139,250,0.15)" }}>
+                <Archive size={12} style={{ color: "#A78BFA" }} />
+              </div>
+              <span className="flex-1 truncate text-left"
+                style={{ color: "#c4b5fd", fontSize: "11px", fontWeight: 500 }}>
+                工作流闭环
+              </span>
             </button>
           </div>
         </div>
