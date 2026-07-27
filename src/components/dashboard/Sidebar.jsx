@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ClipboardCheck, BarChart3, Trophy,
-  Users, UserPlus, Settings,
+  Users, UserPlus, Settings, Inbox,
 } from "lucide-react";
 import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift } from "@/lib/clinicTime";
@@ -42,7 +42,7 @@ const GROUPS = [
   },
 ];
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, pendingReconcileCount = 0, onOpenReconcile }) {
   const { theme } = useTheme();
   const shift = beijingShift();
   const { pathname } = useLocation();
@@ -112,6 +112,36 @@ export default function Sidebar({ isOpen, onClose }) {
               {group.items.map(renderItem)}
             </div>
           ))}
+
+          {/* 店长工作区 */}
+          <div className="mt-3">
+            <div className="flex items-center gap-1.5 px-2 mb-1">
+              <div className="w-1 h-3 rounded-full" style={{ background: "#A78BFA" }} />
+              <span style={{ color: "#A78BFA", fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em" }}>
+                店长工作区
+              </span>
+            </div>
+            <button
+              onClick={() => { onClose?.(); onOpenReconcile?.(); }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all duration-150 text-left"
+              style={{ border: "1px solid transparent" }}
+            >
+              <div className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+                style={{ background: "rgba(167,139,250,0.15)" }}>
+                <Inbox size={12} style={{ color: "#A78BFA" }} />
+              </div>
+              <span className="flex-1 truncate text-left"
+                style={{ color: "#A78BFA", fontSize: "11px", fontWeight: 600 }}>
+                闭环核销入库
+              </span>
+              {pendingReconcileCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0"
+                  style={{ background: "rgba(167,139,250,0.2)", color: "#A78BFA", border: "1px solid rgba(167,139,250,0.4)" }}>
+                  {pendingReconcileCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         <div

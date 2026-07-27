@@ -1,5 +1,4 @@
 import React, { useCallback } from "react";
-import { Inbox, ChevronRight } from "lucide-react";
 import TopBar from "@/components/dashboard/TopBar";
 import Sidebar from "@/components/dashboard/Sidebar";
 import EventStream from "@/components/dashboard/EventStream";
@@ -95,6 +94,8 @@ function DashboardInner() {
         panelStatuses={{}}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        pendingReconcileCount={pendingReconcileCount}
+        onOpenReconcile={() => setReconcileOpen(true)}
       />
 
       {/* Main layout */}
@@ -128,33 +129,6 @@ function DashboardInner() {
           {/* 四维现实空间指挥台 */}
           <div className="mb-4">
             <FourDimensionsPanel onOpenDimension={setActiveDimension} />
-          </div>
-
-          {/* 闭环工作流核销入库 — 指挥台独立入口 */}
-          <div className="mb-4">
-            <button
-              onClick={() => setReconcileOpen(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all active:scale-[0.99]"
-              style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}
-            >
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.35)" }}>
-                <Inbox size={17} style={{ color: "#A78BFA" }} />
-              </div>
-              <div className="flex-1 text-left">
-                <div className="text-sm font-bold" style={{ color: theme.text }}>闭环工作流 · 核销入库</div>
-                <div className="text-xs" style={{ color: theme.textMuted }}>
-                  批量审批已闭环工作流，单条同意或勾选一键入库
-                </div>
-              </div>
-              {pendingReconcileCount > 0 && (
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0"
-                  style={{ background: "rgba(167,139,250,0.18)", color: "#A78BFA", border: "1px solid rgba(167,139,250,0.4)" }}>
-                  待核销 {pendingReconcileCount}
-                </span>
-              )}
-              <ChevronRight size={16} style={{ color: theme.textFaint }} />
-            </button>
           </div>
 
           {/* V10 双层架构：事件流走马灯（战术）+ 工作流快照（战略）*/}
