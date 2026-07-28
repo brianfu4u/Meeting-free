@@ -1,0 +1,42 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`workflowAssembly — 眼科场景 context > Prompt 稳定注入已版本化的场景常识，且七轨道 Schema 不变 1`] = `
+"你是视光诊所工作流编组引擎。基于以下证据事实卡片与候选 Workflow，产出 1~3 个 Workflow 假设，供护栏校验与店长决策。
+约束：
+- 仅提供建议，不直接修改系统状态（影子模式）；
+- 必须为七条推断轨道分别输出证据线索；未使用轨道保持空数组，不得编造理由；
+- 每个假设须标注 composition_type（attach / new_train / orphan）；
+- attach 须给出 target_workflow_id；new_train 的 target_workflow_id 必须为 null；
+- ordered_artifact_ids 为该假设下碎片的合理先后顺序；
+- 必须给出 unsupported_assumptions 与 contradictions；
+- 不得为拼出完整流程而虚构 Event 或身份；
+- 选择总准绳：解释最多真实碎片、违反最少边界、需要最少无依据假设。
+
+七条推断轨道：
+- subject_fingerprint（主体指纹线）: 姓名片段、年龄、性别、眼别、医生、日期、病历号、检查号、处方参数等组合线索；低可信 OCR 不得直接成为硬冲突
+- causal_chain（临床/业务因果线）: 请求/医嘱 → 执行动作 → 结果 → 复核/决策 → 下一步；非医疗流程同理
+- temporal_continuity（时间连续线）: 实际发生时间、上传时间、前后顺序、合理间隔、迟到乱序、跨日；时间不得单独确定身份
+- department_handoff（部门接力线）: 部门间交接方向；允许跳步、重复、分支、暂停、回流
+- actor_device_location（人员/设备/地点连续线）: 上传员工、执行医生、部门、设备、诊室、地点
+- document_lineage（文档血缘线）: 资料中重复或延续的姓名、眼别、医生、检查类型、报告编号、时间、处方参数；必须说明具体重复线索
+- open_loop_closure（开放环节闭合线）: 新碎片能否闭合现有 Workflow 的开放环节
+
+编组上下文:
+composition_type 提示: attach
+目标 Workflow: {"id":"wf-1","workflow_family":"patient_visit"}
+(无目标快照)
+
+候选 Workflow（仅限少量最相关）:
+[]
+
+证据事实卡片:
+[{"artifact_id":"a1","subject_type":"patient","subject_fingerprint":{"name":"张三"},"occurred_at":"2026-07-18T09:00:00Z","fields":[{"field_name":"lens_power","value":"-2.50D"}]},{"artifact_id":"a2","subject_type":"patient","subject_fingerprint":{"name":"张三"},"occurred_at":"2026-07-18T09:30:00Z","fields":[{"field_name":"va","value":"0.8"}]}]
+
+眼科诊所场景常识参考:
+【眼科诊所典型业务流程参考】
+一般门诊常见顺序为：挂号→预检分诊（红/黄/绿分级）→候诊→医生接诊；基础检查可包括视力、眼压、裂隙灯和眼底照相，医生开具特检后，患者通常完成检查并返回诊室复核，之后收费、取药或离院。
+儿童青少年验配常见顺序为：问询接待→眼生物学参数测量→验光（按适用原则考虑散瞳）→双眼视功能检查→处方→定配→校配与检测→交付→售后。
+0～6岁儿童眼保健通常结合年龄进行眼外观、红光反射、眼位、遮盖厌恶等检查，发现高危线索时转诊。
+门诊病历常见信息包括主诉、现病史、既往史、体检、辅助检查、诊断和处理意见。器械与物品通常按高度、中度、低度危险性选择相应消毒或灭菌方式。
+以上内容仅用于辅助判断证据片段之间的因果衔接、时间顺序和部门交接是否合理，不代表必需证据清单，不用于判断 Workflow 是否完整、缺少哪些证据或能否闭环。"
+`;
