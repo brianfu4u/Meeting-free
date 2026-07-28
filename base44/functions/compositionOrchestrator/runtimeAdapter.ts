@@ -4,17 +4,22 @@ import { buildCompositionClusters } from "./runtime/clustering.js";
 import { assembleWorkflow } from "./runtime/workflowAssembly.js";
 import { validateHypotheses } from "./runtime/guardrailValidator.js";
 import {
+  OPHTHALMOLOGY_COMPOSITION_CONTEXT,
+  OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION,
+} from "./runtime/ophthalmologyCompositionContext.js";
+import {
   clusterMultiPage,
   propagateGroupResolution,
   buildMultipageVetoIssue,
 } from "./runtime/factCardCluster.js";
 
 export const PHASE2_RUNTIME_SOURCES = {
-  "src/lib/composition/prompts.js": "92d7d741dffc41e6859e2a4bbf4ecbced327c559",
+  "src/lib/composition/ophthalmologyCompositionContext.js": "70bfef2a873ce0b86d48d3a76b6c8c12decf13d9",
+  "src/lib/composition/prompts.js": "c217ba95e9e9e0cf9149470b432c9d25ae9c922b",
   "src/lib/composition/evidenceInterpreter.js": "1fe84faf2f7be6ed9ba4f5ab121e19a651d1a9f2",
   "src/lib/composition/candidateFinder.js": "cd2264b4aa5417c667b922482221562f01b6f996",
   "src/lib/composition/clustering.js": "bcdf4db155bd85d493106236531f3300216a1770",
-  "src/lib/composition/workflowAssembly.js": "223c1d41b963d21f330a05d66c4fcd7605a80a4f",
+  "src/lib/composition/workflowAssembly.js": "8ed5ef568743f1128ed738bb48e4f466848c4e0f",
   "src/lib/composition/guardrailValidator.js": "39275606474fe379c5bd3370eea90ba6b4284770",
   "src/lib/tenant/tenantContext.js": "b7504dcf1c9fb86ff2ec30bc4f0b9a439cf4a82c",
 };
@@ -316,6 +321,7 @@ export async function executeCompositionRuntime({
       policyVersion,
       assemblyRunId: compositionRunId,
       guessPolicy: guessPolicy || {},
+      sopDigest: OPHTHALMOLOGY_COMPOSITION_CONTEXT,
     });
     hypotheses.push(...assembled.hypotheses);
   }
@@ -331,6 +337,7 @@ export async function executeCompositionRuntime({
       policyVersion,
       assemblyRunId: compositionRunId,
       guessPolicy: guessPolicy || {},
+      sopDigest: OPHTHALMOLOGY_COMPOSITION_CONTEXT,
     });
     hypotheses.push(...assembled.hypotheses);
   }
@@ -366,5 +373,6 @@ export async function executeCompositionRuntime({
     factCardIds: resolvedCards.map((item) => item.id).filter(Boolean),
     // V11 多页证据聚合结果（纯内存态，供看板/审计展示，不落库）
     multipageClusters,
+    compositionContextVersion: OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION,
   };
 }
