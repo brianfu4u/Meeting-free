@@ -54,11 +54,8 @@ export default function WorkflowTodaySummary({ onOpenSnapshot, onOpenClosure }) 
   for (const s of openSnaps) {
     if (flow[s.status] !== undefined) flow[s.status] += 1;
   }
-  // 红色（急需介入）优先展示，其次黄色（疑似卡滞），最后绿色（正常流动）
-  const stateOrder = ["pending_manager_closure", "stalled", "active"];
-  const listed = [...openSnaps]
-    .sort((a, b) => stateOrder.indexOf(a.status) - stateOrder.indexOf(b.status))
-    .slice(0, 5);
+  // 首页仅列出「急需介入」工作流，其余状态点击上方数字抽屉查看完整列表
+  const urgent = openSnaps.filter((s) => s.status === "pending_manager_closure").slice(0, 6);
 
   const MiniStat = ({ icon: Icon, value, label, color }) => (
     <div className="rounded-lg p-2 flex items-center gap-2" style={{ background: theme.canvas, border: `1px solid ${theme.border}` }}>
@@ -70,16 +67,30 @@ export default function WorkflowTodaySummary({ onOpenSnapshot, onOpenClosure }) 
     </div>
   );
 
-  const StatePill = ({ state, count }) => {
+  const StatePill = ({ state, count, onClick }) => {
     const c = FLOW_STATES[state];
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg flex-1 min-w-0" style={{ background: c.bg, border: `1px solid ${c.color}33` }}>
+      <button onClick={onClick} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg flex-1 min-w-0 transition hover:opacity-80" style={{ background: c.bg, border: `1px solid ${c.color}33` }}>
         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
         <span className="text-sm font-bold tabular-nums flex-shrink-0" style={{ color: c.color }}>{count}</span>
         <span className="text-[10px] truncate" style={{ color: theme.textMuted }}>{c.label}</span>
-      </div>
+      </button>
     );
   };
+
+  // 闭环进度：已耗时 / (已耗时 + 预估剩余)，封顶 95%
+  const closureProgress = (s) => {
+    const elapsed = s.total_elapsed_minutes || 0;
+    const remain = s.estimated_completion_minutes || 0;
+    if (elapsed === 0 && remain === 0) return 0;
+    const total = elapsed + remain;
+    if (total <= 0) return 0;
+    return Math.min(95, Math.max(5, Math.round((elapsed / total) * 100)));
+  };
+  // AI 闭环建议：优先 llm_recommendation，缺省回退到瓶颈节点提示
+  const closureAdvice = (s) =>
+    s.llm_recommendation ||
+    (s.bottleneck_node ? `需补充「${s.bottleneck_node}」节点证据以推进闭环` : "暂无 AI 建议，请店长研判");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -113,43 +124,64 @@ export default function WorkflowTodaySummary({ onOpenSnapshot, onOpenClosure }) 
         </div>
       </button>
 
-      {/* 右卡：截止当前工作流流动情况（三态） */}
-      <button
-        onClick={onOpenClosure}
-        className="text-left rounded-xl p-4 transition-all active:scale-[0.98] w-full"
+      {/* 右卡：截止当前工作流流动情况（三态 + 急需介入清单） */}
+      <div
+        className="rounded-xl p-4 w-full"
         style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}
       >
         <div className="flex items-center gap-2 mb-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(0,199,217,0.15)", border: "1px solid rgba(0,199,217,0.33)" }}>
             <Activity size={15} style={{ color: "#00C7D9" }} />
           </div>
-          <span className="text-xs font-bold" style={{ color: theme.text }}>工作流流动（今日）</span>
-          <span className="ml-auto text-[10px] flex items-center gap-0.5" style={{ color: theme.textMuted }}>
+          <span className="text-xs font-bold" style={{ color: theme.text }}>工作流流动（截至当前）</span>
+          <button onClick={onOpenClosure} className="ml-auto text-[10px] flex items-center gap-0.5 transition hover:opacity-80" style={{ color: theme.textMuted }}>
             查看详情 <ChevronRight size={12} />
-          </span>
+          </button>
         </div>
+        {/* 三态数字：点击打开抽屉查看对应完整列表 */}
         <div className="flex items-center gap-2 mb-2.5">
-          <StatePill state="active" count={flow.active} />
-          <StatePill state="stalled" count={flow.stalled} />
-          <StatePill state="pending_manager_closure" count={flow.pending_manager_closure} />
+          <StatePill state="active" count={flow.active} onClick={onOpenClosure} />
+          <StatePill state="stalled" count={flow.stalled} onClick={onOpenClosure} />
+          <StatePill state="pending_manager_closure" count={flow.pending_manager_closure} onClick={onOpenClosure} />
         </div>
-        <div className="space-y-1">
-          {listed.length === 0 && (
-            <div className="text-[10px] py-2 text-center" style={{ color: theme.textFaint }}>今日暂无活跃工作流</div>
+        {/* 急需介入清单：闭环进度条 + AI 闭环建议 */}
+        <div className="space-y-1.5">
+          {urgent.length === 0 && (
+            <div className="text-[10px] py-3 text-center" style={{ color: theme.textFaint }}>暂无急需介入工作流</div>
           )}
-          {listed.map((s) => {
-            const c = FLOW_STATES[s.status] || FLOW_STATES.active;
+          {urgent.map((s) => {
+            const pct = closureProgress(s);
+            const advice = closureAdvice(s);
             return (
-              <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: theme.canvas, border: `1px solid ${theme.border}`, borderLeft: `3px solid ${c.color}` }}>
-                <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "60px" }}>{s.patient_name || "未登记"}</span>
-                <span className="text-[10px] flex-shrink-0" style={{ color: theme.textMuted }}>{LINE_LABEL[s.business_line] || "—"}</span>
-                <span className="text-[10px] flex-1 truncate ml-1" style={{ color: theme.textMuted }}>{s.current_node || "—"}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0" style={{ background: c.bg, color: c.color }}>{c.label}</span>
-              </div>
+              <button
+                key={s.id}
+                onClick={onOpenClosure}
+                className="w-full text-left px-2.5 py-2 rounded-lg transition hover:opacity-90"
+                style={{ background: theme.canvas, border: `1px solid ${theme.border}`, borderLeft: "3px solid #f87171" }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold flex-shrink-0" style={{ color: theme.text, minWidth: "56px" }}>{s.patient_name || "未登记"}</span>
+                  <span className="text-[10px] flex-shrink-0" style={{ color: theme.textMuted }}>{LINE_LABEL[s.business_line] || "—"}</span>
+                  <span className="text-[10px] flex-1 truncate ml-1" style={{ color: theme.textMuted }}>{s.current_node || "—"}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0 tag-red">{FLOW_STATES.pending_manager_closure.label}</span>
+                </div>
+                {/* 闭环进度条 */}
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg,#fbbf24,#f87171)" }} />
+                  </div>
+                  <span className="text-[9.5px] tabular-nums w-7 text-right" style={{ color: theme.textMuted }}>{pct}%</span>
+                </div>
+                {/* AI 闭环建议 */}
+                <div className="flex items-start gap-1">
+                  <span className="text-[9px] px-1 py-0.5 rounded flex-shrink-0" style={{ background: "rgba(248,113,113,0.12)", color: "#f87171" }}>AI建议</span>
+                  <span className="text-[10px] leading-snug" style={{ color: theme.textMuted }}>{advice}</span>
+                </div>
+              </button>
             );
           })}
         </div>
-      </button>
+      </div>
     </div>
   );
 }
