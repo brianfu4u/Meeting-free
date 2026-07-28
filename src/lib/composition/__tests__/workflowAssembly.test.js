@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { assembleWorkflow } from "../workflowAssembly";
+import {
+  OPHTHALMOLOGY_COMPOSITION_CONTEXT,
+  OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION,
+} from "../ophthalmologyCompositionContext";
 
 const factCards = [
   { id: "f1", artifact_id: "a1", explicit_workflow_id: null, subject_type: "patient", subject_fingerprint: { name: "张三" }, subject_quality: "high", occurred_at: "2026-07-18T09:00:00Z", fields: [{ field_name: "lens_power", value: "-2.50D" }] },
@@ -35,6 +39,36 @@ describe("workflowAssembly — 编组目标输出", () => {
     expect(h.workflow_hypothesis_id).not.toBe("ignored");
     expect(h.source_proposal_id).toBe(res.source_proposal_id);
     expect(h.source_proposal_id).toBe("c1::art:a1,a2::pv1");
+  });
+});
+
+describe("workflowAssembly — 眼科场景 context", () => {
+  it("Prompt 稳定注入已版本化的场景常识，且七轨道 Schema 不变", async () => {
+    const cluster = { fact_card_ids: ["f1", "f2"], artifact_ids: ["a1", "a2"], composition_type: "attach" };
+    const invokeLLM = vi.fn(async () => ({
+      hypotheses: [{
+        workflow_family: "patient_visit", composition_type: "attach",
+        target_workflow_id: "wf-1", target_snapshot_id: null, target_snapshot_version: null,
+        ordered_artifact_ids: ["a1", "a2"], reasoning_tracks: {},
+        unsupported_assumptions: [], contradictions: [], unexplained_artifact_ids: [],
+      }],
+      unexplained_artifact_ids: [],
+    }));
+    const result = await assembleWorkflow({
+      cluster, compositionType: "attach", factCards,
+      workflow: { id: "wf-1", workflow_family: "patient_visit" },
+      sopDigest: OPHTHALMOLOGY_COMPOSITION_CONTEXT,
+      invokeLLM, clinicId: "c1", policyVersion: 1,
+    });
+    const request = invokeLLM.mock.calls[0][0];
+    expect(request.prompt).toContain("眼科诊所场景常识参考:");
+    expect(request.prompt).toContain(OPHTHALMOLOGY_COMPOSITION_CONTEXT);
+    expect(request.prompt).not.toContain("眼科诊所场景常识参考:\n(无)");
+    expect(request.prompt).toMatchSnapshot();
+    expect(Object.keys(request.response_json_schema.properties.hypotheses.items.properties.reasoning_tracks.properties))
+      .toEqual(TRACK_KEYS);
+    expect(result.composition_context_version).toBe(OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION);
+    expect(result.prompt_version).toContain(OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION);
   });
 });
 

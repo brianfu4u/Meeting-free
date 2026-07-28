@@ -11,6 +11,7 @@ const root = path.resolve(here, "../../../..");
 const mirrorDir = path.join(root, "base44/functions/compositionOrchestrator/runtime");
 
 const mirrors = {
+  "src/lib/composition/ophthalmologyCompositionContext.js": "ophthalmologyCompositionContext.js",
   "src/lib/composition/prompts.js": "prompts.js",
   "src/lib/composition/evidenceInterpreter.js": "evidenceInterpreter.js",
   "src/lib/composition/candidateFinder.js": "candidateFinder.js",
@@ -30,7 +31,8 @@ function gitBlobSha(content) {
 function restoreCanonicalImports(content) {
   return content
     .replaceAll('from "./prompts.js";', 'from "./prompts";')
-    .replaceAll('from "./tenantContext.js";', 'from "../tenant/tenantContext";');
+    .replaceAll('from "./tenantContext.js";', 'from "../tenant/tenantContext";')
+    .replaceAll('from "./ophthalmologyCompositionContext.js";', 'from "./ophthalmologyCompositionContext";');
 }
 
 describe("Phase 2 generated runtime mirror parity", () => {

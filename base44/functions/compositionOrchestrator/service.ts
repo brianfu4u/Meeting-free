@@ -1,3 +1,5 @@
+import { OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION } from "./runtime/ophthalmologyCompositionContext.js";
+
 import { isSuppressed } from "../../shared/phase1Instrumentation.ts";
 // Keep deploy-time types local: Base44 may misclassify cross-file `import type`
 type ActorContext = { user_id: string; clinic_id: string; role: "staff" | "admin" };
@@ -569,7 +571,7 @@ async function run(
       cutoffEventSeq: request.cutoff_event_seq,
       cutoffIngestedAt: request.cutoff_ingested_at ?? null,
       policyVersion: request.policy_version,
-      promptVersion: request.prompt_version ?? null,
+      promptVersion: `${request.prompt_version || "workflow-assembly-v3"}+${OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION}`,
       modelVersion: request.model_version ?? null,
     });
     if (!tenantSafe(ops, actor.clinic_id, descriptor)) {
