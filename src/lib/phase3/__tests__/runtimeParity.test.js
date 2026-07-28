@@ -11,6 +11,7 @@ const root = path.resolve(here, "../../../..");
 const mirrorDir = path.join(root, "base44/functions/compositionOrchestrator/runtime");
 
 const mirrors = {
+  "src/lib/composition/ophthalmologyCompositionContext.js": "ophthalmologyCompositionContext.js",
   "src/lib/composition/prompts.js": "prompts.js",
   "src/lib/composition/evidenceInterpreter.js": "evidenceInterpreter.js",
   "src/lib/composition/candidateFinder.js": "candidateFinder.js",
@@ -30,7 +31,8 @@ function gitBlobSha(content) {
 function restoreCanonicalImports(content) {
   return content
     .replaceAll('from "./prompts.js";', 'from "./prompts";')
-    .replaceAll('from "./tenantContext.js";', 'from "../tenant/tenantContext";');
+    .replaceAll('from "./tenantContext.js";', 'from "../tenant/tenantContext";')
+    .replaceAll('from "./ophthalmologyCompositionContext.js";', 'from "./ophthalmologyCompositionContext";');
 }
 
 describe("Phase 2 generated runtime mirror parity", () => {
@@ -60,11 +62,11 @@ describe("Phase 2 generated runtime mirror parity", () => {
 const phase3Mirrors = {
   "src/lib/phase3/contract.js": {
     mirror: "phase3Contract.js",
-    blob: "e9b901be89c170d34ac02b55a7e432a3d1509c58",
+    blob: "d7cf563cd2fdf8da6e7bbb85dbbfb3df7eccca6b",
   },
   "src/lib/phase3/orchestratorCore.js": {
     mirror: "orchestratorCore.js",
-    blob: "32d0fe8362990a42f5e736beae1b4e2c88f133b3",
+    blob: "61cf72d39cb457238475a68a50c9e5d1f61ab205",
   },
 };
 
