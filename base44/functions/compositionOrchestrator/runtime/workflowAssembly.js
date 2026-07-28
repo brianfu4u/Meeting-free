@@ -1,4 +1,4 @@
-// GENERATED_PHASE2_MIRROR source=src/lib/composition/workflowAssembly.js blob=223c1d41b963d21f330a05d66c4fcd7605a80a4f
+// GENERATED_PHASE2_MIRROR source=src/lib/composition/workflowAssembly.js blob=8ed5ef568743f1128ed738bb48e4f466848c4e0f
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS V10 — Workflow Assembly（修订版 R2）
@@ -17,6 +17,7 @@ import {
   ASSEMBLY_JSON_SCHEMA,
 } from "./prompts.js";
 import { computeProposalIdempotencyKey } from "./tenantContext.js";
+import { OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION } from "./ophthalmologyCompositionContext.js";
 
 export async function assembleWorkflow({
   cluster,
@@ -84,7 +85,8 @@ export async function assembleWorkflow({
     hypotheses,
     unexplained_artifact_ids: raw.unexplained_artifact_ids || [],
     source_proposal_id,
-    prompt_version: PROMPT_VERSIONS.WORKFLOW_ASSEMBLY,
+    prompt_version: `${PROMPT_VERSIONS.WORKFLOW_ASSEMBLY}+${OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION}`,
+    composition_context_version: OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION,
     model_version: "automatic",
   };
 }
