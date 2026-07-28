@@ -15,6 +15,7 @@ import {
   ASSEMBLY_JSON_SCHEMA,
 } from "./prompts";
 import { computeProposalIdempotencyKey } from "../tenant/tenantContext";
+import { OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION } from "./ophthalmologyCompositionContext";
 
 export async function assembleWorkflow({
   cluster,
@@ -82,7 +83,8 @@ export async function assembleWorkflow({
     hypotheses,
     unexplained_artifact_ids: raw.unexplained_artifact_ids || [],
     source_proposal_id,
-    prompt_version: PROMPT_VERSIONS.WORKFLOW_ASSEMBLY,
+    prompt_version: `${PROMPT_VERSIONS.WORKFLOW_ASSEMBLY}+${OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION}`,
+    composition_context_version: OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION,
     model_version: "automatic",
   };
 }
