@@ -1,4 +1,4 @@
-// GENERATED_PHASE2_MIRROR source=src/lib/composition/prompts.js blob=92d7d741dffc41e6859e2a4bbf4ecbced327c559
+// GENERATED_PHASE2_MIRROR source=src/lib/composition/prompts.js blob=c217ba95e9e9e0cf9149470b432c9d25ae9c922b
 // Do not edit manually; parity test pins the canonical source blob.
 /**
  * Clinic OS V10 — Composition 编组逻辑层 Prompt 版本与模板（修订版 R2）
@@ -150,7 +150,7 @@ export function buildAssemblyPrompt({ factCards, candidateWorkflows = [], compos
       0
     ),
     "",
-    "SOP 摘要:",
+    "眼科诊所场景常识参考:",
     sopDigest || "(无)",
   ].join("\n");
 }
