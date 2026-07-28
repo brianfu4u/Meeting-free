@@ -148,7 +148,7 @@ export function buildAssemblyPrompt({ factCards, candidateWorkflows = [], compos
       0
     ),
     "",
-    "SOP 摘要:",
+    "眼科诊所场景常识参考:",
     sopDigest || "(无)",
   ].join("\n");
 }
