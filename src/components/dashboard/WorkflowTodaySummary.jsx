@@ -11,8 +11,8 @@ import { GitBranch, Activity, ChevronRight, Layers, FileText, Boxes } from "luci
 import { useTheme } from "@/lib/ThemeContext";
 import { base44 } from "@/api/base44Client";
 import { todayBeijingDate } from "@/lib/clinicTime";
+import { CLINIC_ID } from "@/hooks/useClinicData";
 
-const CLINIC_ID = "clinic-001";
 const LINE_LABEL = { optometry: "验光", medical: "眼科", vision_training: "训练" };
 
 // 工作流流动三态（宪法 V10 状态语义映射）
