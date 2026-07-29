@@ -1,1 +1,169 @@
-{"name":"Artifact","type":"object","properties":{"clinic_id":{"type":"string","description":"门店唯一标识，严格 Tenant 逻辑隔离字段，来自服务端认证上下文"},"artifact_type":{"type":"string","enum":["image","file","voice","screenshot","text"],"description":"原始证据载体类型：照片/文件/语音/截图/文本。Phase 5 新增 text。"},"fragment_type":{"type":"string","enum":["image","document","audio","text"],"description":"Phase 5：多模态碎片类型。与 artifact_type 并存，Phase 1–4 编组器不读取本字段。"},"file_url":{"type":"string","description":"证据文件 URL（UploadFile 产出），存储 Key 须经 Tenant Scope 命名。创建后不可覆盖。"},"source_staff_id":{"type":"string","description":"上传员工 Staff ID（服务端从 Staff 绑定解析，禁止信任客户端 staff_id）"},"source_session_id":{"type":"string","description":"关联 PatientSession ID（患者相关时必填，非患者可空）"},"source_event_id":{"type":"string","description":"产出本碎片的 AuditLog event_id（溯源链入口）"},"origin_evidence_item_id":{"type":"string","description":"方向A实时桥接幂等键：来源 EvidenceItem ID；同 clinic_id 下只允许一条有效桥接链"},"source_region":{"type":"string","description":"来源区域/部门职能编码（如 reception/optometry/medical）"},"source_role":{"type":"string","description":"Server-validated uploader role used as source-context evidence; never trust an unverified client role"},"category_id":{"type":"string","description":"Stable upload micro-explanation category key; strong prior, never ground truth"},"is_proxy":{"type":"boolean","default":false,"description":"Whether the authenticated uploader explicitly declared an on-behalf-of upload"},"proxy_for_role":{"type":"string","description":"Server-validated declared business role represented by a proxy upload"},"exception_class":{"type":"string","enum":["manager_approved_exception"],"description":"Explicit exceptional context isolated from normal assembly and rule learning"},"normal_rule_learning_eligible":{"type":"boolean","default":true,"description":"False permanently excludes this Artifact from normal policy/rule learning"},"source_workflow_id":{"type":"string","description":"Phase 3：显式绑定 Workflow ID（CandidateFinder explicit_id 自动挂接依据）"},"linked_undo_artifact_id":{"type":"string","description":"次日回流 self_supplement 绑定：本车厢是对 linked_undo_artifact_id 所指旧车厢的人工补充说明。编组时强制将两者分入同一 cluster，无需 LLM 推断同源性。"},"business_date":{"type":"string","format":"date","description":"业务日期（本地时区），用于跨日归档与今日过滤"},"captured_at":{"type":"string","format":"date-time","description":"采集/上传时间戳。客户端可提交，服务端兜底为 received_at。创建后不可覆盖。"},"ingestion_seq":{"type":"number","description":"入站事件序号，对应当时水位 cutoff_event_seq"},"interpreted":{"type":"boolean","default":false,"description":"是否已被 Evidence Interpreter 生成 EvidenceFactCard"},"evidence_fact_card_id":{"type":"string","description":"主 FactCard ID（1:1 缓存）"},"client_request_id":{"type":"string","description":"Phase 5：客户端幂等键。与 clinic_id 组成 ingestion_key。"},"ingestion_key":{"type":"string","description":"Phase 5：clinic_id::client_request_id，入站唯一性索引。"},"mime_type":{"type":"string","description":"Phase 5：服务端嗅探后的 MIME 类型。"},"original_filename":{"type":"string","description":"Phase 5：原始文件名（脱敏后保存，不含路径）。"},"file_size":{"type":"number","description":"Phase 5：文件字节数（服务端校验）。"},"checksum":{"type":"string","description":"Phase 5：客户端提交的校验和（可选，不作为信任依据）。"},"received_at":{"type":"string","format":"date-time","description":"Phase 5：服务端接收时间戳。"},"source_channel":{"type":"string","description":"Phase 5：入站渠道（如 staff_pad/web/dashboard）。"},"original_metadata":{"type":"object","description":"Phase 5：不可变原始 metadata（设备/位置提示等客户端上下文，不作为已验证事实）。","additionalProperties":true},"adapter_name":{"type":"string","description":"Phase 5：处理本碎片的 Adapter 名（image/document/audio/text）。"},"adapter_version":{"type":"string","description":"Phase 5：Adapter 版本。"}},"required":["clinic_id","artifact_type","file_url","source_staff_id","business_date","captured_at"]}
+{
+  "name": "Artifact",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5\uff0c\u6765\u81ea\u670d\u52a1\u7aef\u8ba4\u8bc1\u4e0a\u4e0b\u6587"
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "file",
+        "voice",
+        "screenshot",
+        "text"
+      ],
+      "description": "\u539f\u59cb\u8bc1\u636e\u8f7d\u4f53\u7c7b\u578b\uff1a\u7167\u7247/\u6587\u4ef6/\u8bed\u97f3/\u622a\u56fe/\u6587\u672c\u3002Phase 5 \u65b0\u589e text\u3002"
+    },
+    "fragment_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "document",
+        "audio",
+        "text"
+      ],
+      "description": "Phase 5\uff1a\u591a\u6a21\u6001\u788e\u7247\u7c7b\u578b\u3002\u4e0e artifact_type \u5e76\u5b58\uff0cPhase 1\u20134 \u7f16\u7ec4\u5668\u4e0d\u8bfb\u53d6\u672c\u5b57\u6bb5\u3002"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "\u8bc1\u636e\u6587\u4ef6 URL\uff08UploadFile \u4ea7\u51fa\uff09\uff0c\u5b58\u50a8 Key \u987b\u7ecf Tenant Scope \u547d\u540d\u3002\u521b\u5efa\u540e\u4e0d\u53ef\u8986\u76d6\u3002"
+    },
+    "source_staff_id": {
+      "type": "string",
+      "description": "\u4e0a\u4f20\u5458\u5de5 Staff ID\uff08\u670d\u52a1\u7aef\u4ece Staff \u7ed1\u5b9a\u89e3\u6790\uff0c\u7981\u6b62\u4fe1\u4efb\u5ba2\u6237\u7aef staff_id\uff09"
+    },
+    "source_session_id": {
+      "type": "string",
+      "description": "\u5173\u8054 PatientSession ID\uff08\u60a3\u8005\u76f8\u5173\u65f6\u5fc5\u586b\uff0c\u975e\u60a3\u8005\u53ef\u7a7a\uff09"
+    },
+    "source_event_id": {
+      "type": "string",
+      "description": "\u4ea7\u51fa\u672c\u788e\u7247\u7684 AuditLog event_id\uff08\u6eaf\u6e90\u94fe\u5165\u53e3\uff09"
+    },
+    "origin_evidence_item_id": {
+      "type": "string",
+      "description": "\u65b9\u5411A\u5b9e\u65f6\u6865\u63a5\u5e42\u7b49\u952e\uff1a\u6765\u6e90 EvidenceItem ID\uff1b\u540c clinic_id \u4e0b\u53ea\u5141\u8bb8\u4e00\u6761\u6709\u6548\u6865\u63a5\u94fe"
+    },
+    "source_region": {
+      "type": "string",
+      "description": "\u6765\u6e90\u533a\u57df/\u90e8\u95e8\u804c\u80fd\u7f16\u7801\uff08\u5982 reception/optometry/medical\uff09"
+    },
+    "source_role": {
+      "type": "string",
+      "description": "Server-validated uploader role used as source-context evidence; never trust an unverified client role"
+    },
+    "category_id": {
+      "type": "string",
+      "description": "Stable upload micro-explanation category key; strong prior, never ground truth"
+    },
+    "is_proxy": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the authenticated uploader explicitly declared an on-behalf-of upload"
+    },
+    "proxy_for_role": {
+      "type": "string",
+      "description": "Server-validated declared business role represented by a proxy upload"
+    },
+    "exception_class": {
+      "type": "string",
+      "enum": [
+        "manager_approved_exception"
+      ],
+      "description": "Explicit exceptional context isolated from normal assembly and rule learning"
+    },
+    "normal_rule_learning_eligible": {
+      "type": "boolean",
+      "default": true,
+      "description": "False permanently excludes this Artifact from normal policy/rule learning"
+    },
+    "source_workflow_id": {
+      "type": "string",
+      "description": "Phase 3\uff1a\u663e\u5f0f\u7ed1\u5b9a Workflow ID\uff08CandidateFinder explicit_id \u81ea\u52a8\u6302\u63a5\u4f9d\u636e\uff09"
+    },
+    "linked_undo_artifact_id": {
+      "type": "string",
+      "description": "\u6b21\u65e5\u56de\u6d41 self_supplement \u7ed1\u5b9a\uff1a\u672c\u8f66\u53a2\u662f\u5bf9 linked_undo_artifact_id \u6240\u6307\u65e7\u8f66\u53a2\u7684\u4eba\u5de5\u8865\u5145\u8bf4\u660e\u3002\u7f16\u7ec4\u65f6\u5f3a\u5236\u5c06\u4e24\u8005\u5206\u5165\u540c\u4e00 cluster\uff0c\u65e0\u9700 LLM \u63a8\u65ad\u540c\u6e90\u6027\u3002"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u4e1a\u52a1\u65e5\u671f\uff08\u672c\u5730\u65f6\u533a\uff09\uff0c\u7528\u4e8e\u8de8\u65e5\u5f52\u6863\u4e0e\u4eca\u65e5\u8fc7\u6ee4"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u91c7\u96c6/\u4e0a\u4f20\u65f6\u95f4\u6233\u3002\u5ba2\u6237\u7aef\u53ef\u63d0\u4ea4\uff0c\u670d\u52a1\u7aef\u515c\u5e95\u4e3a received_at\u3002\u521b\u5efa\u540e\u4e0d\u53ef\u8986\u76d6\u3002"
+    },
+    "ingestion_seq": {
+      "type": "number",
+      "description": "\u5165\u7ad9\u4e8b\u4ef6\u5e8f\u53f7\uff0c\u5bf9\u5e94\u5f53\u65f6\u6c34\u4f4d cutoff_event_seq"
+    },
+    "interpreted": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u662f\u5426\u5df2\u88ab Evidence Interpreter \u751f\u6210 EvidenceFactCard"
+    },
+    "evidence_fact_card_id": {
+      "type": "string",
+      "description": "\u4e3b FactCard ID\uff081:1 \u7f13\u5b58\uff09"
+    },
+    "client_request_id": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u5ba2\u6237\u7aef\u5e42\u7b49\u952e\u3002\u4e0e clinic_id \u7ec4\u6210 ingestion_key\u3002"
+    },
+    "ingestion_key": {
+      "type": "string",
+      "description": "Phase 5\uff1aclinic_id::client_request_id\uff0c\u5165\u7ad9\u552f\u4e00\u6027\u7d22\u5f15\u3002"
+    },
+    "mime_type": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u670d\u52a1\u7aef\u55c5\u63a2\u540e\u7684 MIME \u7c7b\u578b\u3002"
+    },
+    "original_filename": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u539f\u59cb\u6587\u4ef6\u540d\uff08\u8131\u654f\u540e\u4fdd\u5b58\uff0c\u4e0d\u542b\u8def\u5f84\uff09\u3002"
+    },
+    "file_size": {
+      "type": "number",
+      "description": "Phase 5\uff1a\u6587\u4ef6\u5b57\u8282\u6570\uff08\u670d\u52a1\u7aef\u6821\u9a8c\uff09\u3002"
+    },
+    "checksum": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u5ba2\u6237\u7aef\u63d0\u4ea4\u7684\u6821\u9a8c\u548c\uff08\u53ef\u9009\uff0c\u4e0d\u4f5c\u4e3a\u4fe1\u4efb\u4f9d\u636e\uff09\u3002"
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Phase 5\uff1a\u670d\u52a1\u7aef\u63a5\u6536\u65f6\u95f4\u6233\u3002"
+    },
+    "source_channel": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u5165\u7ad9\u6e20\u9053\uff08\u5982 staff_pad/web/dashboard\uff09\u3002"
+    },
+    "original_metadata": {
+      "type": "object",
+      "description": "Phase 5\uff1a\u4e0d\u53ef\u53d8\u539f\u59cb metadata\uff08\u8bbe\u5907/\u4f4d\u7f6e\u63d0\u793a\u7b49\u5ba2\u6237\u7aef\u4e0a\u4e0b\u6587\uff0c\u4e0d\u4f5c\u4e3a\u5df2\u9a8c\u8bc1\u4e8b\u5b9e\uff09\u3002",
+      "additionalProperties": true
+    },
+    "adapter_name": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u5904\u7406\u672c\u788e\u7247\u7684 Adapter \u540d\uff08image/document/audio/text\uff09\u3002"
+    },
+    "adapter_version": {
+      "type": "string",
+      "description": "Phase 5\uff1aAdapter \u7248\u672c\u3002"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "artifact_type",
+    "file_url",
+    "source_staff_id",
+    "business_date",
+    "captured_at"
+  ]
+}
