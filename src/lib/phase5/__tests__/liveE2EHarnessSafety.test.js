@@ -19,8 +19,8 @@ describe("Direction A live E2E harness safety", () => {
   });
 
   it("reads actual scheduler state before temporarily changing gates", () => {
-    expect(helper).toContain('Deno.env.get("COMPOSITION_SCHEDULER_ENABLED")');
-    expect(helper).toContain('Deno.env.get("COMPOSITION_SCHEDULER_CLINICS")');
+    expect(helper).toContain('secretState("COMPOSITION_SCHEDULER_ENABLED")');
+    expect(helper).toContain('secretState("COMPOSITION_SCHEDULER_CLINICS")');
     expect(helper).toContain('ClinicConfig.filter({ clinic_id: "clinic-001" })');
     expect(shell.indexOf("ORIGINAL_DIAGNOSIS=")).toBeLessThan(shell.indexOf("base44_cli secrets set"));
   });
