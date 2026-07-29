@@ -1,4 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
+import { bridgeEvidenceItemsRealtime } from "../../shared/evidenceArtifactBridge.ts";
 
 /**
  * Clinic OS V10 — StaffReportService（采集层 Collection Layer）
@@ -56,6 +57,8 @@ async function archiveEvidence(
       submitted_at: now,
       submitted_by: staff_id,
       eval_result: "pending",
+      bridge_status: "pending",
+      attempt_count: 0,
       ...(att.transcript ? { eval_notes: `语音转写：${att.transcript}` } : {}),
     });
     ids.push(ev.id);
@@ -93,11 +96,9 @@ Deno.serve(async (req) => {
     }
     const clinic_id = staff.clinic_id;
     const now = new Date().toISOString();
-    // 部门代号：role_group 映射为短码（一线诊疗/前台销售/后台支撑）
     const DEPT_CODE = { medical_core: "MED", front_sales: "FRT", back_support: "BCK" };
     const deptCode = DEPT_CODE[staff.role_group] || "GEN";
     const ymd = now.slice(0, 10).replace(/-/g, "");
-    // V10 事件流编号：{yyyymmdd}/{clinic_id}/{dept}/{staff_id}/{event_type}_{ts}
     const eventTypeMap = {
       new_event: "report_submitted",
       progress: "progress_reported",
@@ -105,17 +106,13 @@ Deno.serve(async (req) => {
     };
     const event_id = `${ymd}/${clinic_id}/${deptCode}/${staff_id}/${eventTypeMap[report_type]}_${Date.now()}`;
 
-    // ── 2. 采集层：归一化附件（EvidenceNormalizer 独立模块）──────────────────
     const atts = normalizeAttachments(attachments);
-
-    // ── 3. 证据存档：EvidenceItem 不可变存档（不推理）────────────────────────
     const evidenceIds = await archiveEvidence(svc, clinic_id, task_id || null, event_id, atts, staff_id, now);
 
-    // ── 4. 结构化 Event：将汇报转化为 AuditLog 条目（系统语言） ─────────────
     const transcripts = atts.filter((a) => a.transcript).map((a) => a.transcript).join("\n");
     const combinedText = [text, transcripts].filter(Boolean).join("\n").trim();
 
-    const auditEntry = await svc.entities.AuditLog.create({
+    await svc.entities.AuditLog.create({
       clinic_id,
       event_id,
       timestamp: now,
@@ -136,7 +133,43 @@ Deno.serve(async (req) => {
       },
     });
 
-    // ── 5. 若有关联 Task，更新其 report_log（仅追加日志，不改变状态） ───────
+    // Direction A only: process the EvidenceItem rows created by this request.
+    // Historical EvidenceItem backfill is intentionally out of scope.
+    let bridgeResults: unknown[] = [];
+    try {
+      const evidenceItems = await Promise.all(
+        evidenceIds.map((id) => svc.entities.EvidenceItem.get(id)),
+      );
+      bridgeResults = await bridgeEvidenceItemsRealtime({
+        svc,
+        evidenceItems,
+        sourceEventId: event_id,
+        staff,
+        now,
+      });
+    } catch {
+      // bridge failure must never fail the employee report.
+      await svc.entities.AuditLog.create({
+        clinic_id,
+        event_id: `${event_id}/evidence-bridge/fatal`,
+        timestamp: new Date().toISOString(),
+        source_agent: "StaffReportService_V10",
+        trigger_type: "EVIDENCE_ARTIFACT_BRIDGE_DISPATCH_FAILED",
+        payload: {
+          source_event_id: event_id,
+          evidence_ids: evidenceIds,
+          last_error_code: "internal_error",
+          employee_report_preserved: true,
+        },
+      }).catch(() => undefined);
+      bridgeResults = evidenceIds.map((id) => ({
+        origin_evidence_item_id: id,
+        bridge_status: "failed",
+        last_error_code: "internal_error",
+        employee_report_preserved: true,
+      }));
+    }
+
     const logEntry = {
       type: report_type,
       text: combinedText,
@@ -152,36 +185,23 @@ Deno.serve(async (req) => {
         const newLog = [...(Array.isArray(task.report_log) ? task.report_log : []), logEntry];
 
         if (report_type === "completion") {
-          // 员工自主工作（staff_self）完成：可以自核销，因为原本就无需店长批准
           if (task.dispatched_by === "staff_self") {
             await svc.entities.OperationalTask.update(task_id, {
               status: "completed",
               report_log: newLog,
             });
           } else {
-            // 管理层派发的任务完成汇报：只更新日志，状态变更等待店长确认
-            // 同时生成 AttentionItem 提醒店长来核销
-            await svc.entities.OperationalTask.update(task_id, {
-              report_log: newLog,
-            });
+            await svc.entities.OperationalTask.update(task_id, { report_log: newLog });
           }
         } else {
-          // progress / new_event：只追加日志
-          await svc.entities.OperationalTask.update(task_id, {
-            report_log: newLog,
-          });
+          await svc.entities.OperationalTask.update(task_id, { report_log: newLog });
         }
       }
     }
 
-    // ── 6. 推理层：LLM 分析（仅生成建议，不产生任何 clinic state 变更） ─────
     let aiParsed: Record<string, unknown> = {};
     let attentionItemId: string | null = null;
 
-    // ── 5.1 非结构化资料解析：视觉识图 + 结构化文件抽取 ────────────────────
-    // V10 子 Agent 沙箱：采集层只做"证据 → 可读上下文"的转译，不做推理。
-    // 视觉类（image/screenshot）与文档类（file: pdf/图片）URL 直接喂视觉模型；
-    // 结构化表格类（csv/xlsx/json/html）走 ExtractDataFromUploadedFile 抽取行数据。
     const visionUrls: string[] = atts
       .filter((a) => a.type !== "voice")
       .map((a) => a.url)
@@ -259,7 +279,6 @@ Deno.serve(async (req) => {
         aiParsed = { summary: "LLM 解析失败，已原文存档", needs_manager_attention: false };
       }
 
-      // ── 7. 若 LLM 判断需要店长关注 → 创建 AttentionItem（仅建议，不执行）──
       if (aiParsed.needs_manager_attention) {
         const attnType = report_type === "completion" ? "evidence_missing" : "journey_gap";
         const created = await svc.entities.AttentionItem.create({
@@ -279,9 +298,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 8. 若是 new_event 且员工自主发起 → 创建 staff_self Task ─────────────
-    // （员工自主工作不需要店长批准即可开始，但不是 AI 决策，是系统设计规则）
-    // 新事件记录的是已发生的事（如"完成一名新患者挂号"），直接落为 completed 进历史记录
     let selfTaskId: string | null = null;
     if (report_type === "new_event" && !task_id) {
       const workDesc = combinedText || `（${atts.length}个附件汇报）`;
@@ -304,6 +320,7 @@ Deno.serve(async (req) => {
       ok: true,
       event_id,
       evidence_ids: evidenceIds,
+      evidence_bridge: bridgeResults,
       ai_parsed: aiParsed,
       attention_item_id: attentionItemId,
       self_task_id: selfTaskId,

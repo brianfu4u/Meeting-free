@@ -8,8 +8,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { resolveRuntimeClinicId } from "@/lib/runtimeClinicScope";
 
-export const CLINIC_ID = "clinic-001";
+export const CLINIC_ID = resolveRuntimeClinicId();
 const POLL_MS = 15000;
 
 // 收银台解析结果：今日收款事实卡（金额 / 收费类目来源）
