@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { ClinicProvider } from '@/lib/ClinicContext';
+import { resolveRuntimeClinicId } from '@/lib/runtimeClinicScope';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import Dashboard from "./pages/Dashboard";
@@ -57,11 +58,12 @@ const AuthenticatedApp = () => {
 
 
 function App() {
+  const clinicId = resolveRuntimeClinicId();
 
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <ClinicProvider clinicId="clinic-001">
+        <ClinicProvider clinicId={clinicId}>
           <Router>
             <ScrollToTop />
             <AuthenticatedApp />
