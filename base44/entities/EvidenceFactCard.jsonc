@@ -1,1 +1,217 @@
-{"name":"EvidenceFactCard","type":"object","properties":{"clinic_id":{"type":"string","description":"门店唯一标识，严格 Tenant 逻辑隔离字段"},"artifact_id":{"type":"string","description":"来源 Artifact ID（1:1 缓存锚点）"},"origin_evidence_item_id":{"type":"string","description":"方向A实时桥接来源 EvidenceItem ID；与 Artifact/FragmentProcessingResult 形成完整溯源链"},"fields":{"type":"array","items":{"type":"object","properties":{"field_name":{"type":"string","description":"字段名（如 exam_result/lens_power/patient_complaint）"},"value":{"type":"string","description":"字段提取值"},"source_artifact_id":{"type":"string","description":"该字段来源 Artifact ID（字段级溯源）"},"source_region":{"type":"string","description":"来源区域/坐标"},"source_quote":{"type":"string","description":"来源原文/引用"},"extraction_quality":{"type":"string","enum":["high","medium","low","uncertain"],"description":"字段级提取质量"},"extraction_method":{"type":"string","description":"提取方法（ocr/voice_transcribe/llm_parse/manual）"}},"required":["field_name","value","source_artifact_id","extraction_quality","extraction_method"]},"default":[],"description":"字段级溯源数组"},"business_date":{"type":"string","format":"date","description":"业务日期"},"session_id":{"type":"string","description":"推断关联的 PatientSession ID（可空）"},"extracted_at":{"type":"string","format":"date-time","description":"提取时间（仅记录解读时刻，非业务时间）"},"model_version":{"type":"string","description":"Interpreter 使用的 LLM 模型版本"},"prompt_version":{"type":"string","description":"Interpreter Prompt 版本"},"policy_version":{"type":"number","description":"生成时生效的 GuessPolicy 版本"},"stale":{"type":"boolean","default":false,"description":"源 Artifact 变更后本缓存是否失效"},"explicit_workflow_id":{"type":"string","description":"Phase 3：显式绑定 Workflow ID（来自 Artifact.source_workflow_id）"},"workflow_family_hint":{"type":"string","description":"Phase 3：LLM 推断的工作流业务族提示（Clustering new_train 分组依据）"},"subject_type":{"type":"string","description":"Phase 3：主体类型（patient/supplier/staff/unknown 等）"},"subject_fingerprint":{"type":"object","description":"Phase 3：主体指纹（如 {name}），subject_conflict 硬护栏比对依据","properties":{"name":{"type":"string"}},"additionalProperties":true},"device_serial":{"type":"string","description":"Explicit device identity used by Agent v1.1 hard-conflict validation"},"subject_quality":{"type":"string","enum":["high","medium","low","uncertain"],"description":"Phase 3：主体识别质量"},"occurred_at":{"type":"string","format":"date-time","description":"Phase 3：业务发生时间。无法确定时为 null，且 time_uncertain=true。"},"confidence":{"type":"number","description":"Phase 5：对齐置信度（0–1），由 alignment 层产出。"},"evidence_spans":{"type":"array","items":{"type":"object","additionalProperties":true},"default":[],"description":"Phase 5：证据片段数组（文本+位置，如 page/offset/region/timestamp_start_ms）。"},"contradictions":{"type":"array","items":{"type":"string"},"default":[],"description":"Phase 5：LLM 检测到的矛盾清单。"},"unsupported_assumptions":{"type":"array","items":{"type":"string"},"default":[],"description":"Phase 5：LLM 标注的无依据假设清单。"},"interpreter_version":{"type":"string","description":"Phase 5：Interpreter 版本（对齐层产出）。"},"time_uncertain":{"type":"boolean","default":false,"description":"Phase 5：业务时间不确定标记。occurred_at=null 时必须为 true。"},"alignment_status":{"type":"string","enum":["aligned","needs_clarification","rejected","failed"],"description":"Phase 5：对齐状态。aligned=可送入 Agent，needs_clarification=需补充，rejected/failed=不送入。"},"assembly_eligible":{"type":"boolean","default":false,"description":"Phase 5：是否可送入 Composition Agent。仅 aligned 且结构合法时为 true。"},"processing_result_id":{"type":"string","description":"Phase 5：关联 FragmentProcessingResult ID。"},"marquee_label":{"type":"string","description":"V11 走马灯通道：SemanticReconstructionSkill 产出的走马灯展示文本（业务族·主体·首字段值）。仅 aligned 时填写，走马灯组件直接绑定本字段播放。"},"marquee_urgency":{"type":"string","enum":["green","yellow","red"],"description":"V11 走马灯通道：展示紧急度（green/yellow/red），由 Skill 按对齐质量/矛盾推断。"}},"required":["clinic_id","artifact_id","business_date","extracted_at"]}
+{
+  "name": "EvidenceFactCard",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "\u95e8\u5e97\u552f\u4e00\u6807\u8bc6\uff0c\u4e25\u683c Tenant \u903b\u8f91\u9694\u79bb\u5b57\u6bb5"
+    },
+    "artifact_id": {
+      "type": "string",
+      "description": "\u6765\u6e90 Artifact ID\uff081:1 \u7f13\u5b58\u951a\u70b9\uff09"
+    },
+    "origin_evidence_item_id": {
+      "type": "string",
+      "description": "\u65b9\u5411A\u5b9e\u65f6\u6865\u63a5\u6765\u6e90 EvidenceItem ID\uff1b\u4e0e Artifact/FragmentProcessingResult \u5f62\u6210\u5b8c\u6574\u6eaf\u6e90\u94fe"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "description": "\u5b57\u6bb5\u540d\uff08\u5982 exam_result/lens_power/patient_complaint\uff09"
+          },
+          "value": {
+            "type": "string",
+            "description": "\u5b57\u6bb5\u63d0\u53d6\u503c"
+          },
+          "source_artifact_id": {
+            "type": "string",
+            "description": "\u8be5\u5b57\u6bb5\u6765\u6e90 Artifact ID\uff08\u5b57\u6bb5\u7ea7\u6eaf\u6e90\uff09"
+          },
+          "source_region": {
+            "type": "string",
+            "description": "\u6765\u6e90\u533a\u57df/\u5750\u6807"
+          },
+          "source_quote": {
+            "type": "string",
+            "description": "\u6765\u6e90\u539f\u6587/\u5f15\u7528"
+          },
+          "extraction_quality": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "uncertain"
+            ],
+            "description": "\u5b57\u6bb5\u7ea7\u63d0\u53d6\u8d28\u91cf"
+          },
+          "extraction_method": {
+            "type": "string",
+            "description": "\u63d0\u53d6\u65b9\u6cd5\uff08ocr/voice_transcribe/llm_parse/manual\uff09"
+          }
+        },
+        "required": [
+          "field_name",
+          "value",
+          "source_artifact_id",
+          "extraction_quality",
+          "extraction_method"
+        ]
+      },
+      "default": [],
+      "description": "\u5b57\u6bb5\u7ea7\u6eaf\u6e90\u6570\u7ec4"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "\u4e1a\u52a1\u65e5\u671f"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "\u63a8\u65ad\u5173\u8054\u7684 PatientSession ID\uff08\u53ef\u7a7a\uff09"
+    },
+    "extracted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u63d0\u53d6\u65f6\u95f4\uff08\u4ec5\u8bb0\u5f55\u89e3\u8bfb\u65f6\u523b\uff0c\u975e\u4e1a\u52a1\u65f6\u95f4\uff09"
+    },
+    "model_version": {
+      "type": "string",
+      "description": "Interpreter \u4f7f\u7528\u7684 LLM \u6a21\u578b\u7248\u672c"
+    },
+    "prompt_version": {
+      "type": "string",
+      "description": "Interpreter Prompt \u7248\u672c"
+    },
+    "policy_version": {
+      "type": "number",
+      "description": "\u751f\u6210\u65f6\u751f\u6548\u7684 GuessPolicy \u7248\u672c"
+    },
+    "stale": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u6e90 Artifact \u53d8\u66f4\u540e\u672c\u7f13\u5b58\u662f\u5426\u5931\u6548"
+    },
+    "explicit_workflow_id": {
+      "type": "string",
+      "description": "Phase 3\uff1a\u663e\u5f0f\u7ed1\u5b9a Workflow ID\uff08\u6765\u81ea Artifact.source_workflow_id\uff09"
+    },
+    "workflow_family_hint": {
+      "type": "string",
+      "description": "Phase 3\uff1aLLM \u63a8\u65ad\u7684\u5de5\u4f5c\u6d41\u4e1a\u52a1\u65cf\u63d0\u793a\uff08Clustering new_train \u5206\u7ec4\u4f9d\u636e\uff09"
+    },
+    "subject_type": {
+      "type": "string",
+      "description": "Phase 3\uff1a\u4e3b\u4f53\u7c7b\u578b\uff08patient/supplier/staff/unknown \u7b49\uff09"
+    },
+    "subject_fingerprint": {
+      "type": "object",
+      "description": "Phase 3\uff1a\u4e3b\u4f53\u6307\u7eb9\uff08\u5982 {name}\uff09\uff0csubject_conflict \u786c\u62a4\u680f\u6bd4\u5bf9\u4f9d\u636e",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "device_serial": {
+      "type": "string",
+      "description": "Explicit device identity used by Agent v1.1 hard-conflict validation"
+    },
+    "subject_quality": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "uncertain"
+      ],
+      "description": "Phase 3\uff1a\u4e3b\u4f53\u8bc6\u522b\u8d28\u91cf"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Phase 3\uff1a\u4e1a\u52a1\u53d1\u751f\u65f6\u95f4\u3002\u65e0\u6cd5\u786e\u5b9a\u65f6\u4e3a null\uff0c\u4e14 time_uncertain=true\u3002"
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Phase 5\uff1a\u5bf9\u9f50\u7f6e\u4fe1\u5ea6\uff080\u20131\uff09\uff0c\u7531 alignment \u5c42\u4ea7\u51fa\u3002"
+    },
+    "evidence_spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "default": [],
+      "description": "Phase 5\uff1a\u8bc1\u636e\u7247\u6bb5\u6570\u7ec4\uff08\u6587\u672c+\u4f4d\u7f6e\uff0c\u5982 page/offset/region/timestamp_start_ms\uff09\u3002"
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Phase 5\uff1aLLM \u68c0\u6d4b\u5230\u7684\u77db\u76fe\u6e05\u5355\u3002"
+    },
+    "unsupported_assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Phase 5\uff1aLLM \u6807\u6ce8\u7684\u65e0\u4f9d\u636e\u5047\u8bbe\u6e05\u5355\u3002"
+    },
+    "interpreter_version": {
+      "type": "string",
+      "description": "Phase 5\uff1aInterpreter \u7248\u672c\uff08\u5bf9\u9f50\u5c42\u4ea7\u51fa\uff09\u3002"
+    },
+    "time_uncertain": {
+      "type": "boolean",
+      "default": false,
+      "description": "Phase 5\uff1a\u4e1a\u52a1\u65f6\u95f4\u4e0d\u786e\u5b9a\u6807\u8bb0\u3002occurred_at=null \u65f6\u5fc5\u987b\u4e3a true\u3002"
+    },
+    "alignment_status": {
+      "type": "string",
+      "enum": [
+        "aligned",
+        "needs_clarification",
+        "rejected",
+        "failed"
+      ],
+      "description": "Phase 5\uff1a\u5bf9\u9f50\u72b6\u6001\u3002aligned=\u53ef\u9001\u5165 Agent\uff0cneeds_clarification=\u9700\u8865\u5145\uff0crejected/failed=\u4e0d\u9001\u5165\u3002"
+    },
+    "assembly_eligible": {
+      "type": "boolean",
+      "default": false,
+      "description": "Phase 5\uff1a\u662f\u5426\u53ef\u9001\u5165 Composition Agent\u3002\u4ec5 aligned \u4e14\u7ed3\u6784\u5408\u6cd5\u65f6\u4e3a true\u3002"
+    },
+    "processing_result_id": {
+      "type": "string",
+      "description": "Phase 5\uff1a\u5173\u8054 FragmentProcessingResult ID\u3002"
+    },
+    "marquee_label": {
+      "type": "string",
+      "description": "V11 \u8d70\u9a6c\u706f\u901a\u9053\uff1aSemanticReconstructionSkill \u4ea7\u51fa\u7684\u8d70\u9a6c\u706f\u5c55\u793a\u6587\u672c\uff08\u4e1a\u52a1\u65cf\u00b7\u4e3b\u4f53\u00b7\u9996\u5b57\u6bb5\u503c\uff09\u3002\u4ec5 aligned \u65f6\u586b\u5199\uff0c\u8d70\u9a6c\u706f\u7ec4\u4ef6\u76f4\u63a5\u7ed1\u5b9a\u672c\u5b57\u6bb5\u64ad\u653e\u3002"
+    },
+    "marquee_urgency": {
+      "type": "string",
+      "enum": [
+        "green",
+        "yellow",
+        "red"
+      ],
+      "description": "V11 \u8d70\u9a6c\u706f\u901a\u9053\uff1a\u5c55\u793a\u7d27\u6025\u5ea6\uff08green/yellow/red\uff09\uff0c\u7531 Skill \u6309\u5bf9\u9f50\u8d28\u91cf/\u77db\u76fe\u63a8\u65ad\u3002"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "artifact_id",
+    "business_date",
+    "extracted_at"
+  ]
+}
