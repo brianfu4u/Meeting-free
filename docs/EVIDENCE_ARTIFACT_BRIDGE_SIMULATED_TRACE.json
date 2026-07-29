@@ -1,0 +1,51 @@
+{
+  "simulation": "in-memory deterministic bridge test",
+  "direction": "A-real-time-only",
+  "historical_backfill": false,
+  "trace": [
+    {
+      "step": 1,
+      "entity": "EvidenceItem",
+      "id": "evidenceitem-1",
+      "bridge_status": "pending",
+      "attempt_count": 0
+    },
+    {
+      "step": 2,
+      "entity": "Artifact",
+      "id": "artifact-2",
+      "origin_evidence_item_id": "evidenceitem-1",
+      "ingestion_seq": 1785332027210000,
+      "source_channel": "staff_report"
+    },
+    {
+      "step": 3,
+      "entity": "FragmentProcessingResult",
+      "id": "fragmentprocessingresult-3",
+      "origin_evidence_item_id": "evidenceitem-1",
+      "status": "aligned",
+      "assembly_eligible": true
+    },
+    {
+      "step": 4,
+      "entity": "EvidenceFactCard",
+      "id": "evidencefactcard-4",
+      "origin_evidence_item_id": "evidenceitem-1",
+      "artifact_id": "artifact-2",
+      "alignment_status": "aligned",
+      "assembly_eligible": true
+    },
+    {
+      "step": 5,
+      "component": "compositionOrchestrator scheduled scan pool",
+      "read_condition": {
+        "clinic_id_match": true,
+        "alignment_status": "aligned",
+        "assembly_eligible": true,
+        "ingestion_seq_lte_cutoff": true
+      },
+      "eligible": true,
+      "cutoff_event_seq": 1785332027210000
+    }
+  ]
+}
