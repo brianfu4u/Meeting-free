@@ -9,8 +9,8 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   LineChart, Line, PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { asList } from "@/hooks/useClinicData";
 
-const CLINIC_ID = "clinic-001";
 const LINE_LABEL = { optometry: "验光配镜", medical: "眼科医疗", vision_training: "视觉训练" };
 const LINE_COLORS = { optometry: "#00C7D9", medical: "#A78BFA", vision_training: "#4ade80" };
 
@@ -25,24 +25,24 @@ function Inner() {
 
   const revenueQ = useQuery({
     queryKey: ["analytics", "revenue", clinicId],
-    queryFn: () => base44.entities.RevenueRecord.filter({ clinic_id: clinicId }, "-recorded_at", 200),
+    queryFn: async () => asList(await base44.entities.RevenueRecord.filter({ clinic_id: clinicId }, "-recorded_at", 200)),
     refetchInterval: 30000,
   });
   const sessionQ = useQuery({
     queryKey: ["analytics", "sessions", clinicId],
-    queryFn: () => base44.entities.PatientSession.filter({ clinic_id: clinicId }, "-arrival_time", 200),
+    queryFn: async () => asList(await base44.entities.PatientSession.filter({ clinic_id: clinicId }, "-arrival_time", 200)),
     refetchInterval: 30000,
   });
   const taskQ = useQuery({
     queryKey: ["analytics", "tasks", clinicId],
-    queryFn: () => base44.entities.OperationalTask.filter({ clinic_id: clinicId }, "-created_date", 200),
+    queryFn: async () => asList(await base44.entities.OperationalTask.filter({ clinic_id: clinicId }, "-created_date", 200)),
     refetchInterval: 30000,
   });
 
   const loading = revenueQ.isLoading || sessionQ.isLoading || taskQ.isLoading;
-  const revenues = revenueQ.data || [];
-  const sessions = sessionQ.data || [];
-  const tasks = taskQ.data || [];
+  const revenues = asList(revenueQ.data);
+  const sessions = asList(sessionQ.data);
+  const tasks = asList(taskQ.data);
 
   // 按日聚合营收（近 7 日）
   const revenueByDay = useMemo(() => {

@@ -16,8 +16,7 @@ import {
   GitBranch, Clock, CheckCircle2, AlertCircle, Loader2,
   Archive, ArrowRightCircle, ChevronDown, FileSearch,
 } from "lucide-react";
-
-const CLINIC_ID = "clinic-001";
+import { asList, CLINIC_ID } from "@/hooks/useClinicData";
 
 const C = {
   canvas: "#0D1B2A", card: "#1E293B", border: "#334155",
@@ -234,11 +233,12 @@ function ClosureCard({ snap, onClosed }) {
 
 export default function WorkflowClosureView() {
   const [showArchive, setShowArchive] = useState(false);
-  const { data: allSnapshots = [], isLoading } = useQuery({
+  const { data: rawSnapshots, isLoading } = useQuery({
     queryKey: ["workflowSnapshots", CLINIC_ID, "all"],
-    queryFn: () => base44.entities.WorkflowSnapshot.filter({ clinic_id: CLINIC_ID }, "-generated_at", 50),
+    queryFn: async () => asList(await base44.entities.WorkflowSnapshot.filter({ clinic_id: CLINIC_ID }, "-generated_at", 50)),
     refetchInterval: 15000,
   });
+  const allSnapshots = asList(rawSnapshots);
 
   const open = allSnapshots.filter((s) => s.status !== "closed");
   const closed = allSnapshots.filter((s) => s.status === "closed");

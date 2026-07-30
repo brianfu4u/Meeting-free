@@ -18,8 +18,7 @@ import {
   ClipboardCheck, TrendingUp, TrendingDown, Users, Wallet,
   CheckCircle2, Brain, ChevronRight, Loader,
 } from "lucide-react";
-
-const CLINIC_ID = "clinic-001";
+import { asList, CLINIC_ID } from "@/hooks/useClinicData";
 
 function sameDay(a, b) {
   const d1 = new Date(a), d2 = new Date(b);
@@ -58,26 +57,26 @@ function Inner() {
 
   const revQ = useQuery({
     queryKey: ["dailyReview", "revenue", CLINIC_ID],
-    queryFn: () => base44.entities.RevenueRecord.filter({ clinic_id: CLINIC_ID }, "-recorded_at", 200),
+    queryFn: async () => asList(await base44.entities.RevenueRecord.filter({ clinic_id: CLINIC_ID }, "-recorded_at", 200)),
     refetchInterval: 30000,
   });
   const sessQ = useQuery({
     queryKey: ["dailyReview", "sessions", CLINIC_ID],
-    queryFn: () => base44.entities.PatientSession.filter({ clinic_id: CLINIC_ID }, "-arrival_time", 200),
+    queryFn: async () => asList(await base44.entities.PatientSession.filter({ clinic_id: CLINIC_ID }, "-arrival_time", 200)),
     refetchInterval: 30000,
   });
   const taskQ = useQuery({
     queryKey: ["dailyReview", "tasks", CLINIC_ID],
-    queryFn: () => base44.entities.OperationalTask.filter({ clinic_id: CLINIC_ID }, "-created_date", 300),
+    queryFn: async () => asList(await base44.entities.OperationalTask.filter({ clinic_id: CLINIC_ID }, "-created_date", 300)),
     refetchInterval: 30000,
   });
 
   const loading = revQ.isLoading || sessQ.isLoading || taskQ.isLoading;
 
   const m = useMemo(() => {
-    const revs = revQ.data || [];
-    const sess = sessQ.data || [];
-    const tasks = taskQ.data || [];
+    const revs = asList(revQ.data);
+    const sess = asList(sessQ.data);
+    const tasks = asList(taskQ.data);
 
     const todayRevenue = revs.filter((r) => r.recorded_at && sameDay(r.recorded_at, now)).reduce((s, r) => s + (r.amount || 0), 0);
     const yRevenue = revs.filter((r) => r.recorded_at && isYesterday(r.recorded_at, now)).reduce((s, r) => s + (r.amount || 0), 0);

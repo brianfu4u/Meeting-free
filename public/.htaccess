@@ -1,0 +1,17 @@
+# Ensure JS/CSS are not mis-served as HTML
+AddType application/javascript .js .mjs
+AddType text/css .css
+AddType application/manifest+json .webmanifest
+AddType application/json .json
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Never rewrite real files/directories (assets must be served as-is)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # SPA fallback for client-side routes only
+  RewriteRule ^ index.html [L]
+</IfModule>

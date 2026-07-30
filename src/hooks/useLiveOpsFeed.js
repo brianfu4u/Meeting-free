@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { subscribe } from "@/lib/eventBus";
 import { base44 } from "@/api/base44Client";
+import { appParams } from "@/lib/app-params";
 
 const STATUS_LABEL = { off_duty: "下班", on_duty: "上班", busy: "忙碌", break: "休息", awaiting_confirm: "待确认" };
 const REPORT_LABEL = { new_event: "新事件", progress: "进度汇报", completion: "完成提交" };
@@ -86,14 +87,16 @@ export function useLiveOpsFeed(onEvent) {
       });
     });
 
-    // 2. 实体实时订阅 → 即时刷新四维聚合卡片
-    const entityUnsubs = Object.keys(ENTITY_KEYS).map((name) => {
-      const entity = base44.entities[name];
-      if (!entity || typeof entity.subscribe !== "function") return null;
-      return entity.subscribe(() => {
-        ENTITY_KEYS[name].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-      });
-    });
+    // 2. 实体实时订阅 → 即时刷新四维聚合卡片（无 Base44 app 时跳过，避免无效 WebSocket）
+    const entityUnsubs = appParams.appId
+      ? Object.keys(ENTITY_KEYS).map((name) => {
+          const entity = base44.entities[name];
+          if (!entity || typeof entity.subscribe !== "function") return null;
+          return entity.subscribe(() => {
+            ENTITY_KEYS[name].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+          });
+        })
+      : [];
 
     return () => {
       unsubBus();

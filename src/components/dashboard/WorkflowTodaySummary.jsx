@@ -11,7 +11,7 @@ import { GitBranch, Activity, ChevronRight, Layers, FileText, Boxes } from "luci
 import { useTheme } from "@/lib/ThemeContext";
 import { base44 } from "@/api/base44Client";
 import { todayBeijingDate } from "@/lib/clinicTime";
-import { CLINIC_ID } from "@/hooks/useClinicData";
+import { asList, CLINIC_ID } from "@/hooks/useClinicData";
 
 const LINE_LABEL = { optometry: "验光", medical: "眼科", vision_training: "训练" };
 
@@ -28,17 +28,17 @@ export default function WorkflowTodaySummary({ onOpenSnapshot, onOpenClosure }) 
 
   const runsQ = useQuery({
     queryKey: ["compositionRuns", CLINIC_ID, today],
-    queryFn: () => base44.entities.CompositionRun.filter({ clinic_id: CLINIC_ID, business_date: today }, "-run_started_at", 50),
+    queryFn: async () => asList(await base44.entities.CompositionRun.filter({ clinic_id: CLINIC_ID, business_date: today }, "-run_started_at", 50)),
     refetchInterval: 15000,
   });
   const snapsQ = useQuery({
     queryKey: ["workflowSnapshots", CLINIC_ID, "todayFlow"],
-    queryFn: () => base44.entities.WorkflowSnapshot.filter({ clinic_id: CLINIC_ID }, "-generated_at", 50),
+    queryFn: async () => asList(await base44.entities.WorkflowSnapshot.filter({ clinic_id: CLINIC_ID }, "-generated_at", 50)),
     refetchInterval: 15000,
   });
 
-  const runs = runsQ.data || [];
-  const snaps = snapsQ.data || [];
+  const runs = asList(runsQ.data);
+  const snaps = asList(snapsQ.data);
 
   // ── 左：当天工作流编组（CompositionRun）──
   const runCount = runs.length;

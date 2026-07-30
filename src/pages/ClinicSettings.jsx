@@ -6,6 +6,7 @@ import { useClinicId } from "@/lib/ClinicContext";
 import PageShell from "@/components/PageShell";
 import { Settings, Loader, Save, CheckCircle2, ToggleLeft, ToggleRight, ShieldCheck, Building2 } from "lucide-react";
 import GuessPolicyPanel from "@/components/clinicSettings/GuessPolicyPanel";
+import { asList } from "@/hooks/useClinicData";
 
 const ROLE_PERMISSIONS = [
   { role: "doctor", label: "医生", perms: ["就诊全流程", "开具处方", "证据提交", "查看患者档案"] },
@@ -23,17 +24,17 @@ function Inner() {
 
   const configQ = useQuery({
     queryKey: ["clinicConfig", clinicId],
-    queryFn: () => base44.entities.ClinicConfig.filter({ clinic_id: clinicId }, "-updated_date", 1),
+    queryFn: async () => asList(await base44.entities.ClinicConfig.filter({ clinic_id: clinicId }, "-updated_date", 1)),
     refetchInterval: 60000,
   });
   const flowQ = useQuery({
     queryKey: ["businessFlows", clinicId],
-    queryFn: () => base44.entities.BusinessLineFlow.filter({ clinic_id: clinicId }, "-created_date", 20),
+    queryFn: async () => asList(await base44.entities.BusinessLineFlow.filter({ clinic_id: clinicId }, "-created_date", 20)),
     refetchInterval: 30000,
   });
 
-  const cfg = configQ.data?.[0] || null;
-  const flows = flowQ.data || [];
+  const cfg = asList(configQ.data)[0] || null;
+  const flows = asList(flowQ.data);
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);

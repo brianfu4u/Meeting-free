@@ -15,6 +15,7 @@ import {
   useInventory,
   useRevenueTargets,
   deriveHealthScore,
+  asList,
 } from "@/hooks/useClinicData";
 
 const STATUS_LABEL = {
@@ -71,12 +72,12 @@ export default function LiveOpsPanel() {
   const revenueQ = useRevenueTargets();
 
   const loading = sessionsQ.isLoading || staffQ.isLoading;
-  const sessions = sessionsQ.data || [];
-  const staff = staffQ.data || [];
-  const tasks = tasksQ.data || [];
-  const alerts = alertsQ.data || [];
-  const inventory = inventoryQ.data || [];
-  const revenue = revenueQ.data || [];
+  const sessions = asList(sessionsQ.data);
+  const staff = asList(staffQ.data);
+  const tasks = asList(tasksQ.data);
+  const alerts = asList(alertsQ.data);
+  const inventory = asList(inventoryQ.data);
+  const revenue = asList(revenueQ.data);
 
   const healthScore = deriveHealthScore(sessions, tasks, alerts, inventory);
 

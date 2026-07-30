@@ -12,8 +12,7 @@ import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-
-const CLINIC_ID = "clinic-001";
+import { asList, CLINIC_ID } from "@/hooks/useClinicData";
 
 const C = {
   canvas: "#0D1B2A", card: "#1E293B", border: "#334155",
@@ -173,16 +172,17 @@ function SnapshotCard({ snap, onClose }) {
 
 export default function WorkflowSnapshotPanel() {
   const [filter, setFilter] = useState("active");
-  const { data: snapshots = [], isLoading } = useQuery({
+  const { data: rawSnapshots, isLoading } = useQuery({
     queryKey: ["workflowSnapshots", CLINIC_ID, filter],
-    queryFn: () => {
+    queryFn: async () => {
       const query = filter === "all"
         ? { clinic_id: CLINIC_ID }
         : { clinic_id: CLINIC_ID, status: filter };
-      return base44.entities.WorkflowSnapshot.filter(query, "-generated_at", 20);
+      return asList(await base44.entities.WorkflowSnapshot.filter(query, "-generated_at", 20));
     },
     refetchInterval: 15000,
   });
+  const snapshots = asList(rawSnapshots);
 
   const FILTERS = [
     { key: "active", label: "流动中" },

@@ -12,10 +12,8 @@ import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useToast } from "@/components/ui/use-toast";
-import { useIsClinicManager, usePendingUndoItems } from "@/hooks/useClinicData";
+import { useIsClinicManager, usePendingUndoItems, asList, CLINIC_ID } from "@/hooks/useClinicData";
 import { AlertTriangle, ChevronDown, ChevronUp, CheckCircle2, XCircle, ArrowUpCircle, Clock, Link2, Eye, Archive } from "lucide-react";
-
-const CLINIC_ID = "clinic-001";
 
 const ATTENTION_TYPE_LABELS = {
   journey_gap: "旅程断点",
@@ -162,11 +160,12 @@ export default function AttentionQueue() {
   const isManager = useIsClinicManager();
   const [acceptingId, setAcceptingId] = useState(null);
   const undoQ = usePendingUndoItems();
-  const { data: items = [], isLoading } = useQuery({
+  const { data: rawItems, isLoading } = useQuery({
     queryKey: ["attentionItems", CLINIC_ID],
-    queryFn: () => base44.entities.AttentionItem.filter({ clinic_id: CLINIC_ID, status: "open" }, "-generated_at", 30),
+    queryFn: async () => asList(await base44.entities.AttentionItem.filter({ clinic_id: CLINIC_ID, status: "open" }, "-generated_at", 30)),
     refetchInterval: 10000,
   });
+  const items = asList(rawItems);
 
   const redItems = items.filter((i) => i.urgency === "red");
   const yellowItems = items.filter((i) => i.urgency === "yellow");
@@ -264,7 +263,7 @@ export default function AttentionQueue() {
 
       {isManager && (
         <OrphanAcceptSection
-          items={undoQ.data || []}
+          items={asList(undoQ.data)}
           loading={undoQ.isLoading}
           onAccept={handleAcceptOrphan}
           acceptingId={acceptingId}

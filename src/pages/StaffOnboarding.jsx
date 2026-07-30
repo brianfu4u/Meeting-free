@@ -10,6 +10,7 @@ import {
   UserPlus, Mail, Loader, KeyRound, Copy, CheckCircle2, AlertCircle,
   Link2, UserCheck, Trash2,
 } from "lucide-react";
+import { asList } from "@/hooks/useClinicData";
 
 function Inner() {
   const { theme } = useTheme();
@@ -25,11 +26,12 @@ function Inner() {
 
   const pendingQ = useQuery({
     queryKey: ["staff", clinicId, "pending"],
-    queryFn: () => base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100),
+    queryFn: async () => asList(await base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100)),
     refetchInterval: 15000,
   });
-  const pending = (pendingQ.data || []).filter((s) => !s.user_id);
-  const bound = (pendingQ.data || []).filter((s) => !!s.user_id).length;
+  const allStaff = asList(pendingQ.data);
+  const pending = allStaff.filter((s) => !s.user_id);
+  const bound = allStaff.filter((s) => !!s.user_id).length;
 
   const genCode = () => {
     const c = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -145,7 +147,7 @@ function Inner() {
           <div className="text-[10px] mt-0.5" style={{ color: theme.textSub }}>已绑定账号</div>
         </div>
         <div className="rounded-xl p-3" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
-          <div className="text-lg font-bold" style={{ color: "#00C7D9" }}>{(pendingQ.data || []).length}</div>
+          <div className="text-lg font-bold" style={{ color: "#00C7D9" }}>{allStaff.length}</div>
           <div className="text-[10px] mt-0.5" style={{ color: theme.textSub }}>在册总数</div>
         </div>
       </div>
@@ -155,15 +157,15 @@ function Inner() {
         <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: `1px solid ${theme.border}` }}>
           <UserCheck size={15} style={{ color: "#00C7D9" }} />
           <span className="text-sm font-bold" style={{ color: theme.text }}>员工花名册（按 11 部门）</span>
-          <span className="text-[11px] ml-auto" style={{ color: theme.textFaint }}>{(pendingQ.data || []).length} 人 · 终端注册即在此显示</span>
+          <span className="text-[11px] ml-auto" style={{ color: theme.textFaint }}>{allStaff.length} 人 · 终端注册即在此显示</span>
         </div>
         {pendingQ.isLoading ? (
           <div className="p-6 flex justify-center"><Loader className="animate-spin" style={{ color: theme.textSub }} /></div>
-        ) : (pendingQ.data || []).length === 0 ? (
+        ) : allStaff.length === 0 ? (
           <div className="p-6 text-center text-xs" style={{ color: theme.textFaint }}>暂无员工，先邀请注册或让员工在终端绑定</div>
         ) : (
           (() => {
-            const all = pendingQ.data || [];
+            const all = allStaff;
             const byDept = {};
             all.forEach((s) => {
               const deptId = s.department_id || ROLE_TO_DEPARTMENT[s.role] || "supplemental";

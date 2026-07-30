@@ -10,6 +10,7 @@ import { Users, Activity, TrendingUp, Package, ChevronRight, RefreshCw } from "l
 import { useTheme } from "@/lib/ThemeContext";
 import { beijingShift, todayBeijingDate } from "@/lib/clinicTime";
 import {
+  asList,
   usePatientSessions,
   useRegistrationFactCards,
   usePaymentFactCards,
@@ -89,10 +90,10 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   const configQ = useClinicConfig();
 
   const loading = staffQ.isLoading || sessionsQ.isLoading;
-  const staff = staffQ.data || [];
-  const sessions = sessionsQ.data || [];
-  const inventory = inventoryQ.data || [];
-  const revenue = revenueQ.data || [];
+  const staff = asList(staffQ.data);
+  const sessions = asList(sessionsQ.data);
+  const inventory = asList(inventoryQ.data);
+  const revenue = asList(revenueQ.data);
   const config = configQ.data || null;
 
   // ── 人：员工在岗态势 ──
@@ -124,7 +125,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
 
   // ── 流：患者流转 ──
   // 人流 = 截止到目前为止的来院病人总数（数据来源：挂号单解析结果）
-  const regCards = regQ.data || [];
+  const regCards = asList(regQ.data);
   const totalVisitors = regCards.length;
   const ACTIVE_SESSION = new Set(["arrived", "seated", "in_progress", "stalled"]);
   const activeSessions = sessions.filter((s) => ACTIVE_SESSION.has(s.status));
@@ -149,7 +150,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
 
   // ── 钱：截止现在总收款（数据来源：收银台上传小票解析结果）──
   const payQ = usePaymentFactCards();
-  const payCards = payQ.data || [];
+  const payCards = asList(payQ.data);
   const totalCollected = payCards.reduce((s, c) => {
     const v = (c.fields || []).find((f) => f.field_name === "amount")?.value;
     return s + (v ? parseFloat(v) || 0 : 0);
@@ -160,7 +161,7 @@ export default function FourDimensionsPanel({ onOpenDimension }) {
   // 设备清单来自 InventoryItem(category=equipment)；今日使用次数 = 今日特检报告单据数（每张算一次）
   const equipment = inventory.filter((i) => i.category === "equipment");
   const examQ = useExamReportFactCards();
-  const examCards = examQ.data || [];
+  const examCards = asList(examQ.data);
   const totalEquipUsage = examCards.length;
 
   return (

@@ -24,6 +24,7 @@ import {
   useInventory,
   deriveHealthScore,
   usePendingReconcileSnapshots,
+  asList,
 } from "@/hooks/useClinicData";
 import { useLiveOpsFeed } from "@/hooks/useLiveOpsFeed";
 import { formatBeijingTimeShort } from "@/lib/clinicTime";
@@ -73,9 +74,9 @@ function DashboardInner() {
   const alertsQ = useAlerts();
   const inventoryQ = useInventory();
 
-  const liveEvents = (auditQ.data || []).map(mapAuditToEvent);
+  const liveEvents = asList(auditQ.data).map(mapAuditToEvent);
   const reconcileQ = usePendingReconcileSnapshots();
-  const pendingReconcileCount = (reconcileQ.data || []).length;
+  const pendingReconcileCount = asList(reconcileQ.data).length;
   const overallHealth = deriveHealthScore(
     sessionsQ.data,
     tasksQ.data,

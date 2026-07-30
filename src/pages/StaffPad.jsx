@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useTheme, ThemeProvider } from "@/lib/ThemeContext";
 import { useStaffSelf, ROLE_LABELS, STAFF_STATUS_LABELS, STAFF_STATUS_COLORS } from "@/lib/staffPad/useStaffSelf";
-import { useOperationalTasks } from "@/hooks/useClinicData";
+import { useOperationalTasks, asList } from "@/hooks/useClinicData";
 import { isToday } from "@/lib/clinicDate";
 import { DEPARTMENT_BY_ID, ROLE_TO_DEPARTMENT } from "@/lib/departments/registry";
 import BindingScreen from "@/components/staffPad/BindingScreen";
@@ -59,15 +59,16 @@ function StaffPadInner() {
   if (!staff) return <BindingScreen user={user} onBound={refresh} />;
 
   // V10 今日焦点：todo 只展示当日任务；历史未完成单独入口可查看
-  const allUnfinished = (tasksQ.data || []).filter(
+  const taskList = asList(tasksQ.data);
+  const allUnfinished = taskList.filter(
     (t) => t.assignee_staff_id === staff.id && !["completed", "exception"].includes(t.status)
   );
   const todayTodo = allUnfinished.filter((t) => isToday(t.created_date));
   const historyUnfinished = allUnfinished.filter((t) => !isToday(t.created_date));
   const priority = todayTodo.filter((t) => t.priority === "P1" || t.priority === "P2");
   const normal = todayTodo.filter((t) => t.priority === "P3" || t.priority === "P4");
-  const activeTask = (tasksQ.data || []).find((t) => t.id === activeTaskId);
-  const history = (tasksQ.data || [])
+  const activeTask = taskList.find((t) => t.id === activeTaskId);
+  const history = taskList
     .filter((t) => t.assignee_staff_id === staff.id && ["completed", "exception"].includes(t.status))
     .sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date));
   const historyAll = [...history, ...historyUnfinished].sort(

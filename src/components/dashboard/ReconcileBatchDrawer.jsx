@@ -16,8 +16,8 @@ import {
   X, Eye, CheckCircle2, Loader2, Archive, GitBranch,
   Clock, ArrowRightCircle, FileText, ChevronLeft, Inbox,
 } from "lucide-react";
+import { asList, CLINIC_ID } from "@/hooks/useClinicData";
 
-const CLINIC_ID = "clinic-001";
 const LINE_LABEL = { optometry: "验光配镜", medical: "眼科医疗", vision_training: "视觉训练" };
 
 function fmtTime(t) {
@@ -42,21 +42,23 @@ export default function ReconcileBatchDrawer({ open, onClose }) {
 
   const q = useQuery({
     queryKey: ["reconcileClosedSnapshots", CLINIC_ID],
-    queryFn: () =>
-      base44.entities.WorkflowSnapshot.filter(
-        { clinic_id: CLINIC_ID, status: "closed" },
-        "-manager_closed_at",
-        100
+    queryFn: async () =>
+      asList(
+        await base44.entities.WorkflowSnapshot.filter(
+          { clinic_id: CLINIC_ID, status: "closed" },
+          "-manager_closed_at",
+          100
+        )
       ),
     refetchInterval: 15000,
     enabled: open,
   });
 
   const pending = useMemo(
-    () => (q.data || []).filter((s) => !s.reconciled),
+    () => asList(q.data).filter((s) => !s.reconciled),
     [q.data]
   );
-  const detail = detailId ? (q.data || []).find((s) => s.id === detailId) : null;
+  const detail = detailId ? asList(q.data).find((s) => s.id === detailId) : null;
 
   useEffect(() => {
     if (open) {

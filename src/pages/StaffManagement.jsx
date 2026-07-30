@@ -7,6 +7,7 @@ import { ROLE_LABELS, ROLE_TO_DEPARTMENT, STAFF_STATUS_LABELS, STAFF_STATUS_COLO
 import { DEPARTMENTS, BUSINESS_FAMILIES } from "@/lib/departments/registry";
 import { ArrowLeft, UserPlus, Users, Loader, Trash2, Mail, Link2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
+import { asList } from "@/hooks/useClinicData";
 
 function Stat({ label, value, color, theme }) {
   return (
@@ -29,10 +30,10 @@ function StaffMgmtInner() {
 
   const staffQ = useQuery({
     queryKey: ["staff", clinicId],
-    queryFn: () => base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100),
+    queryFn: async () => asList(await base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100)),
     refetchInterval: 15000,
   });
-  const staff = staffQ.data || [];
+  const staff = asList(staffQ.data);
 
   const onInvite = async () => {
     if (!email.trim()) { setInviteResult({ ok: false, msg: "请输入员工邮箱" }); return; }

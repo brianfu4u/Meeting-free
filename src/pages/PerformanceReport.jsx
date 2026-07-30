@@ -6,6 +6,7 @@ import { useClinicId } from "@/lib/ClinicContext";
 import PageShell from "@/components/PageShell";
 import { Award, Loader, Trophy, TrendingUp, CheckCircle2, Brain } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { asList } from "@/hooks/useClinicData";
 
 function monthKey(d) {
   const dt = new Date(d);
@@ -21,14 +22,15 @@ function monthKey(d) {
  * - 截止 100 分
  */
 function efficiencyScore(tasks) {
-  const total = tasks.length;
+  const list = asList(tasks);
+  const total = list.length;
   if (total === 0) return 0;
-  const completed = tasks.filter((t) => t.status === "completed").length;
+  const completed = list.filter((t) => t.status === "completed").length;
   const rate = completed / total;
   let score = 60 + rate * 30;
-  const highPriDone = tasks.filter((t) => t.status === "completed" && (t.priority === "P1" || t.priority === "P2")).length;
+  const highPriDone = list.filter((t) => t.status === "completed" && (t.priority === "P1" || t.priority === "P2")).length;
   score += Math.min(highPriDone * 4, 10);
-  const exceptions = tasks.filter((t) => t.status === "exception").length;
+  const exceptions = list.filter((t) => t.status === "exception").length;
   score -= exceptions * 8;
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -39,12 +41,12 @@ function Inner() {
 
   const staffQ = useQuery({
     queryKey: ["staff", clinicId, "perf"],
-    queryFn: () => base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100),
+    queryFn: async () => asList(await base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100)),
     refetchInterval: 30000,
   });
   const taskQ = useQuery({
     queryKey: ["tasks", clinicId, "perf"],
-    queryFn: () => base44.entities.OperationalTask.filter({ clinic_id: clinicId }, "-created_date", 300),
+    queryFn: async () => asList(await base44.entities.OperationalTask.filter({ clinic_id: clinicId }, "-created_date", 300)),
     refetchInterval: 30000,
   });
 
@@ -54,13 +56,13 @@ function Inner() {
   });
   const months = useMemo(() => {
     const set = new Set([month]);
-    (taskQ.data || []).forEach((t) => { if (t.created_date) set.add(monthKey(t.created_date)); });
+    asList(taskQ.data).forEach((t) => { if (t.created_date) set.add(monthKey(t.created_date)); });
     return Array.from(set).sort().reverse().slice(0, 6);
   }, [taskQ.data, month]);
 
   const loading = staffQ.isLoading || taskQ.isLoading;
-  const staff = staffQ.data || [];
-  const tasks = taskQ.data || [];
+  const staff = asList(staffQ.data);
+  const tasks = asList(taskQ.data);
 
   // 当月任务
   const monthTasks = useMemo(() => tasks.filter((t) => t.created_date && monthKey(t.created_date) === month), [tasks, month]);

@@ -12,8 +12,7 @@ import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
 import { Radio, Loader, Train, Link2 } from "lucide-react";
 import { isToday } from "@/lib/clinicDate";
-
-const CLINIC_ID = "clinic-001";
+import { asList, CLINIC_ID } from "@/hooks/useClinicData";
 const PRIORITY_COLOR = { P1: "#DC2626", P2: "#D97706", P3: "#00C7D9", P4: "#64748B" };
 const URGENCY_COLOR = { green: "#16A34A", yellow: "#D97706", red: "#DC2626" };
 
@@ -75,40 +74,40 @@ export default function EventStreamMarquee() {
   const { theme } = useTheme();
   const q = useQuery({
     queryKey: ["marquee", "unclosed-tasks", CLINIC_ID],
-    queryFn: () => base44.entities.OperationalTask.filter({ clinic_id: CLINIC_ID }, "-created_date", 100),
+    queryFn: async () => asList(await base44.entities.OperationalTask.filter({ clinic_id: CLINIC_ID }, "-created_date", 100)),
     refetchInterval: 15000,
   });
   const fc = useQuery({
     queryKey: ["marquee", "fact-cards", CLINIC_ID],
-    queryFn: () => base44.entities.EvidenceFactCard.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-extracted_at", 100),
+    queryFn: async () => asList(await base44.entities.EvidenceFactCard.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-extracted_at", 100)),
     refetchInterval: 8000,
   });
   const staffQ = useQuery({
     queryKey: ["marquee", "staff", CLINIC_ID],
-    queryFn: () => base44.entities.Staff.filter({ clinic_id: CLINIC_ID }, "-created_date", 60),
+    queryFn: async () => asList(await base44.entities.Staff.filter({ clinic_id: CLINIC_ID }, "-created_date", 60)),
     refetchInterval: 30000,
   });
   const artQ = useQuery({
     queryKey: ["marquee", "artifacts", CLINIC_ID],
-    queryFn: () => base44.entities.Artifact.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-created_date", 200),
+    queryFn: async () => asList(await base44.entities.Artifact.filter({ clinic_id: CLINIC_ID, business_date: todayBusinessDate() }, "-created_date", 200)),
     refetchInterval: 15000,
   });
 
   const staffMap = React.useMemo(() => {
     const m = {};
-    for (const s of (staffQ.data || [])) m[s.id] = s.staff_name;
+    for (const s of asList(staffQ.data)) m[s.id] = s.staff_name;
     return m;
   }, [staffQ.data]);
 
   const artifactStaff = React.useMemo(() => {
     const m = {};
-    for (const a of (artQ.data || [])) m[a.id] = a.source_staff_id;
+    for (const a of asList(artQ.data)) m[a.id] = a.source_staff_id;
     return m;
   }, [artQ.data]);
 
   const resolveName = (id) => (id && staffMap[id]) || "员工";
 
-  const taskItems = (q.data || [])
+  const taskItems = asList(q.data)
     .filter((t) => isToday(t.created_date))
     .filter((t) => t.ai_parsed?.marquee_label || t.description)
     .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
@@ -121,7 +120,7 @@ export default function EventStreamMarquee() {
       time: fmtHHmm(t.created_date),
     }));
 
-  const factItems = (fc.data || [])
+  const factItems = asList(fc.data)
     .filter((f) => f.marquee_label)
     .sort((a, b) => new Date(a.extracted_at) - new Date(b.extracted_at))
     .map((f) => ({

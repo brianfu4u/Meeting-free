@@ -18,10 +18,25 @@ export const AuthProvider = ({ children }) => {
     checkAppState();
   }, []);
 
+  const unlockWithoutAuth = () => {
+    setAuthError(null);
+    setIsAuthenticated(false);
+    setUser(null);
+    setAuthChecked(true);
+    setIsLoadingAuth(false);
+    setIsLoadingPublicSettings(false);
+  };
+
   const checkAppState = async () => {
     try {
       setIsLoadingPublicSettings(true);
       setAuthError(null);
+
+      // Static deploy without Base44 app id/backend: skip remote gate so the UI can render.
+      if (!appParams.appId) {
+        unlockWithoutAuth();
+        return;
+      }
       
       // First, check app public settings (with token if available)
       // This will tell us if auth is required, user not registered, etc.
@@ -35,7 +50,19 @@ export const AuthProvider = ({ children }) => {
       });
       
       try {
-        const publicSettings = await appClient.get(`/prod/public-settings/by-id/${appParams.appId}`);
+        const publicSettings = await Promise.race([
+          appClient.get(`/prod/public-settings/by-id/${appParams.appId}`),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(Object.assign(new Error('Auth settings timeout'), { status: 0 })), 8000)
+          ),
+        ]);
+
+        // SPA hosts often return index.html (200) for missing /api routes.
+        if (!publicSettings || typeof publicSettings !== 'object' || Array.isArray(publicSettings)) {
+          unlockWithoutAuth();
+          return;
+        }
+
         setAppPublicSettings(publicSettings);
         
         // If we got the app public settings successfully, check if user is authenticated
@@ -69,23 +96,16 @@ export const AuthProvider = ({ children }) => {
               message: appError.message
             });
           }
+          setIsLoadingPublicSettings(false);
+          setIsLoadingAuth(false);
         } else {
-          setAuthError({
-            type: 'unknown',
-            message: appError.message || 'Failed to load app'
-          });
+          // Missing/broken API on static hosting — continue into the app.
+          unlockWithoutAuth();
         }
-        setIsLoadingPublicSettings(false);
-        setIsLoadingAuth(false);
       }
     } catch (error) {
       console.error('Unexpected error:', error);
-      setAuthError({
-        type: 'unknown',
-        message: error.message || 'An unexpected error occurred'
-      });
-      setIsLoadingPublicSettings(false);
-      setIsLoadingAuth(false);
+      unlockWithoutAuth();
     }
   };
 
@@ -93,7 +113,12 @@ export const AuthProvider = ({ children }) => {
     try {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
-      const currentUser = await base44.auth.me();
+      const currentUser = await Promise.race([
+        base44.auth.me(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(Object.assign(new Error('Auth timeout'), { status: 0 })), 8000)
+        ),
+      ]);
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);

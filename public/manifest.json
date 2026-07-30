@@ -1,0 +1,10 @@
+{
+  "name": "今天我来当店长 · 明视眼科诊所运营中心",
+  "short_name": "当店长",
+  "description": "眼科诊所实时运营指挥中心",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "lang": "zh-CN"
+}

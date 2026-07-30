@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useClinicId } from "@/lib/ClinicContext";
 import { deriveSchedulerHealth } from "@/lib/phase4/schedulerHealth";
+import { asList } from "@/hooks/useClinicData";
 
 const COLORS = {
   neutral: "#94A3B8",
@@ -34,12 +35,14 @@ export default function CompositionSchedulerHealth() {
     queryKey: ["compositionSchedulerHealth", clinicId],
     enabled: Boolean(clinicId),
     queryFn: async () => {
-      const rows = await base44.entities.ClinicConfig.filter(
-        { clinic_id: clinicId },
-        "-updated_date",
-        1
+      const rows = asList(
+        await base44.entities.ClinicConfig.filter(
+          { clinic_id: clinicId },
+          "-updated_date",
+          1
+        )
       );
-      return rows?.[0] || null;
+      return rows[0] || null;
     },
     refetchInterval: 30000,
   });

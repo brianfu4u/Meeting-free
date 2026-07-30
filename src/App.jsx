@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -8,6 +9,7 @@ import { ClinicProvider } from '@/lib/ClinicContext';
 import { resolveRuntimeClinicId } from '@/lib/runtimeClinicScope';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
+import { appParams } from '@/lib/app-params';
 import Dashboard from "./pages/Dashboard";
 import DailyReview from "./pages/DailyReview";
 import StaffPad from "./pages/StaffPad";
@@ -19,6 +21,14 @@ import PerformanceReport from "./pages/PerformanceReport";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const canUseHostedLogin = Boolean(appParams.appId && appParams.appBaseUrl);
+
+  // Only redirect when a real Base44 backend/login is configured.
+  useEffect(() => {
+    if (authError?.type === 'auth_required' && canUseHostedLogin) {
+      navigateToLogin();
+    }
+  }, [authError, canUseHostedLogin, navigateToLogin]);
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -33,9 +43,7 @@ const AuthenticatedApp = () => {
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
+    } else if (authError.type === 'auth_required' && canUseHostedLogin) {
       return null;
     }
   }

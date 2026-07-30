@@ -18,6 +18,7 @@ import {
   useInventory,
   useRevenueTargets,
   useClinicConfig,
+  asList,
 } from "@/hooks/useClinicData";
 
 const DIM_META = {
@@ -69,7 +70,8 @@ function Stat({ theme, value, label, color }) {
 }
 
 function PeopleDetail({ theme }) {
-  const { data = [] } = useStaff();
+  const { data: raw } = useStaff();
+  const data = asList(raw);
   if (data.length === 0) return <Empty theme={theme} />;
 
   const isOnDutyLike = (s) => s.status === "on_duty" || s.status === "busy" || s.status === "awaiting_confirm";
@@ -125,8 +127,10 @@ function PeopleDetail({ theme }) {
 }
 
 function FlowDetail({ theme }) {
-  const { data: sessions = [] } = usePatientSessions();
-  const { data: regCards = [] } = useRegistrationFactCards();
+  const { data: rawSessions } = usePatientSessions();
+  const { data: rawRegCards } = useRegistrationFactCards();
+  const sessions = asList(rawSessions);
+  const regCards = asList(rawRegCards);
   if (regCards.length === 0) return <Empty theme={theme} />;
 
   // 挂号解析卡 → 就诊目的 + 新客/老客；session_id join PatientSession → 当前就诊状态
@@ -212,7 +216,8 @@ const FEE_CATEGORIES = [
 ];
 
 function MoneyDetail({ theme }) {
-  const { data: cards = [] } = usePaymentFactCards();
+  const { data: rawCards } = usePaymentFactCards();
+  const cards = asList(rawCards);
   if (cards.length === 0) {
     return <div className="text-xs py-8 text-center" style={{ color: theme.textMuted }}>今日暂无收款记录</div>;
   }
@@ -317,8 +322,10 @@ function matchDeviceCount(equipment, examCards) {
 }
 
 function ThingsDetail({ theme }) {
-  const { data: inventory = [] } = useInventory();
-  const { data: examCards = [] } = useExamReportFactCards();
+  const { data: rawInventory } = useInventory();
+  const { data: rawExamCards } = useExamReportFactCards();
+  const inventory = asList(rawInventory);
+  const examCards = asList(rawExamCards);
   const equipment = inventory.filter((i) => i.category === "equipment");
   if (equipment.length === 0) return <Empty theme={theme} />;
 
