@@ -23,7 +23,6 @@
 //   clinic-001 may upload while off_duty. This relaxes only the legacy on-duty
 //   gate; exact clinic_id equality and Staff.user_id binding remain mandatory.
 export const DEFAULT_SINGLE_CLINIC_UPLOAD_TEST_ID = "clinic-001";
-export const SAME_CLINIC_OFF_DUTY_TEST_REASON = "same_clinic_off_duty_upload_test";
 
 export function canRelaxDefaultClinicOnDutyGate({ clinicId, staff, requireOnDuty }) {
   return Boolean(
@@ -45,13 +44,11 @@ export async function resolveClinicActor(svc, user, clinicId, options = {}) {
   ) || null;
 
   let staff = null;
-  let tenantScopeRelaxed = false;
   if (requireOnDuty) {
     if (sameClinicStaff && sameClinicStaff.status !== "off_duty") {
       staff = sameClinicStaff;
     } else if (canRelaxDefaultClinicOnDutyGate({ clinicId, staff: sameClinicStaff, requireOnDuty })) {
       staff = sameClinicStaff;
-      tenantScopeRelaxed = true;
     }
   } else {
     staff = sameClinicStaff;
@@ -62,14 +59,7 @@ export async function resolveClinicActor(svc, user, clinicId, options = {}) {
       const configs = await svc.entities.ClinicConfig.filter({ clinic_id: clinicId });
       const config = configs?.[0];
       if (config && config.manager_id === user.id) {
-        return {
-          user_id: user.id,
-          clinic_id: clinicId,
-          staff_id: user.id,
-          role: "admin",
-          tenant_scope_relaxed: false,
-          tenant_scope_relaxation_reason: null,
-        };
+        return { user_id: user.id, clinic_id: clinicId, staff_id: user.id, role: "admin" };
       }
     }
     return null;
@@ -80,9 +70,5 @@ export async function resolveClinicActor(svc, user, clinicId, options = {}) {
     clinic_id: clinicId,
     staff_id: staff.id,
     role: staffRole,
-    tenant_scope_relaxed: tenantScopeRelaxed,
-    tenant_scope_relaxation_reason: tenantScopeRelaxed
-      ? SAME_CLINIC_OFF_DUTY_TEST_REASON
-      : null,
   };
 }
