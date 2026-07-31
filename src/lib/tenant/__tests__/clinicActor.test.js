@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_SINGLE_CLINIC_UPLOAD_TEST_ID,
-  SAME_CLINIC_OFF_DUTY_TEST_REASON,
   canRelaxDefaultClinicOnDutyGate,
   resolveClinicActor,
 } from "../../../../base44/shared/clinicActor.ts";
@@ -46,8 +45,6 @@ describe("clinic actor tenant isolation", () => {
       clinic_id: DEFAULT_SINGLE_CLINIC_UPLOAD_TEST_ID,
       staff_id: staff.id,
       role: "admin",
-      tenant_scope_relaxed: true,
-      tenant_scope_relaxation_reason: SAME_CLINIC_OFF_DUTY_TEST_REASON,
     });
   });
 
@@ -94,7 +91,7 @@ describe("clinic actor tenant isolation", () => {
     )).resolves.toBeNull();
   });
 
-  it("preserves the existing on-duty same-clinic behavior without relaxation", async () => {
+  it("preserves the existing on-duty same-clinic behavior", async () => {
     const user = { id: "user-003", role: "user" };
     const staff = {
       id: "staff-003",
@@ -114,8 +111,6 @@ describe("clinic actor tenant isolation", () => {
       clinic_id: "clinic-001",
       staff_id: staff.id,
       role: "admin",
-      tenant_scope_relaxed: false,
-      tenant_scope_relaxation_reason: null,
     });
   });
 
