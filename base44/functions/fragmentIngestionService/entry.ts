@@ -12,6 +12,7 @@ import {
   ALIGNMENT_STATUS,
   ATTENTION_TYPE_EVIDENCE_MISSING,
   computeIngestionKey,
+  computeIngestionSeq,
   isTestClinic,
   makeResponse,
   mapFragmentTypeToArtifactType,
@@ -33,6 +34,8 @@ import { runAdapter } from "./adapters.ts";
 import { alignExtraction, evaluateAlignment } from "./alignment.ts";
 import { reconstruct } from "../../shared/semanticReconstructionSkill.ts";
 import { resolveClinicActor } from "../../shared/clinicActor.ts";
+
+let lastIssuedIngestionSeq = 0;
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -124,6 +127,7 @@ async function captureFragment(base44, body, actor) {
   if (validation.error) return validation.error;
 
   const now = new Date().toISOString();
+  lastIssuedIngestionSeq = computeIngestionSeq(Date.now(), lastIssuedIngestionSeq);
   const capturedAt = isNonEmptyString(body.captured_at) ? body.captured_at : now;
   const businessDate = computeBusinessDate(capturedAt, actor.clinic_id);
   const artifactDescriptor = {
@@ -139,6 +143,7 @@ async function captureFragment(base44, body, actor) {
     interpreted: false,
     client_request_id: body.client_request_id,
     ingestion_key: ingestionKey,
+    ingestion_seq: lastIssuedIngestionSeq,
     mime_type: body.source.mime_type || null,
     original_filename: sanitizeFilename(body.source.original_filename),
     file_size: body.source.file_size ?? null,
