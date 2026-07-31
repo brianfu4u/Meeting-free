@@ -2,7 +2,13 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useClinicId } from "@/lib/ClinicContext";
 import { useTheme } from "@/lib/ThemeContext";
-import { ROLE_GROUPS, ROLE_TO_DEPARTMENT, DEPARTMENT_BY_ID } from "@/lib/staffPad/useStaffSelf";
+import { ROLE_TO_DEPARTMENT, DEPARTMENT_BY_ID } from "@/lib/staffPad/useStaffSelf";
+import {
+  buildStaffBindingPayload,
+  isTerminalPunchTestClinic,
+  resolveTerminalSignupRole,
+  TEST_TERMINAL_STAFF_ROLE,
+} from "@/lib/staffPad/terminalPunchTesting";
 import { DEPARTMENTS, BUSINESS_FAMILIES } from "@/lib/departments/registry";
 import { UserPlus, Loader } from "lucide-react";
 
@@ -15,28 +21,28 @@ export default function BindingScreen({ user, onBound }) {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
 
+  const isTestClinic = isTerminalPunchTestClinic(clinicId);
+  const effectiveRole = resolveTerminalSignupRole(clinicId, role);
+
   const submit = async () => {
     if (!name.trim()) { setErr("请填写姓名"); return; }
     setSubmitting(true); setErr("");
     try {
-      await base44.entities.Staff.create({
-        clinic_id: clinicId,
-        staff_name: name.trim(),
-        role,
-        role_group: ROLE_GROUPS[role],
-        department_id: ROLE_TO_DEPARTMENT[role],
-        status: "off_duty",
-        pad_online: true,
-        user_id: user.id,
-        assigned_zone: zone.trim(),
+      const payload = buildStaffBindingPayload({
+        clinicId,
+        user,
+        name,
+        selectedRole: role,
+        zone,
       });
+      await base44.entities.Staff.create(payload);
       onBound();
     } catch (e) {
       setErr(e.message || "绑定失败");
     } finally { setSubmitting(false); }
   };
 
-  const currentDept = DEPARTMENT_BY_ID[ROLE_TO_DEPARTMENT[role]];
+  const currentDept = DEPARTMENT_BY_ID[ROLE_TO_DEPARTMENT[effectiveRole]];
 
   return (
     <div className="min-h-screen flex items-center justify-center p-5" style={{ background: theme.canvas }}>
@@ -58,17 +64,28 @@ export default function BindingScreen({ user, onBound }) {
           style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }} />
 
         <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>岗位角色</label>
-        <select value={role} onChange={(e) => setRole(e.target.value)}
-          className="w-full rounded-lg px-3 py-2.5 text-sm mb-2 outline-none"
-          style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }}>
-          {DEPARTMENTS.filter((d) => d.roles.length > 0).map((d) => (
-            <optgroup key={d.id} label={`${d.code} · ${d.name}`} style={{ color: "#000" }}>
-              {d.roles.map((r) => (
-                <option key={r.id} value={r.id} style={{ color: "#000" }}>{r.label}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        {isTestClinic ? (
+          <div
+            className="w-full rounded-lg px-3 py-2.5 text-sm mb-2"
+            style={{ background: "rgba(0,199,217,0.08)", border: "1px solid rgba(0,199,217,0.3)", color: theme.text }}
+            data-testid="fixed-test-staff-role"
+            data-role={TEST_TERMINAL_STAFF_ROLE}
+          >
+            测试员工（固定岗位：前台）
+          </div>
+        ) : (
+          <select value={role} onChange={(e) => setRole(e.target.value)}
+            className="w-full rounded-lg px-3 py-2.5 text-sm mb-2 outline-none"
+            style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }}>
+            {DEPARTMENTS.filter((d) => d.roles.length > 0).map((d) => (
+              <optgroup key={d.id} label={`${d.code} · ${d.name}`} style={{ color: "#000" }}>
+                {d.roles.map((r) => (
+                  <option key={r.id} value={r.id} style={{ color: "#000" }}>{r.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
         {currentDept && (
           <div className="text-[11px] mb-3 flex items-center gap-1.5" style={{ color: theme.textMuted }}>
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: BUSINESS_FAMILIES[currentDept.family].color }} />
