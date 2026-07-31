@@ -2,6 +2,7 @@ import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
 import { publish, TRIGGER_TYPES } from "@/lib/eventBus";
+import { canUseTerminalPunch } from "@/lib/staffPad/terminalPunchTesting";
 import { Loader } from "lucide-react";
 
 const STATES = [
@@ -14,9 +15,10 @@ const STATES = [
 export default function ClockBar({ staff, clinicId, onChanged }) {
   const { theme } = useTheme();
   const [busy, setBusy] = useState(false);
+  const punchEligible = canUseTerminalPunch({ staff, clinicId });
 
   const tap = async (s) => {
-    if (busy || staff.status === s.key) return;
+    if (!punchEligible || busy || staff.status === s.key) return;
     setBusy(true);
     try {
       const patch = { status: s.key };
@@ -42,7 +44,7 @@ export default function ClockBar({ staff, clinicId, onChanged }) {
         {STATES.map((s) => {
           const active = staff.status === s.key;
           return (
-            <button key={s.key} onClick={() => tap(s)} disabled={busy}
+            <button key={s.key} onClick={() => tap(s)} disabled={busy || !punchEligible}
               className="rounded-xl py-3 flex flex-col items-center gap-1 transition-all active:scale-95 disabled:opacity-60"
               style={{
                 background: active ? s.bg : theme.cardBg,
@@ -59,6 +61,11 @@ export default function ClockBar({ staff, clinicId, onChanged }) {
           );
         })}
       </div>
+      {!punchEligible && (
+        <div className="text-[11px] mt-2" style={{ color: "#f87171" }}>
+          当前账号尚未绑定有效员工身份，暂不能打卡。
+        </div>
+      )}
     </div>
   );
 }
