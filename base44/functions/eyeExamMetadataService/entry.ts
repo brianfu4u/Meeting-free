@@ -2,9 +2,15 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { resolveClinicActor } from "../../shared/clinicActor.ts";
 import { dispatchEyeExamReportMetadata } from "../../shared/eyeExamMetadata/dispatch.ts";
 import { metadataToFactCardFields } from "../../shared/eyeExamMetadata/model.ts";
+import {
+  aggregateParsingQuality,
+  buildParsingQualityEvent,
+} from "../../shared/eyeExamMetadata/quality.ts";
 import { assertTenantScope, isNonEmptyString } from "../fragmentIngestionService/security.ts";
 
 const ACTION_PARSE_AND_PERSIST = "parseAndPersist";
+const ACTION_GET_QUALITY_OVERVIEW = "getQualityOverview";
+const QUALITY_OVERVIEW_ROLES = new Set(["clinic_director", "qa_officer"]);
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
@@ -17,27 +23,55 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ ok: false, error_code: "unauthenticated" }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
-    if (body?.action !== ACTION_PARSE_AND_PERSIST) {
-      return Response.json({ ok: false, error_code: "action_invalid" }, { status: 400 });
-    }
-    if (!isNonEmptyString(body.clinic_id) || !isNonEmptyString(body.artifact_id)) {
-      return Response.json({ ok: false, error_code: "artifact_context_required" }, { status: 400 });
+    if (!isNonEmptyString(body.clinic_id)) {
+      return Response.json({ ok: false, error_code: "clinic_context_required" }, { status: 400 });
     }
 
-    const actor = await resolveClinicActor(base44.asServiceRole, user, body.clinic_id, {
-      requireOnDuty: true,
-      staffRole: "staff",
-    });
-    if (!actor) return Response.json({ ok: false, error_code: "tenant_scope_violation" }, { status: 403 });
+    if (body.action === ACTION_PARSE_AND_PERSIST) {
+      if (!isNonEmptyString(body.artifact_id)) {
+        return Response.json({ ok: false, error_code: "artifact_context_required" }, { status: 400 });
+      }
+      const actor = await resolveClinicActor(base44.asServiceRole, user, body.clinic_id, {
+        requireOnDuty: true,
+        staffRole: "staff",
+      });
+      if (!actor) return Response.json({ ok: false, error_code: "tenant_scope_violation" }, { status: 403 });
+      const result = await parseAndPersist(base44.asServiceRole, body, actor);
+      return Response.json({ ok: true, ...result }, { status: 200 });
+    }
 
-    const result = await parseAndPersist(base44.asServiceRole, body, actor);
-    return Response.json({ ok: true, ...result }, { status: 200 });
+    if (body.action === ACTION_GET_QUALITY_OVERVIEW) {
+      const actor = await resolveQualityOverviewActor(base44.asServiceRole, user, body.clinic_id);
+      if (!actor) return Response.json({ ok: false, error_code: "quality_overview_forbidden" }, { status: 403 });
+      const overview = await getQualityOverview(base44.asServiceRole, body, actor);
+      return Response.json({ ok: true, overview }, { status: 200 });
+    }
+
+    return Response.json({ ok: false, error_code: "action_invalid" }, { status: 400 });
   } catch (error: any) {
     const code = typeof error?.code === "string" ? error.code : "internal_error";
     const status = code === "tenant_scope_violation" ? 403 : 500;
     return Response.json({ ok: false, error_code: code }, { status });
   }
 });
+
+async function resolveQualityOverviewActor(svc, user, clinicId) {
+  if (user.role === "admin") {
+    const configs = await svc.entities.ClinicConfig.filter({ clinic_id: clinicId });
+    if (configs?.[0]?.manager_id === user.id) {
+      return { user_id: user.id, clinic_id: clinicId, staff_id: user.id, role: "admin" };
+    }
+  }
+
+  const actor = await resolveClinicActor(svc, user, clinicId, {
+    requireOnDuty: false,
+    staffRole: "staff",
+  });
+  if (!actor) return null;
+  const staff = await svc.entities.Staff.get(actor.staff_id).catch(() => null);
+  if (!staff || staff.clinic_id !== clinicId || !QUALITY_OVERVIEW_ROLES.has(staff.role)) return null;
+  return { ...actor, role: "quality_manager" };
+}
 
 async function parseAndPersist(svc, body, actor) {
   const artifact = await svc.entities.Artifact.get(body.artifact_id).catch(() => null);
@@ -77,12 +111,44 @@ async function parseAndPersist(svc, body, actor) {
   const record = await upsertMetadataRecord(svc, metadata, actor.clinic_id);
   if (factCard) await appendMetadataToFactCard(svc, factCard, metadata, artifact.id);
 
+  // Quality telemetry is intentionally non-blocking. A statistics storage
+  // failure must never roll back the original evidence or metadata record.
+  const qualityEvent = await upsertQualityEvent(svc, metadata, actor.clinic_id, artifact.id)
+    .catch(() => null);
+
   return {
     metadata: record,
     artifact_id: artifact.id,
     origin_evidence_item_id: evidenceItem?.id || null,
     evidence_fact_card_id: factCard?.id || null,
+    quality_event_recorded: qualityEvent != null,
   };
+}
+
+async function getQualityOverview(svc, body, actor) {
+  const rows = await svc.entities.EyeExamParserQualityEvent.filter({
+    clinic_id: actor.clinic_id,
+  });
+  return aggregateParsingQuality(Array.isArray(rows) ? rows : [], {
+    days: body.days,
+    limit: body.top_n,
+  });
+}
+
+async function upsertQualityEvent(svc, metadata, clinicId, artifactId) {
+  const descriptor = buildParsingQualityEvent(metadata, {
+    clinic_id: clinicId,
+    raw_artifact_id: artifactId,
+    recorded_at: new Date().toISOString(),
+  });
+  const existing = await svc.entities.EyeExamParserQualityEvent.filter({
+    clinic_id: clinicId,
+    raw_artifact_id: artifactId,
+    parser_version: descriptor.parser_version,
+  });
+  const row = Array.isArray(existing) ? existing[0] : null;
+  if (row) return svc.entities.EyeExamParserQualityEvent.update(row.id, descriptor);
+  return svc.entities.EyeExamParserQualityEvent.create(descriptor);
 }
 
 async function resolveRawText(svc, artifact, processing, suppliedText) {
