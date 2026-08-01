@@ -587,7 +587,7 @@ async function dispatchToComposition(base44, body, actor) {
 function computeBusinessDate(capturedAtIso, clinicId) {
   try {
     const d = new Date(capturedAtIso);
-    const tz = "Asia/Tokyo";
+    const tz = "Asia/Shanghai";
     const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
     return fmt.format(d);
   } catch {
