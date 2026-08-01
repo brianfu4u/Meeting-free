@@ -6,6 +6,9 @@ export const STATUS_LABELS = {
   pending: "待处理",
   processing: "解析中",
   aligned: "已对齐",
+  parsed: "元数据已解析",
+  partial: "元数据部分解析",
+  fallback: "格式待适配",
   needs_clarification: "需补充",
   failed: "失败",
   rejected: "已拒绝",
@@ -15,6 +18,9 @@ export const STATUS_COLORS = {
   pending: "#94A3B8",
   processing: "#60a5fa",
   aligned: "#4ade80",
+  parsed: "#4ade80",
+  partial: "#fbbf24",
+  fallback: "#fbbf24",
   needs_clarification: "#fbbf24",
   failed: "#f87171",
   rejected: "#f87171",
@@ -56,6 +62,43 @@ function unwrap(res) {
   return res?.data ?? res;
 }
 
+function metadataPreviewFields(metadata) {
+  if (!metadata) return [];
+  const fields = [];
+  const push = (fieldName, value) => {
+    if (value == null || value === "") return;
+    fields.push({
+      field_name: fieldName,
+      value: typeof value === "string" ? value : JSON.stringify(value),
+      source_quote: metadata.raw_text_excerpt || "",
+      extraction_quality: metadata.parse_status === "parsed" ? "high" : "uncertain",
+    });
+  };
+  push("报告类型", metadata.exam_type);
+  push("检查项目", metadata.exam_item_name);
+  push("设备厂商", metadata.device_vendor);
+  push("检查时间", metadata.measured_at);
+  for (const [key, value] of Object.entries(metadata.report_key_values || {})) push(key, value);
+  for (const side of ["right", "left"]) {
+    for (const [key, value] of Object.entries(metadata.eye_side_results?.[side]?.key_values || {})) {
+      if (["axis_original_ocr_deg", "axis_correction_applied"].includes(key)) continue;
+      push(`${side}.${key}`, value);
+    }
+  }
+  return fields;
+}
+
+export function buildEyeExamMetadataPreview(metadata, genericPreview = null) {
+  if (!metadata) return genericPreview;
+  return {
+    extracted_text: genericPreview?.extracted_text || metadata.raw_text_excerpt || "",
+    fields: metadataPreviewFields(metadata),
+    alignment_status: metadata.parse_status,
+    quality_issues: metadata.warnings || [],
+    evidence_alignment_status: genericPreview?.alignment_status || null,
+  };
+}
+
 export async function captureFragment(payload) {
   const res = unwrap(await base44.functions.invoke("fragmentIngestionService", payload));
   if (res && res.ok === false) {
@@ -67,8 +110,8 @@ export async function captureFragment(payload) {
   }
 
   // Direct ingestion may produce useful OCR even when the generic workflow
-  // quality gate asks for clarification. Metadata derivation is therefore
-  // attempted here as a non-blocking post-step as well as after Evidence bridge.
+  // quality gate asks for clarification. Eye-exam metadata has a separate,
+  // non-diagnostic completeness status and is shown preferentially in preview.
   if (payload?.clinic_id && res?.artifact?.id) {
     try {
       const metadataResult = await persistEyeExamMetadata({
@@ -76,7 +119,12 @@ export async function captureFragment(payload) {
         artifact_id: res.artifact.id,
         evidence_fact_card_id: res?.alignment?.fact_card_ids?.[0] || null,
       });
-      return { ...res, eye_exam_metadata: metadataResult?.metadata || null };
+      const metadata = metadataResult?.metadata || null;
+      return {
+        ...res,
+        eye_exam_metadata: metadata,
+        parse_preview: buildEyeExamMetadataPreview(metadata, res?.parse_preview || null),
+      };
     } catch {
       // Never turn a successful evidence upload into a failed upload because
       // optional eye-exam metadata derivation was unavailable.

@@ -1,4 +1,4 @@
-export const EYE_EXAM_METADATA_SCHEMA_VERSION = "eye-exam-report-metadata.v1";
+export const EYE_EXAM_METADATA_SCHEMA_VERSION = "eye-exam-report-metadata.v1.1";
 export const EYE_EXAM_DISCLAIMER = "仅为检查数据记录，不构成医学诊断或治疗建议。";
 
 export const EYE_EXAM_PARSE_STATUS = Object.freeze({
@@ -9,6 +9,7 @@ export const EYE_EXAM_PARSE_STATUS = Object.freeze({
 
 const MAX_RAW_TEXT = 4000;
 const MAX_KEY_VALUES = 40;
+const MAX_RAW_MEASUREMENTS = 20;
 
 function cleanString(value: unknown, max = 256): string | null {
   if (typeof value !== "string") return null;
@@ -39,6 +40,23 @@ function sanitizeKeyValues(value: unknown): Record<string, string | number | boo
   return output;
 }
 
+function sanitizeRawMeasurements(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_RAW_MEASUREMENTS).map((item) => {
+    const row = item && typeof item === "object" && !Array.isArray(item)
+      ? item as Record<string, unknown>
+      : {};
+    const output: Record<string, string | number> = {};
+    for (const key of ["sphere_d", "cylinder_d", "axis_raw_deg", "axis_deg"]) {
+      const number = finiteNumber(row[key]);
+      if (number != null) output[key] = number;
+    }
+    const sourceLine = cleanString(row.source_line, 240);
+    if (sourceLine) output.source_line = sourceLine;
+    return output;
+  }).filter((row) => Object.keys(row).length > 0);
+}
+
 function normalizeEyeSide(value: unknown) {
   const input = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -46,6 +64,7 @@ function normalizeEyeSide(value: unknown) {
   return {
     raw_text: cleanString(input.raw_text, 2000) || "",
     key_values: sanitizeKeyValues(input.key_values),
+    raw_measurements: sanitizeRawMeasurements(input.raw_measurements),
   };
 }
 
@@ -76,6 +95,7 @@ export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
     raw_artifact_id: cleanString(input.raw_artifact_id, 128),
     origin_evidence_item_id: cleanString(input.origin_evidence_item_id, 128),
     evidence_fact_card_id: cleanString(input.evidence_fact_card_id, 128),
+    report_key_values: sanitizeKeyValues(input.report_key_values),
     eye_side_results: {
       right: normalizeEyeSide(eyeSides.right),
       left: normalizeEyeSide(eyeSides.left),
@@ -105,6 +125,10 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     device_vendor: llmMetadata.device_vendor || ruleMetadata.device_vendor,
     device_model: llmMetadata.device_model || ruleMetadata.device_model,
     measured_at: llmMetadata.measured_at || ruleMetadata.measured_at,
+    report_key_values: {
+      ...(ruleMetadata.report_key_values || {}),
+      ...(llmMetadata.report_key_values || {}),
+    },
     eye_side_results: {
       right: {
         raw_text: llmMetadata.eye_side_results?.right?.raw_text || ruleMetadata.eye_side_results?.right?.raw_text,
@@ -112,6 +136,7 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
           ...(ruleMetadata.eye_side_results?.right?.key_values || {}),
           ...(llmMetadata.eye_side_results?.right?.key_values || {}),
         },
+        raw_measurements: ruleMetadata.eye_side_results?.right?.raw_measurements || [],
       },
       left: {
         raw_text: llmMetadata.eye_side_results?.left?.raw_text || ruleMetadata.eye_side_results?.left?.raw_text,
@@ -119,6 +144,7 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
           ...(ruleMetadata.eye_side_results?.left?.key_values || {}),
           ...(llmMetadata.eye_side_results?.left?.key_values || {}),
         },
+        raw_measurements: ruleMetadata.eye_side_results?.left?.raw_measurements || [],
       },
     },
     parse_status: llmMetadata.parse_status || ruleMetadata.parse_status,
@@ -171,6 +197,9 @@ export function metadataToFactCardFields(metadata: any, artifactId: string) {
   push("eye_exam.measured_at", metadata.measured_at, metadata.measured_at ? "medium" : "uncertain");
   push("eye_exam.parse_status", metadata.parse_status);
 
+  for (const [key, value] of Object.entries(metadata.report_key_values || {}).slice(0, 20)) {
+    push(`eye_exam.${key}`, value, "high");
+  }
   for (const side of ["right", "left"]) {
     const values = metadata.eye_side_results?.[side]?.key_values || {};
     for (const [key, value] of Object.entries(values).slice(0, 20)) {
@@ -189,6 +218,7 @@ export const EYE_EXAM_LLM_SCHEMA = {
     device_vendor: { type: "string" },
     device_model: { type: "string" },
     measured_at: { type: "string" },
+    report_key_values: { type: "object", additionalProperties: true },
     eye_side_results: {
       type: "object",
       additionalProperties: false,
