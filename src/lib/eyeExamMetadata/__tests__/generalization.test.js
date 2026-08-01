@@ -56,7 +56,10 @@ describe("eye exam format generalization", () => {
       warnings: [],
     }));
 
-    const text = `TOPCON\nREF. DATA\n2026_08_01 AM 10:34\n<R> S C A\n-2.25 -1.00 163\n<L> S C A\n-2.50 -1.25 140`;
+    // PR #59 now fully parses a complete TOPCON REF. DATA receipt without
+    // LLM. This fixture intentionally omits measured_at so Phase 2 exercises
+    // format-level constrained completion for a genuinely missing field.
+    const text = `TOPCON\nREF. DATA\n<R> S C A\n-2.25 -1.00 163\n<L> S C A\n-2.50 -1.25 140`;
     const result = await dispatchEyeExamReportMetadata({
       rawText: text,
       context: baseContext,
