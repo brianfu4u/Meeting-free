@@ -32,11 +32,10 @@ Deno.serve(async (req) => {
 
     const result = await parseAndPersist(base44.asServiceRole, body, actor);
     return Response.json({ ok: true, ...result }, { status: 200 });
-  } catch (error) {
-    return Response.json({
-      ok: false,
-      error_code: typeof error?.code === "string" ? error.code : "internal_error",
-    }, { status: 500 });
+  } catch (error: any) {
+    const code = typeof error?.code === "string" ? error.code : "internal_error";
+    const status = code === "tenant_scope_violation" ? 403 : 500;
+    return Response.json({ ok: false, error_code: code }, { status });
   }
 });
 
@@ -49,7 +48,7 @@ async function parseAndPersist(svc, body, actor) {
   const evidenceItem = await resolveEvidenceItem(svc, artifact, body.origin_evidence_item_id, actor.clinic_id);
   const factCard = await resolveFactCard(svc, artifact, body.evidence_fact_card_id, actor.clinic_id);
   const processing = await resolveProcessing(svc, artifact, actor.clinic_id);
-  const rawText = String(body.raw_text || processing?.extracted_text || "").trim();
+  const rawText = await resolveRawText(svc, artifact, processing, body.raw_text);
   if (!rawText) return { metadata: null, skipped_reason: "source_text_unavailable" };
 
   const deps = {
@@ -84,6 +83,46 @@ async function parseAndPersist(svc, body, actor) {
     origin_evidence_item_id: evidenceItem?.id || null,
     evidence_fact_card_id: factCard?.id || null,
   };
+}
+
+async function resolveRawText(svc, artifact, processing, suppliedText) {
+  const existing = String(suppliedText || processing?.extracted_text || "").trim();
+  if (existing) return existing.slice(0, 12000);
+  if (!artifact.file_url || !["image", "document"].includes(artifact.fragment_type)) return "";
+
+  try {
+    const extracted = await svc.integrations.Core.ExtractDataFromUploadedFile({
+      file_url: artifact.file_url,
+      json_schema: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          pages: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                page_number: { type: "number" },
+                text: { type: "string" },
+              },
+            },
+          },
+          rows: { type: "array", items: { type: "object", additionalProperties: true } },
+        },
+      },
+    });
+    if (!extracted || extracted.status !== "success") return "";
+    const output = extracted.output || {};
+    const pages = Array.isArray(output.pages)
+      ? output.pages.map((page) => page?.text).filter(Boolean).join("\n")
+      : "";
+    const rows = Array.isArray(output.rows) && output.rows.length > 0
+      ? JSON.stringify(output.rows)
+      : "";
+    return String(output.text || pages || rows || "").trim().slice(0, 12000);
+  } catch {
+    return "";
+  }
 }
 
 async function resolveEvidenceItem(svc, artifact, requestedId, clinicId) {
