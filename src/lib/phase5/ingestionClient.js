@@ -37,6 +37,12 @@ export const ERROR_LABELS = {
   fragment_not_retryable: "当前状态不可重试",
   retry_limit_reached: "重试次数已达上限",
   upload_failed: "文件上传失败",
+  eye_exam_upload_needs_reupload_due_to_low_quality: "这张检查报告照片过于模糊，系统无法可靠识别关键信息，请重新拍照并上传。",
+  eye_exam_item_confirmation_required: "请选择具体检查项目类型",
+  eye_exam_item_tag_invalid: "检查项目类型无效",
+  eye_exam_item_other_note_required: "选择其他眼科检查时，请填写简短说明",
+  eye_exam_metadata_not_found: "未找到眼科检查报告元数据",
+  eye_exam_metadata_not_confirmable: "当前报告质量不足，请重新上传后再确认检查项目",
 };
 
 // 计算 SHA-256 校验和（仅作幂等辅助，非安全边界）
@@ -71,13 +77,18 @@ function metadataPreviewFields(metadata) {
       field_name: fieldName,
       value: typeof value === "string" ? value : JSON.stringify(value),
       source_quote: metadata.raw_text_excerpt || "",
-      extraction_quality: metadata.parse_status === "parsed" ? "high" : "uncertain",
+      extraction_quality: metadata.exam_item_manual_tag
+        ? "confirmed"
+        : metadata.parse_status === "parsed" ? "high" : "uncertain",
     });
   };
   push("报告类型", metadata.exam_type);
-  push("检查项目", metadata.exam_item_name);
+  push("自动识别项目", metadata.exam_item_name);
+  push("人工确认项目", metadata.exam_item_manual_label);
   push("设备厂商", metadata.device_vendor);
   push("检查时间", metadata.measured_at);
+  push("OCR 质量", metadata.ocr_quality_flag);
+  push("OCR 质量分数", metadata.ocr_quality_score);
   for (const [key, value] of Object.entries(metadata.report_key_values || {})) push(key, value);
   for (const side of ["right", "left"]) {
     for (const [key, value] of Object.entries(metadata.eye_side_results?.[side]?.key_values || {})) {
@@ -88,7 +99,7 @@ function metadataPreviewFields(metadata) {
   return fields;
 }
 
-export function buildEyeExamMetadataPreview(metadata, genericPreview = null) {
+export function buildEyeExamMetadataPreview(metadata, genericPreview = null, serviceResult = {}) {
   if (!metadata) return genericPreview;
   return {
     extracted_text: genericPreview?.extracted_text || metadata.raw_text_excerpt || "",
@@ -96,22 +107,33 @@ export function buildEyeExamMetadataPreview(metadata, genericPreview = null) {
     alignment_status: metadata.parse_status,
     quality_issues: metadata.warnings || [],
     evidence_alignment_status: genericPreview?.alignment_status || null,
+    ocr_quality_score: metadata.ocr_quality_score ?? null,
+    ocr_quality_flag: metadata.ocr_quality_flag || null,
+    requires_reupload: metadata.requires_reupload === true,
+    upload_warning_code: serviceResult.warning_code || null,
+    requires_exam_item_confirmation: metadata.requires_exam_item_confirmation === true,
+    exam_item_candidates: serviceResult.exam_item_candidates || [],
+    exam_item_suggested_tag: serviceResult.exam_item_suggested_tag || metadata.exam_item_suggested_tag || null,
+    artifact_id: serviceResult.artifact_id || metadata.raw_artifact_id || null,
+    evidence_fact_card_id: serviceResult.evidence_fact_card_id || metadata.evidence_fact_card_id || null,
   };
+}
+
+function throwServiceError(res, fallbackCode) {
+  const code = res?.error_code || fallbackCode;
+  const err = new Error(ERROR_LABELS[code] || code);
+  err.error_code = code;
+  err.response = { data: res };
+  throw err;
 }
 
 export async function captureFragment(payload) {
   const res = unwrap(await base44.functions.invoke("fragmentIngestionService", payload));
-  if (res && res.ok === false) {
-    const code = res.error_code || "ingestion_failed";
-    const err = new Error(ERROR_LABELS[code] || code);
-    err.error_code = code;
-    err.response = { data: res };
-    throw err;
-  }
+  if (res && res.ok === false) throwServiceError(res, "ingestion_failed");
 
   // Direct ingestion may produce useful OCR even when the generic workflow
   // quality gate asks for clarification. Eye-exam metadata has a separate,
-  // non-diagnostic completeness status and is shown preferentially in preview.
+  // non-diagnostic completeness and upload-quality status.
   if (payload?.clinic_id && res?.artifact?.id) {
     try {
       const metadataResult = await persistEyeExamMetadata({
@@ -123,7 +145,13 @@ export async function captureFragment(payload) {
       return {
         ...res,
         eye_exam_metadata: metadata,
-        parse_preview: buildEyeExamMetadataPreview(metadata, res?.parse_preview || null),
+        eye_exam_metadata_result: metadataResult,
+        eye_exam_upload_warning_code: metadataResult?.warning_code || null,
+        requires_reupload: metadataResult?.requires_reupload === true,
+        requires_exam_item_confirmation: metadataResult?.requires_exam_item_confirmation === true,
+        exam_item_candidates: metadataResult?.exam_item_candidates || [],
+        exam_item_suggested_tag: metadataResult?.exam_item_suggested_tag || null,
+        parse_preview: buildEyeExamMetadataPreview(metadata, res?.parse_preview || null, metadataResult),
       };
     } catch {
       // Never turn a successful evidence upload into a failed upload because
@@ -138,13 +166,16 @@ export async function persistEyeExamMetadata(payload) {
     ...payload,
     action: "parseAndPersist",
   }));
-  if (res && res.ok === false) {
-    const code = res.error_code || "eye_exam_metadata_failed";
-    const err = new Error(ERROR_LABELS[code] || code);
-    err.error_code = code;
-    err.response = { data: res };
-    throw err;
-  }
+  if (res && res.ok === false) throwServiceError(res, "eye_exam_metadata_failed");
+  return res;
+}
+
+export async function confirmEyeExamItem(payload) {
+  const res = unwrap(await base44.functions.invoke("eyeExamMetadataService", {
+    ...payload,
+    action: "confirmExamItem",
+  }));
+  if (res && res.ok === false) throwServiceError(res, "eye_exam_item_confirmation_failed");
   return res;
 }
 

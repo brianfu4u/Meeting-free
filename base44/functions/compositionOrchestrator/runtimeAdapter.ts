@@ -17,7 +17,7 @@ export const PHASE2_RUNTIME_SOURCES = {
   "src/lib/composition/ophthalmologyCompositionContext.js": "70bfef2a873ce0b86d48d3a76b6c8c12decf13d9",
   "src/lib/composition/prompts.js": "a328371620b8eaeb6da623e3167bbd88522aa614",
   "src/lib/composition/evidenceInterpreter.js": "1fe84faf2f7be6ed9ba4f5ab121e19a651d1a9f2",
-  "src/lib/composition/candidateFinder.js": "cd2264b4aa5417c667b922482221562f01b6f996",
+  "src/lib/composition/candidateFinder.js": "c65cece42692e7fc8b02853680e0d34c06f6c2c0",
   "src/lib/composition/clustering.js": "bcdf4db155bd85d493106236531f3300216a1770",
   "src/lib/composition/workflowAssembly.js": "8ed5ef568743f1128ed738bb48e4f466848c4e0f",
   "src/lib/composition/guardrailValidator.js": "39275606474fe379c5bd3370eea90ba6b4284770",

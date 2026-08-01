@@ -1,4 +1,4 @@
-export const EYE_EXAM_METADATA_SCHEMA_VERSION = "eye-exam-report-metadata.v1.1";
+export const EYE_EXAM_METADATA_SCHEMA_VERSION = "eye-exam-report-metadata.v1.2";
 export const EYE_EXAM_DISCLAIMER = "仅为检查数据记录，不构成医学诊断或治疗建议。";
 
 export const EYE_EXAM_PARSE_STATUS = Object.freeze({
@@ -6,6 +6,8 @@ export const EYE_EXAM_PARSE_STATUS = Object.freeze({
   partial: "partial",
   fallback: "fallback",
 });
+
+export const EYE_EXAM_OCR_QUALITY_FLAGS = Object.freeze(["good", "borderline", "poor"]);
 
 const MAX_RAW_TEXT = 4000;
 const MAX_KEY_VALUES = 40;
@@ -76,18 +78,29 @@ function uniqueWarnings(value: unknown): string[] {
 export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
   const confidence = finiteNumber(input.parse_confidence);
   const templateMatchScore = finiteNumber(input.template_match_score);
+  const ocrQualityScore = finiteNumber(input.ocr_quality_score);
   const status = Object.values(EYE_EXAM_PARSE_STATUS).includes(input.parse_status as string)
     ? input.parse_status
     : EYE_EXAM_PARSE_STATUS.partial;
   const eyeSides = input.eye_side_results && typeof input.eye_side_results === "object"
     ? input.eye_side_results as Record<string, unknown>
     : {};
+  const ocrQualityFlag = EYE_EXAM_OCR_QUALITY_FLAGS.includes(input.ocr_quality_flag as string)
+    ? input.ocr_quality_flag
+    : null;
 
   return {
     schema_version: EYE_EXAM_METADATA_SCHEMA_VERSION,
     record_kind: "exam_data_record",
     exam_type: cleanString(input.exam_type, 120) || "未识别眼科检查报告",
     exam_item_name: cleanString(input.exam_item_name, 180),
+    exam_item_suggested_tag: cleanString(input.exam_item_suggested_tag, 80),
+    exam_item_manual_tag: cleanString(input.exam_item_manual_tag, 80),
+    exam_item_manual_label: cleanString(input.exam_item_manual_label, 120),
+    exam_item_manual_note: cleanString(input.exam_item_manual_note, 240),
+    exam_item_confirmed_at: cleanString(input.exam_item_confirmed_at, 64),
+    exam_item_confirmed_by_staff_id: cleanString(input.exam_item_confirmed_by_staff_id, 128),
+    requires_exam_item_confirmation: input.requires_exam_item_confirmation === true,
     device_vendor: cleanString(input.device_vendor, 120),
     device_model: cleanString(input.device_model, 160),
     measured_at: cleanString(input.measured_at, 64),
@@ -108,6 +121,12 @@ export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
     template_match_score: templateMatchScore == null
       ? null
       : Math.max(0, Math.min(1, templateMatchScore)),
+    ocr_quality_score: ocrQualityScore == null
+      ? null
+      : Math.round(Math.max(0, Math.min(100, ocrQualityScore))),
+    ocr_quality_flag: ocrQualityFlag,
+    ocr_quality_reasons: uniqueWarnings(input.ocr_quality_reasons),
+    requires_reupload: input.requires_reupload === true,
     parse_status: status,
     parse_confidence: confidence == null ? 0.4 : Math.max(0, Math.min(1, confidence)),
     warnings: uniqueWarnings(input.warnings),
@@ -165,8 +184,8 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     ],
   });
 
-  // Tenant, provenance and format-template identity are always controlled by
-  // the deterministic dispatch layer. LLM output cannot replace them.
+  // Tenant, provenance, upload quality and user-confirmation identity are
+  // controlled by deterministic/server layers. LLM output cannot replace them.
   return {
     ...merged,
     clinic_id: ruleMetadata.clinic_id || null,
@@ -179,6 +198,17 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     template_id: ruleMetadata.template_id || null,
     template_version: ruleMetadata.template_version || null,
     template_match_score: ruleMetadata.template_match_score ?? null,
+    ocr_quality_score: ruleMetadata.ocr_quality_score ?? null,
+    ocr_quality_flag: ruleMetadata.ocr_quality_flag || null,
+    ocr_quality_reasons: ruleMetadata.ocr_quality_reasons || [],
+    requires_reupload: ruleMetadata.requires_reupload === true,
+    exam_item_suggested_tag: ruleMetadata.exam_item_suggested_tag || null,
+    exam_item_manual_tag: ruleMetadata.exam_item_manual_tag || null,
+    exam_item_manual_label: ruleMetadata.exam_item_manual_label || null,
+    exam_item_manual_note: ruleMetadata.exam_item_manual_note || null,
+    exam_item_confirmed_at: ruleMetadata.exam_item_confirmed_at || null,
+    exam_item_confirmed_by_staff_id: ruleMetadata.exam_item_confirmed_by_staff_id || null,
+    requires_exam_item_confirmation: ruleMetadata.requires_exam_item_confirmation === true,
     raw_text_excerpt: ruleMetadata.raw_text_excerpt || null,
     disclaimer: EYE_EXAM_DISCLAIMER,
   };
@@ -187,7 +217,7 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
 export function metadataToFactCardFields(metadata: any, artifactId: string) {
   if (!metadata) return [];
   const fields: any[] = [];
-  const push = (fieldName: string, value: unknown, quality = "high") => {
+  const push = (fieldName: string, value: unknown, quality = "high", method?: string) => {
     if (value == null || value === "") return;
     fields.push({
       field_name: fieldName,
@@ -196,16 +226,30 @@ export function metadataToFactCardFields(metadata: any, artifactId: string) {
       source_region: "eye_exam_report_metadata",
       source_quote: metadata.raw_text_excerpt || "",
       extraction_quality: quality,
-      extraction_method: metadata.warnings?.includes("llm_completion_applied") ? "rule_plus_llm" : "rule_parser",
+      extraction_method: method || (metadata.warnings?.includes("llm_completion_applied") ? "rule_plus_llm" : "rule_parser"),
     });
   };
 
   push("eye_exam.exam_type", metadata.exam_type);
   push("eye_exam.exam_item_name", metadata.exam_item_name, metadata.exam_item_name ? "high" : "uncertain");
+  push("eye_exam.exam_item_suggested_tag", metadata.exam_item_suggested_tag, "medium");
   push("eye_exam.device_vendor", metadata.device_vendor, metadata.device_vendor ? "high" : "uncertain");
   push("eye_exam.device_model", metadata.device_model, metadata.device_model ? "medium" : "uncertain");
   push("eye_exam.measured_at", metadata.measured_at, metadata.measured_at ? "medium" : "uncertain");
   push("eye_exam.parse_status", metadata.parse_status);
+  push("eye_exam.ocr_quality_score", metadata.ocr_quality_score, metadata.ocr_quality_flag === "poor" ? "uncertain" : "high");
+  push("eye_exam.ocr_quality_flag", metadata.ocr_quality_flag, metadata.ocr_quality_flag === "poor" ? "uncertain" : "high");
+  push("eye_exam.requires_reupload", metadata.requires_reupload === true);
+  push("eye_exam.requires_exam_item_confirmation", metadata.requires_exam_item_confirmation === true);
+
+  if (metadata.exam_item_manual_tag) {
+    push("eye_exam.exam_item_manual_tag", metadata.exam_item_manual_tag, "high", "user_confirmed");
+    push("eye_exam.exam_item_manual_label", metadata.exam_item_manual_label, "high", "user_confirmed");
+    push("eye_exam.exam_item_manual_note", metadata.exam_item_manual_note, "high", "user_confirmed");
+    push("eye_exam.match_exam_item", metadata.exam_item_manual_tag, "high", "user_confirmed");
+  } else if (!metadata.requires_reupload) {
+    push("eye_exam.match_exam_item", metadata.exam_item_suggested_tag || metadata.exam_item_name, "medium");
+  }
 
   for (const [key, value] of Object.entries(metadata.report_key_values || {}).slice(0, 20)) {
     push(`eye_exam.${key}`, value, "high");
