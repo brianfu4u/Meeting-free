@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { validateFileSize } from "../../../../base44/functions/fragmentIngestionService/security.ts";
-import { ERROR_LABELS } from "../ingestionClient.js";
 
 describe("staff-pad upload metadata contract", () => {
   it("preserves File metadata after Base44 storage upload", () => {
@@ -15,11 +14,13 @@ describe("staff-pad upload metadata contract", () => {
   });
 
   it("demonstrates the pre-fix failure and post-fix success", () => {
+    const client = readFileSync("src/lib/phase5/ingestionClient.js", "utf8");
+
     expect(validateFileSize("image", null)).toEqual({
       ok: false,
       reason: "size_required",
     });
     expect(validateFileSize("image", 1_887_436)).toEqual({ ok: true });
-    expect(ERROR_LABELS.size_required).toContain("文件已上传");
+    expect(client).toContain('size_required: "文件已上传，但后续处理缺少文件大小信息');
   });
 });
