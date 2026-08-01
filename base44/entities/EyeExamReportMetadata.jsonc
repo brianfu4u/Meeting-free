@@ -115,6 +115,18 @@
       "type": "string",
       "description": "解析器版本"
     },
+    "template_id": {
+      "type": "string",
+      "description": "命中的格式级模板 ID，由中央 dispatch 确定，LLM 不可覆盖"
+    },
+    "template_version": {
+      "type": "string",
+      "description": "格式模板版本"
+    },
+    "template_match_score": {
+      "type": "number",
+      "description": "模板匹配分数 0-1，用于工程质量统计，不代表医学结论置信度"
+    },
     "parse_status": {
       "type": "string",
       "enum": ["parsed", "partial", "fallback"],
