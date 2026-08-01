@@ -36,6 +36,10 @@ export default function BindingScreen({ user, onBound }) {
         zone,
       });
       await base44.entities.Staff.create(payload);
+      // 同步更新平台 User.role 为绑定的岗位角色，使 Users 列表显示真实岗位
+      try {
+        await base44.entities.User.update(user.id, { role: payload.role });
+      } catch {}
       onBound();
     } catch (e) {
       setErr(e.message || "绑定失败");

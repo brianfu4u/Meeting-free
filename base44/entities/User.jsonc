@@ -2,10 +2,36 @@
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
+      "description": "\u7528\u6237\u5728\u5e94\u7528\u4e2d\u7684\u89d2\u8272\u3002admin=\u5e97\u957f\u7ba1\u7406\u6743\u9650\uff1buser=\u5e73\u53f0\u9ed8\u8ba4\u666e\u901a\u7528\u6237\uff1b\u5176\u4f59\u503c\u4e3a\u5458\u5de5\u7ec8\u7aef\u7ed1\u5b9a\u65f6\u540c\u6b65\u7684\u5c97\u4f4d\u89d2\u8272\uff08\u4e0e Staff.role \u4e00\u81f4\uff09\uff0c\u4f9b\u5e73\u53f0 Users \u5217\u8868\u663e\u793a\u771f\u5b9e\u5c97\u4f4d\u3002",
       "enum": [
         "admin",
-        "user"
+        "user",
+        "doctor",
+        "physician_asst",
+        "optometrist",
+        "optician",
+        "vision_trainer",
+        "imaging_tech",
+        "diagnostic_staff",
+        "surgeon",
+        "or_nurse",
+        "anesthesiologist",
+        "nurse",
+        "triage_staff",
+        "reception",
+        "crm_staff",
+        "patient_guide",
+        "marketing",
+        "channel_dev",
+        "screening_team",
+        "cashier",
+        "insurance_officer",
+        "accountant",
+        "equipment_admin",
+        "inventory_staff",
+        "clinic_director",
+        "qa_officer",
+        "sanitation_staff"
       ]
     }
   },
