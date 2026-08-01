@@ -4,11 +4,11 @@
   "properties": {
     "clinic_id": {
       "type": "string",
-      "description": "门店唯一标识；必须与来源 Artifact、EvidenceItem 和 FactCard 的 clinic_id 完全一致"
+      "description": "兼容镜像；新编组代码读取 core_routing_fields.clinic_id"
     },
     "patient_id": {
       "type": "string",
-      "description": "可选的患者/PatientSession 关联标识；不从报告内容猜测患者身份"
+      "description": "兼容镜像；不从报告内容猜测患者身份"
     },
     "raw_artifact_id": {
       "type": "string",
@@ -20,197 +20,147 @@
     },
     "evidence_fact_card_id": {
       "type": "string",
-      "description": "关联 EvidenceFactCard ID；关键字段会同时扁平写入 FactCard.fields"
+      "description": "关联 EvidenceFactCard ID；仅 core_routing_fields 会投影到 FactCard"
     },
     "schema_version": {
       "type": "string",
       "description": "统一眼科检查报告元数据模型版本"
     },
+    "layer_contract_version": {
+      "type": "string",
+      "description": "基础编组层与增值详细层的统一契约版本"
+    },
     "record_kind": {
       "type": "string",
-      "enum": ["exam_data_record"],
-      "description": "固定为检查数据记录，明确区别于诊断或治疗建议"
+      "enum": ["exam_data_record"]
     },
-    "exam_type": {
-      "type": "string",
-      "description": "检查大类，例如眼压检查、屈光验光、OCT、眼底照相、角膜内皮细胞检查、眼科超声"
-    },
-    "exam_item_name": {
-      "type": "string",
-      "description": "解析器自动识别的具体检查项目名称，例如 Tono Data、Macular Cube 512x128"
-    },
-    "exam_item_suggested_tag": {
-      "type": "string",
-      "description": "根据解析结果建议的业务检查项目标签，仅用于前端预选"
-    },
-    "exam_item_manual_tag": {
-      "type": "string",
-      "description": "上传人员人工确认的业务检查项目标签；工作流匹配时优先于自动识别名称"
-    },
-    "exam_item_manual_label": {
-      "type": "string",
-      "description": "人工确认标签的显示名称"
-    },
-    "exam_item_manual_note": {
-      "type": "string",
-      "description": "选择其他眼科检查时的简短说明"
-    },
-    "exam_item_confirmed_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "人工确认检查项目的时间"
-    },
-    "exam_item_confirmed_by_staff_id": {
-      "type": "string",
-      "description": "服务端确认的操作员工 ID"
-    },
-    "requires_exam_item_confirmation": {
-      "type": "boolean",
-      "default": false,
-      "description": "是否需要上传人员补充确认具体检查项目类型"
-    },
-    "device_vendor": {
-      "type": "string",
-      "description": "设备厂商，例如 TOPCON、ZEISS"
-    },
-    "device_model": {
-      "type": "string",
-      "description": "设备型号；仅记录报告中明确出现或规则可靠识别的型号"
-    },
-    "measured_at": {
-      "type": "string",
-      "description": "报告中记录的检查日期时间；不确定时可为空"
-    },
-    "report_key_values": {
+    "core_routing_fields": {
       "type": "object",
-      "additionalProperties": true,
-      "description": "不属于单眼的报告级测量值，例如 PD、VD"
-    },
-    "eye_side_results": {
-      "type": "object",
-      "description": "统一左右眼结果结构；仅记录原始检查数据，不评价是否正常",
+      "description": "基础编组层。编组 Agent 唯一允许读取的元数据层，不含左右眼测量值或设备详细参数。",
       "properties": {
-        "right": {
+        "metadata_domain": { "type": "string", "enum": ["eye_exam"] },
+        "exam_type": { "type": "string" },
+        "exam_item_name": { "type": "string" },
+        "event_type": { "type": "string" },
+        "event_title": { "type": "string" },
+        "clinic_id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "department": { "type": "string" },
+        "role": { "type": "string" },
+        "occurred_at": { "type": "string" },
+        "reported_at": { "type": "string" },
+        "basic_summary": { "type": "string" },
+        "item_tag": { "type": "string" },
+        "priority_hint": { "type": "string" },
+        "sla_target_minutes": { "type": "number" },
+        "requires_reupload": { "type": "boolean", "default": false }
+      },
+      "required": ["metadata_domain", "exam_type", "exam_item_name", "clinic_id", "occurred_at", "basic_summary"]
+    },
+    "value_add_fields": {
+      "type": "object",
+      "description": "增值详细层。供电子病历合成、检查纵览、趋势分析和质量报表使用，不参与基础编组。",
+      "properties": {
+        "device_context": {
           "type": "object",
           "properties": {
-            "raw_text": { "type": "string" },
-            "key_values": { "type": "object", "additionalProperties": true },
-            "raw_measurements": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "sphere_d": { "type": "number" },
-                  "cylinder_d": { "type": "number" },
-                  "axis_raw_deg": { "type": "number" },
-                  "axis_deg": { "type": "number" },
-                  "source_line": { "type": "string" }
-                },
-                "additionalProperties": false
-              }
-            }
+            "device_vendor": { "type": "string" },
+            "device_model": { "type": "string" }
           },
           "additionalProperties": false
         },
-        "left": {
+        "report_key_values": {
           "type": "object",
+          "additionalProperties": true,
+          "description": "报告级详细参数，例如 PD、VD"
+        },
+        "eye_side_results": {
+          "type": "object",
+          "description": "左右眼详细测量值；仅记录数据，不评价是否正常",
           "properties": {
-            "raw_text": { "type": "string" },
-            "key_values": { "type": "object", "additionalProperties": true },
-            "raw_measurements": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "sphere_d": { "type": "number" },
-                  "cylinder_d": { "type": "number" },
-                  "axis_raw_deg": { "type": "number" },
-                  "axis_deg": { "type": "number" },
-                  "source_line": { "type": "string" }
-                },
-                "additionalProperties": false
-              }
+            "right": {
+              "type": "object",
+              "properties": {
+                "raw_text": { "type": "string" },
+                "key_values": { "type": "object", "additionalProperties": true },
+                "raw_measurements": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+              },
+              "additionalProperties": false
+            },
+            "left": {
+              "type": "object",
+              "properties": {
+                "raw_text": { "type": "string" },
+                "key_values": { "type": "object", "additionalProperties": true },
+                "raw_measurements": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
         }
       },
+      "required": ["device_context", "report_key_values", "eye_side_results"],
       "additionalProperties": false
     },
-    "parser_id": {
+    "routing_status": {
       "type": "string",
-      "description": "命中的设备/格式解析器 ID"
+      "enum": ["routing_ready", "routing_partial", "routing_blocked"]
     },
-    "parser_version": {
+    "value_add_status": {
       "type": "string",
-      "description": "解析器版本"
+      "enum": ["value_add_complete", "value_add_partial", "value_add_unavailable"]
     },
-    "template_id": {
-      "type": "string",
-      "description": "命中的格式级模板 ID，由中央 dispatch 确定，LLM 不可覆盖"
-    },
-    "template_version": {
-      "type": "string",
-      "description": "格式模板版本"
-    },
-    "template_match_score": {
-      "type": "number",
-      "description": "模板匹配分数 0-1，用于工程质量统计，不代表医学结论置信度"
-    },
-    "ocr_quality_score": {
-      "type": "number",
-      "description": "OCR 可用性质量分数 0-100，仅用于判断是否需要重新上传"
-    },
-    "ocr_quality_flag": {
-      "type": "string",
-      "enum": ["good", "borderline", "poor"],
-      "description": "OCR 质量标志；poor 时跳过详细眼科数据解析"
-    },
-    "ocr_quality_reasons": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": [],
-      "description": "低质量判断的技术原因码，不包含医学判断"
-    },
-    "requires_reupload": {
-      "type": "boolean",
-      "default": false,
-      "description": "是否应提示上传人员重新拍照或上传更清晰文件"
-    },
-    "parse_status": {
-      "type": "string",
-      "enum": ["parsed", "partial", "fallback"],
-      "description": "parsed=已适配；partial=部分字段；fallback=未知格式保底解析"
-    },
-    "parse_confidence": {
-      "type": "number",
-      "description": "元数据解析置信度 0-1；不代表医学结论置信度"
-    },
-    "warnings": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": [],
-      "description": "格式适配、字段缺失或上传质量提示，不包含诊断判断"
-    },
-    "raw_text_excerpt": {
-      "type": "string",
-      "description": "用于溯源的 OCR/文本摘录，最大长度由解析模型控制"
-    },
-    "disclaimer": {
-      "type": "string",
-      "description": "固定声明：仅为检查数据记录，不构成医学诊断或治疗建议"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "元数据记录创建时间"
-    }
+    "routing_ready": { "type": "boolean" },
+    "missing_routing_fields": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "missing_value_add_fields": { "type": "array", "items": { "type": "string" }, "default": [] },
+
+    "exam_type": { "type": "string", "description": "兼容镜像；新代码读取 core_routing_fields.exam_type" },
+    "exam_item_name": { "type": "string", "description": "兼容镜像；新代码读取 core_routing_fields.exam_item_name" },
+    "exam_item_suggested_tag": { "type": "string" },
+    "exam_item_manual_tag": { "type": "string" },
+    "exam_item_manual_label": { "type": "string" },
+    "exam_item_manual_note": { "type": "string" },
+    "exam_item_confirmed_at": { "type": "string", "format": "date-time" },
+    "exam_item_confirmed_by_staff_id": { "type": "string" },
+    "requires_exam_item_confirmation": { "type": "boolean", "default": false },
+    "department": { "type": "string" },
+    "role": { "type": "string" },
+    "occurred_at": { "type": "string" },
+    "reported_at": { "type": "string" },
+    "basic_summary": { "type": "string" },
+    "device_vendor": { "type": "string", "description": "兼容镜像；增值服务读取 value_add_fields.device_context.device_vendor" },
+    "device_model": { "type": "string", "description": "兼容镜像；增值服务读取 value_add_fields.device_context.device_model" },
+    "measured_at": { "type": "string" },
+    "report_key_values": { "type": "object", "additionalProperties": true, "description": "兼容镜像；增值服务读取 value_add_fields.report_key_values" },
+    "eye_side_results": { "type": "object", "additionalProperties": true, "description": "兼容镜像；增值服务读取 value_add_fields.eye_side_results" },
+    "parser_id": { "type": "string" },
+    "parser_version": { "type": "string" },
+    "template_id": { "type": "string" },
+    "template_version": { "type": "string" },
+    "template_match_score": { "type": "number" },
+    "ocr_quality_score": { "type": "number" },
+    "ocr_quality_flag": { "type": "string", "enum": ["good", "borderline", "poor"] },
+    "ocr_quality_reasons": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "requires_reupload": { "type": "boolean", "default": false },
+    "parse_status": { "type": "string", "enum": ["parsed", "partial", "fallback"] },
+    "parse_confidence": { "type": "number" },
+    "warnings": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "raw_text_excerpt": { "type": "string" },
+    "disclaimer": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" }
   },
   "required": [
     "clinic_id",
     "raw_artifact_id",
     "schema_version",
+    "layer_contract_version",
     "record_kind",
+    "core_routing_fields",
+    "value_add_fields",
+    "routing_status",
+    "value_add_status",
+    "routing_ready",
     "exam_type",
     "eye_side_results",
     "parser_id",

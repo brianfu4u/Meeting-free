@@ -17,15 +17,13 @@ export const PHASE2_RUNTIME_SOURCES = {
   "src/lib/composition/ophthalmologyCompositionContext.js": "70bfef2a873ce0b86d48d3a76b6c8c12decf13d9",
   "src/lib/composition/prompts.js": "a328371620b8eaeb6da623e3167bbd88522aa614",
   "src/lib/composition/evidenceInterpreter.js": "1fe84faf2f7be6ed9ba4f5ab121e19a651d1a9f2",
-  "src/lib/composition/candidateFinder.js": "c65cece42692e7fc8b02853680e0d34c06f6c2c0",
+  "src/lib/composition/candidateFinder.js": "cc89e89bd9d578cfb432ac23f7c28c45f2b338a1",
   "src/lib/composition/clustering.js": "bcdf4db155bd85d493106236531f3300216a1770",
   "src/lib/composition/workflowAssembly.js": "8ed5ef568743f1128ed738bb48e4f466848c4e0f",
   "src/lib/composition/guardrailValidator.js": "39275606474fe379c5bd3370eea90ba6b4284770",
   "src/lib/tenant/tenantContext.js": "b7504dcf1c9fb86ff2ec30bc4f0b9a439cf4a82c",
 };
 
-// Deploy-time provenance for Agent v1.1 mirrors. These pins are deliberately
-// separate from the legacy Phase 2 map so older parity contracts stay stable.
 export const AGENT_V11_RUNTIME_SOURCES = {
   "src/lib/agentV11/attachmentProjection.js": "f9383ef747eb6b61e52cf1b7623ff46b62cc649d",
   "src/lib/agentV11/authoritativeAttachSaga.js": "d9cb0aab76a06cf967fee98d613f740ef83dfa2d",
@@ -236,10 +234,7 @@ export async function executeCompositionRuntime({
       invokeLLM,
       clinicId,
     });
-    // V11 FactCardCluster：注入 session_hint（来自 Artifact.original_metadata），
-    // 供 candidateFinder 之后的聚合同源分组使用。零回归：无 hint 时为 null。
-    const sessionHint =
-      artifact?.original_metadata?.patient_session_id_hint || null;
+    const sessionHint = artifact?.original_metadata?.patient_session_id_hint || null;
     resolvedCards.push({
       ...card,
       _resolvedWorkflowId: link.linkedWorkflowId,
@@ -250,17 +245,11 @@ export async function executeCompositionRuntime({
     });
   }
 
-  // V11 多页证据聚合：同 session_hint + business_date 的卡片识别为同一事件。
-  // 一票否决合并 alignment_status，最小值合并 confidence；纯内存态，不改 FactCard 实体。
   const multipageResult = clusterMultiPage(resolvedCards);
   const multipageClusters = multipageResult.clusters || [];
-  // 组内传播已解析 workflow，使同组卡片归入同一 attach train（候选匹配增强）。
   resolvedCards = propagateGroupResolution(resolvedCards, multipageClusters);
   const multipageVetoIssues = buildMultipageVetoIssue(multipageClusters);
 
-  // 次日回流 self_supplement 绑定：linked_undo_artifact_id 标记的车厢
-  // 强制与旧车厢分入同一 new_train cluster，无需 LLM 推断同源性。
-  // 机制类似多页聚合，但触发键是 linked_undo_artifact_id 而非 session_hint。
   const cardByArtifactId = new Map(resolvedCards.map((c) => [c.artifact_id, c]));
   const forcedUndoGroups = [];
   const undoConsumedCardIds = new Set();
@@ -270,7 +259,7 @@ export async function executeCompositionRuntime({
       .map((id) => cardByArtifactId.get(id))
       .filter(Boolean);
     const members = [oldCard, ...newCards].filter(Boolean);
-    if (members.length < 2) continue; // 仅旧或仅新不构成绑定组
+    if (members.length < 2) continue;
     forcedUndoGroups.push({
       cluster_id: `undo-link::${oldArtId}`,
       fact_card_ids: members.map((c) => c.id).filter(Boolean),
@@ -371,7 +360,6 @@ export async function executeCompositionRuntime({
     expectedMissingProjections,
     artifactIds: [...new Set(hypotheses.flatMap((item) => item.ordered_artifact_ids || []))],
     factCardIds: resolvedCards.map((item) => item.id).filter(Boolean),
-    // V11 多页证据聚合结果（纯内存态，供看板/审计展示，不落库）
     multipageClusters,
     compositionContextVersion: OPHTHALMOLOGY_COMPOSITION_CONTEXT_VERSION,
   };

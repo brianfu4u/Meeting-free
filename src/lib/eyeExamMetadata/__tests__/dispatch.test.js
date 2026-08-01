@@ -15,6 +15,9 @@ const baseContext = {
   patient_id: "session-001",
   raw_artifact_id: "artifact-001",
   origin_evidence_item_id: "evidence-001",
+  department: "特检室",
+  role: "OPTOMETRIST",
+  reported_at: "2026-08-01T12:00:00Z",
 };
 
 const noLlm = { mock: true };
@@ -46,10 +49,11 @@ describe("eye exam report metadata dispatch", () => {
       measured_at: "2026-08-01T09:35:00",
       parser_id: "topcon_tono_parser",
       parse_status: "parsed",
+      routing_status: "routing_ready",
       disclaimer: EYE_EXAM_DISCLAIMER,
     });
     expect(result.eye_side_results.right.key_values.average_iop_mmhg).toBe(19);
-    expect(result.eye_side_results.left.key_values.average_iop_mmhg).toBe(17);
+    expect(result.value_add_fields.eye_side_results.left.key_values.average_iop_mmhg).toBe(17);
   });
 
   it("parses a TOPCON automatic refraction receipt", async () => {
@@ -65,7 +69,7 @@ describe("eye exam report metadata dispatch", () => {
     expect(result.eye_side_results.left.key_values.sphere_d).toBe(-3);
   });
 
-  it("parses the clinic TOPCON multi-row OCR receipt as complete metadata", async () => {
+  it("parses the clinic TOPCON multi-row OCR receipt and keeps detail out of the routing bus", async () => {
     const text = `NAME
 2026_08_01 AM 10:34
 NO.0465
@@ -94,6 +98,7 @@ TOPCON`;
       parser_id: "topcon_refraction_parser",
       parser_version: "phase1.1.v1",
       parse_status: "parsed",
+      routing_status: "routing_ready",
       exam_type: "屈光验光",
       exam_item_name: "自动验光 / Ref Data",
       device_vendor: "TOPCON",
@@ -122,13 +127,14 @@ TOPCON`;
       axis_raw_deg: 14,
       axis_deg: 140,
     });
+    expect(result.value_add_fields.report_key_values).toMatchObject({ pd_mm: 61.5, vd_mm: 12 });
     expect(result.warnings).toContain("left_axis_trailing_zero_ocr_recovered");
     expect(result.warnings).not.toContain("refraction_values_not_fully_detected");
 
     const fields = metadataToFactCardFields(result, "artifact-001");
-    expect(fields.some((field) => field.field_name === "eye_exam.pd_mm" && field.value === "61.5")).toBe(true);
-    expect(fields.some((field) => field.field_name === "eye_exam.vd_mm" && field.value === "12")).toBe(true);
-    expect(fields.some((field) => field.field_name === "eye_exam.left.axis_deg" && field.value === "140")).toBe(true);
+    expect(fields.some((field) => field.field_name === "routing.exam_type" && field.value === "屈光验光")).toBe(true);
+    expect(fields.some((field) => field.field_name === "routing.basic_summary")).toBe(true);
+    expect(fields.some((field) => /pd_mm|vd_mm|axis_deg|sphere_d/.test(field.field_name))).toBe(false);
   });
 
   it("parses a ZEISS Cirrus OCT report", async () => {
@@ -215,15 +221,17 @@ TOPCON`;
     expect(result.clinic_id).toBe("clinic-001");
   });
 
-  it("flattens stable metadata fields for EvidenceFactCard consumption", async () => {
+  it("projects stable core metadata fields for EvidenceFactCard consumption", async () => {
     const result = await dispatchEyeExamReportMetadata({
-      rawText: "TOPCON CT-800\nTono Data\nOD AVG 19 mmHg\nOS AVG 17 mmHg",
+      rawText: "TOPCON CT-800\nTono Data\n2026-08-01 09:35\nOD AVG 19 mmHg\nOS AVG 17 mmHg",
       context: baseContext,
       deps: noLlm,
     });
     const fields = metadataToFactCardFields(result, "artifact-001");
     expect(fields.some((field) => field.field_name === "eye_exam.exam_type" && field.value === "眼压检查")).toBe(true);
-    expect(fields.some((field) => field.field_name === "eye_exam.right.average_iop_mmhg" && field.value === "19")).toBe(true);
+    expect(fields.some((field) => field.field_name === "routing.exam_type" && field.value === "眼压检查")).toBe(true);
+    expect(fields.some((field) => field.field_name === "routing.occurred_at" && field.value === "2026-08-01T09:35:00")).toBe(true);
+    expect(fields.some((field) => field.field_name === "eye_exam.right.average_iop_mmhg")).toBe(false);
     expect(fields.every((field) => field.source_artifact_id === "artifact-001")).toBe(true);
   });
 });

@@ -1,5 +1,9 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.38";
 import { bridgeEvidenceItemsRealtime } from "../../shared/evidenceArtifactBridge.ts";
+import {
+  buildOpsMetadataFromStaffReport,
+  persistOpsMetadataAndProjectRouting,
+} from "../../shared/opsEventMetadata/staffReportProjection.ts";
 
 /**
  * Clinic OS V10 — StaffReportService（采集层 Collection Layer）
@@ -13,12 +17,10 @@ import { bridgeEvidenceItemsRealtime } from "../../shared/evidenceArtifactBridge
  *
  * 数据流：
  * 原始汇报 → EvidenceItem（证据存档）→ AuditLog（结构化 Event）
- * → LLM 分析 → AttentionItem（建议卡片，仅供店长决策）
+ * → LLM 分析 → OpsEventMetadata（core routing + value add）
+ * → AttentionItem（建议卡片，仅供店长决策）
  * → 店长 execute 后 → Task 才被创建（由前端/Manager 动作触发，非本服务）
  */
-// ── EvidenceNormalizer（采集层独立模块）────────────────────────────────
-// V10 宪法：采集层只做证据归一化与不可变存档，不做任何推理。
-// 推理层（Recommendation）由后续 LLM 步骤单独负责，与本模块解耦。
 
 type Attachment = { type?: string; url?: string; transcript?: string; name?: string };
 
@@ -84,7 +86,6 @@ Deno.serve(async (req) => {
 
     const svc = base44.asServiceRole;
 
-    // ── 1. 身份校验（宪法①隔离） ──────────────────────────────────────────
     let staff;
     try {
       staff = await svc.entities.Staff.get(staff_id);
@@ -133,8 +134,6 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Direction A only: process the EvidenceItem rows created by this request.
-    // Historical EvidenceItem backfill is intentionally out of scope.
     let bridgeResults: unknown[] = [];
     try {
       const evidenceItems = await Promise.all(
@@ -148,7 +147,6 @@ Deno.serve(async (req) => {
         now,
       });
     } catch {
-      // bridge failure must never fail the employee report.
       await svc.entities.AuditLog.create({
         clinic_id,
         event_id: `${event_id}/evidence-bridge/fatal`,
@@ -199,7 +197,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    let aiParsed: Record<string, unknown> = {};
+    let aiParsed: Record<string, any> = {};
     let attentionItemId: string | null = null;
 
     const visionUrls: string[] = atts
@@ -237,11 +235,13 @@ Deno.serve(async (req) => {
           file_urls: visionUrls.length > 0 ? visionUrls : undefined,
           prompt: `你是视光诊所运营助理（Clinic OS V10）。
 
-宪法约束：你的输出只是建议，不产生任何实际系统变更。所有决策由店长人工确认后才执行。
+宪法约束：你的输出只是结构化记录和建议，不产生任何实际系统变更。所有决策由店长人工确认后才执行。
+
+请把结果分成两层：
+1. 基础编组信息：event_type、event_title、summary、priority_hint、sla_target_minutes；
+2. 增值详细信息：仅在原始证据明确出现时填写 value_add_fields。禁止猜测培训时长、人数、投诉评分、流程节点、故障次数或停机时长。
 
 你可能收到附带的图片/截图/PDF（file_urls）及结构化表格抽取结果，请结合视觉与文本一并研判。
-
-请分析以下员工工作汇报，判断是否需要引起店长注意：
 
 汇报类型：${report_type}
 汇报内容：${combinedText || "（仅附件，无文字）"}
@@ -251,26 +251,61 @@ Deno.serve(async (req) => {
 
 输出 JSON：
 {
+  "event_type": "complaint|training|equipment_failure|resource_request|progress_update|completion|staff_coordination|other",
+  "event_title": "事件标题（≤30字）",
   "category": "任务进度|异常事件|资源需求|人员协作|其他",
   "urgency": "yellow|red",
-  "summary": "一句话摘要（≤30字）",
-  "marquee_label": "供走马灯播放的事件概括，须涵盖时间(HH:mm)/地点(部门)/人物(姓名或角色)/干了什么(动作+对象)，≤24字，例：14:20 前台 小李 完成新患者挂号 / 10:05 特检室 张医生 完成角膜地形图检查",
+  "priority_hint": "P0|P1|P2|P3",
+  "sla_target_minutes": 数字或null,
+  "summary": "一句话基础摘要（≤30字，不含诊疗结论）",
+  "marquee_label": "供走马灯播放的事件概括，须涵盖时间/地点/人物/动作，≤24字",
   "needs_manager_attention": true或false,
   "attention_title": "需要店长注意时的标题（≤20字）",
   "recommendation": "建议店长采取的行动（≤50字）",
-  "reasoning": "为什么需要或不需要店长关注的推理过程"
+  "reasoning": "为什么需要或不需要店长关注的推理过程",
+  "value_add_fields": {
+    "training_duration_minutes": 数字或null,
+    "participant_count": 数字或null,
+    "complaint_severity_score": 数字或null,
+    "involved_process_nodes": ["明确出现的流程节点"],
+    "equipment_failure_count": 数字或null,
+    "downtime_minutes": 数字或null,
+    "equipment_id": "明确出现的设备编号或null",
+    "training_topic": "明确出现的培训主题或null",
+    "complaint_channel": "明确出现的投诉渠道或null",
+    "additional_metrics": {}
+  }
 }${structuredContext ? "\n\n[结构化附件抽取]\n" + structuredContext : ""}`,
           response_json_schema: {
             type: "object",
             properties: {
+              event_type: { type: "string", enum: ["complaint", "training", "equipment_failure", "resource_request", "progress_update", "completion", "staff_coordination", "other"] },
+              event_title: { type: "string" },
               category: { type: "string" },
               urgency: { type: "string", enum: ["yellow", "red"] },
+              priority_hint: { type: "string", enum: ["P0", "P1", "P2", "P3"] },
+              sla_target_minutes: { type: "number" },
               summary: { type: "string" },
               marquee_label: { type: "string" },
               needs_manager_attention: { type: "boolean" },
               attention_title: { type: "string" },
               recommendation: { type: "string" },
               reasoning: { type: "string" },
+              value_add_fields: {
+                type: "object",
+                properties: {
+                  training_duration_minutes: { type: "number" },
+                  participant_count: { type: "number" },
+                  complaint_severity_score: { type: "number" },
+                  involved_process_nodes: { type: "array", items: { type: "string" } },
+                  equipment_failure_count: { type: "number" },
+                  downtime_minutes: { type: "number" },
+                  equipment_id: { type: "string" },
+                  training_topic: { type: "string" },
+                  complaint_channel: { type: "string" },
+                  additional_metrics: { type: "object", additionalProperties: true },
+                },
+              },
             },
           },
         });
@@ -285,17 +320,57 @@ Deno.serve(async (req) => {
           clinic_id,
           session_id: null,
           attention_type: attnType,
-          urgency: (aiParsed.urgency as string) || "yellow",
-          title: (aiParsed.attention_title as string) || (aiParsed.summary as string) || "员工汇报需关注",
-          reasoning: (aiParsed.reasoning as string) || "",
+          urgency: aiParsed.urgency || "yellow",
+          title: aiParsed.attention_title || aiParsed.summary || "员工汇报需关注",
+          reasoning: aiParsed.reasoning || "",
           evidence_ids: evidenceIds,
           event_ids: [event_id],
-          recommendation: (aiParsed.recommendation as string) || "",
+          recommendation: aiParsed.recommendation || "",
           status: "open",
           generated_at: now,
         });
         attentionItemId = created.id;
       }
+    }
+
+    // OpsEventMetadata is persisted for every staff report, even when the LLM
+    // failed or no value-add metrics were found. Core routing remains usable;
+    // detailed metrics can be partial/unavailable without blocking assembly.
+    let opsEventMetadataRecord: any = null;
+    let opsRoutingFactCardIds: string[] = [];
+    try {
+      const opsMetadata = buildOpsMetadataFromStaffReport({
+        clinic_id,
+        event_id,
+        report_type,
+        combined_text: combinedText,
+        staff,
+        ai_parsed: aiParsed,
+        evidence_ids: evidenceIds,
+        bridge_results: bridgeResults,
+        now,
+      });
+      const persisted = await persistOpsMetadataAndProjectRouting({
+        svc,
+        metadata: opsMetadata,
+        bridge_results: bridgeResults,
+        created_at: now,
+      });
+      opsEventMetadataRecord = persisted.record;
+      opsRoutingFactCardIds = persisted.projected_fact_card_ids;
+    } catch (error) {
+      await svc.entities.AuditLog.create({
+        clinic_id,
+        event_id: `${event_id}/ops-metadata/failure`,
+        timestamp: new Date().toISOString(),
+        source_agent: "StaffReportService_V10",
+        trigger_type: "OPS_EVENT_METADATA_PERSIST_FAILED",
+        payload: {
+          source_event_id: event_id,
+          error_code: "ops_event_metadata_persist_failed",
+          employee_report_preserved: true,
+        },
+      }).catch(() => undefined);
     }
 
     let selfTaskId: string | null = null;
@@ -322,11 +397,14 @@ Deno.serve(async (req) => {
       evidence_ids: evidenceIds,
       evidence_bridge: bridgeResults,
       ai_parsed: aiParsed,
+      ops_event_metadata_id: opsEventMetadataRecord?.id || null,
+      ops_event_routing_status: opsEventMetadataRecord?.routing_status || null,
+      ops_event_value_add_status: opsEventMetadataRecord?.value_add_status || null,
+      ops_routing_fact_card_ids: opsRoutingFactCardIds,
       attention_item_id: attentionItemId,
       self_task_id: selfTaskId,
-      v10_note: "AI 仅生成建议（AttentionItem），所有 clinic state 变更需店长确认后执行",
+      v10_note: "AI 仅生成结构化记录与建议；所有 clinic state 变更需店长确认后执行",
     });
-
   } catch (error) {
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }

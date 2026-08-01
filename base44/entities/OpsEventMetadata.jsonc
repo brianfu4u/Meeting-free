@@ -1,0 +1,96 @@
+{
+  "name": "OpsEventMetadata",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "门店唯一标识；必须与来源事件、Artifact、EvidenceItem 和 FactCard 的租户范围一致"
+    },
+    "source_event_id": {
+      "type": "string",
+      "description": "来源 AuditLog/员工汇报事件 ID，作为运营事件解析幂等锚点"
+    },
+    "source_artifact_id": { "type": "string" },
+    "origin_evidence_item_ids": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "evidence_fact_card_ids": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "schema_version": { "type": "string" },
+    "layer_contract_version": { "type": "string" },
+    "record_kind": { "type": "string", "enum": ["ops_event_record"] },
+    "core_routing_fields": {
+      "type": "object",
+      "description": "基础编组字段。编组 Agent 唯一允许读取的元数据层，不含投诉详情、培训指标或故障统计等增值数据。",
+      "properties": {
+        "metadata_domain": { "type": "string", "enum": ["ops_event"] },
+        "exam_type": { "type": "string" },
+        "exam_item_name": { "type": "string" },
+        "event_type": { "type": "string" },
+        "event_title": { "type": "string" },
+        "clinic_id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "department": { "type": "string" },
+        "role": { "type": "string" },
+        "occurred_at": { "type": "string" },
+        "reported_at": { "type": "string" },
+        "basic_summary": { "type": "string" },
+        "item_tag": { "type": "string" },
+        "priority_hint": { "type": "string" },
+        "sla_target_minutes": { "type": "number" },
+        "requires_reupload": { "type": "boolean", "default": false }
+      },
+      "required": ["metadata_domain", "event_type", "event_title", "clinic_id", "occurred_at", "basic_summary"]
+    },
+    "value_add_fields": {
+      "type": "object",
+      "description": "增值详细字段。仅供运营分析、质量报表等套餐功能读取，不参与基础工作流编组。",
+      "properties": {
+        "training_duration_minutes": { "type": "number" },
+        "participant_count": { "type": "number" },
+        "complaint_severity_score": { "type": "number" },
+        "involved_process_nodes": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "equipment_failure_count": { "type": "number" },
+        "downtime_minutes": { "type": "number" },
+        "equipment_id": { "type": "string" },
+        "training_topic": { "type": "string" },
+        "complaint_channel": { "type": "string" },
+        "additional_metrics": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "routing_status": { "type": "string", "enum": ["routing_ready", "routing_partial", "routing_blocked"] },
+    "value_add_status": { "type": "string", "enum": ["value_add_complete", "value_add_partial", "value_add_unavailable"] },
+    "routing_ready": { "type": "boolean" },
+    "missing_routing_fields": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "missing_value_add_fields": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "parser_id": { "type": "string" },
+    "parser_version": { "type": "string" },
+    "parse_confidence": { "type": "number" },
+    "warnings": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "raw_text_excerpt": { "type": "string" },
+    "disclaimer": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "event_type": { "type": "string", "description": "兼容镜像；新代码读取 core_routing_fields.event_type" },
+    "event_title": { "type": "string", "description": "兼容镜像；新代码读取 core_routing_fields.event_title" },
+    "patient_id": { "type": "string" },
+    "department": { "type": "string" },
+    "role": { "type": "string" },
+    "occurred_at": { "type": "string" },
+    "reported_at": { "type": "string" },
+    "basic_summary": { "type": "string" }
+  },
+  "required": [
+    "clinic_id",
+    "source_event_id",
+    "schema_version",
+    "layer_contract_version",
+    "record_kind",
+    "core_routing_fields",
+    "value_add_fields",
+    "routing_status",
+    "value_add_status",
+    "routing_ready",
+    "parser_id",
+    "parser_version",
+    "disclaimer",
+    "created_at"
+  ]
+}
