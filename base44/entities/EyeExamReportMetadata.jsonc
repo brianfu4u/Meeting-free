@@ -8,7 +8,7 @@
     },
     "patient_id": {
       "type": "string",
-      "description": "可选的患者/PatientSession 关联标识；Phase 1 不从报告内容猜测患者身份"
+      "description": "可选的患者/PatientSession 关联标识；不从报告内容猜测患者身份"
     },
     "raw_artifact_id": {
       "type": "string",
@@ -37,7 +37,37 @@
     },
     "exam_item_name": {
       "type": "string",
-      "description": "报告中的具体检查项目名称，例如 Tono Data、Macular Cube 512x128"
+      "description": "解析器自动识别的具体检查项目名称，例如 Tono Data、Macular Cube 512x128"
+    },
+    "exam_item_suggested_tag": {
+      "type": "string",
+      "description": "根据解析结果建议的业务检查项目标签，仅用于前端预选"
+    },
+    "exam_item_manual_tag": {
+      "type": "string",
+      "description": "上传人员人工确认的业务检查项目标签；工作流匹配时优先于自动识别名称"
+    },
+    "exam_item_manual_label": {
+      "type": "string",
+      "description": "人工确认标签的显示名称"
+    },
+    "exam_item_manual_note": {
+      "type": "string",
+      "description": "选择其他眼科检查时的简短说明"
+    },
+    "exam_item_confirmed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "人工确认检查项目的时间"
+    },
+    "exam_item_confirmed_by_staff_id": {
+      "type": "string",
+      "description": "服务端确认的操作员工 ID"
+    },
+    "requires_exam_item_confirmation": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否需要上传人员补充确认具体检查项目类型"
     },
     "device_vendor": {
       "type": "string",
@@ -127,6 +157,26 @@
       "type": "number",
       "description": "模板匹配分数 0-1，用于工程质量统计，不代表医学结论置信度"
     },
+    "ocr_quality_score": {
+      "type": "number",
+      "description": "OCR 可用性质量分数 0-100，仅用于判断是否需要重新上传"
+    },
+    "ocr_quality_flag": {
+      "type": "string",
+      "enum": ["good", "borderline", "poor"],
+      "description": "OCR 质量标志；poor 时跳过详细眼科数据解析"
+    },
+    "ocr_quality_reasons": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "低质量判断的技术原因码，不包含医学判断"
+    },
+    "requires_reupload": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否应提示上传人员重新拍照或上传更清晰文件"
+    },
     "parse_status": {
       "type": "string",
       "enum": ["parsed", "partial", "fallback"],
@@ -140,7 +190,7 @@
       "type": "array",
       "items": { "type": "string" },
       "default": [],
-      "description": "格式适配或字段缺失提示，不包含诊断判断"
+      "description": "格式适配、字段缺失或上传质量提示，不包含诊断判断"
     },
     "raw_text_excerpt": {
       "type": "string",
