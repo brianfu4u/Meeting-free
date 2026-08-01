@@ -121,7 +121,9 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
       const res = await base44.integrations.Core.UploadFile({ file: f });
       const file_url = res?.file_url || res?.data?.file_url;
       if (!file_url) throw new Error("上传返回无效，未获取到文件地址");
-      const att = { type: "image", url: file_url, name: f.name };
+      // Keep the File reference until MetaTaggingModal builds captureFragment.source.
+      // fragmentIngestionService requires the real byte size and MIME metadata.
+      const att = { type: "image", url: file_url, name: f.name, file: f };
       const idx = retakeIndexRef.current;
       if (idx !== null && idx !== undefined) {
         setAttachments((prev) => prev.map((item, i) => (i === idx ? att : item)));
@@ -149,7 +151,7 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
       const res = await base44.integrations.Core.UploadFile({ file: f });
       const file_url = res?.file_url || res?.data?.file_url;
       if (!file_url) throw new Error("上传返回无效，未获取到文件地址");
-      const att = { type: "file", url: file_url, name: f.name };
+      const att = { type: "file", url: file_url, name: f.name, file: f };
       setAttachments((prev) => [...prev, att]);
       setTaggingAttachment(att);
     } catch (e) {
