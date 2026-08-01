@@ -68,6 +68,32 @@ export async function captureFragment(payload) {
   return res;
 }
 
+export async function persistEyeExamMetadata(payload) {
+  const res = unwrap(await base44.functions.invoke("eyeExamMetadataService", {
+    ...payload,
+    action: "parseAndPersist",
+  }));
+  if (res && res.ok === false) {
+    const code = res.error_code || "eye_exam_metadata_failed";
+    const err = new Error(ERROR_LABELS[code] || code);
+    err.error_code = code;
+    err.response = { data: res };
+    throw err;
+  }
+  return res;
+}
+
+export async function persistEyeExamMetadataForBridgeResults({ clinicId, bridgeResults }) {
+  if (!clinicId || !Array.isArray(bridgeResults)) return [];
+  const eligible = bridgeResults.filter((item) => item?.artifact_id);
+  return Promise.allSettled(eligible.map((item) => persistEyeExamMetadata({
+    clinic_id: clinicId,
+    artifact_id: item.artifact_id,
+    origin_evidence_item_id: item.origin_evidence_item_id || null,
+    evidence_fact_card_id: item.evidence_fact_card_id || null,
+  })));
+}
+
 export async function getFragmentStatus(payload) {
   return unwrap(
     await base44.functions.invoke("fragmentIngestionService", {
