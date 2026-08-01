@@ -174,7 +174,7 @@ export const topconRefractionParser = {
     const text = normalizeExamText(rawText).toUpperCase();
     let score = 0;
     if (/\bTOPCON\b/.test(text)) score += 0.3;
-    if (/REF\s*DATA|AUTO\s*REF|REFRACT|验光|屈光/.test(text)) score += 0.4;
+    if (/REF\s*\.?\s*DATA|AUTO\s*REF|REFRACT|验光|屈光/.test(text)) score += 0.4;
     if (/\bSPH\b|\bCYL\b|\bAXIS\b|<\s*[RL]\s*>\s*S\s+C\s+A|\bS\s+C\s+A\b/.test(text)) score += 0.25;
     if (/\bKR[- ]?\d{3,4}\b|KERATO/.test(text)) score += 0.1;
     return Math.min(1, score);
@@ -215,7 +215,7 @@ export const topconRefractionParser = {
     return createEyeExamMetadata({
       ...context,
       exam_type: "屈光验光",
-      exam_item_name: /REF\s*DATA/i.test(text) ? "自动验光 / Ref Data" : "自动验光",
+      exam_item_name: /REF\s*\.?\s*DATA/i.test(text) ? "自动验光 / Ref Data" : "自动验光",
       ...device,
       measured_at: measuredAt,
       report_key_values: reportKeyValues,
