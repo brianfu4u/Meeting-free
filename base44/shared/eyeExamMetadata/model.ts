@@ -111,20 +111,30 @@ export function createEyeExamMetadata(input: Record<string, any> = {}) {
     || "未识别眼科检查报告";
   const examItemName = cleanString(input.exam_item_name || existingCore.exam_item_name, 180)
     || examType;
-  const manualTag = cleanString(input.exam_item_manual_tag, 80)
-    || cleanString(existingCore.item_tag, 80);
+  const manualTag = cleanString(input.exam_item_manual_tag, 80);
   const manualLabel = cleanString(input.exam_item_manual_label, 120);
   const suggestedTag = cleanString(input.exam_item_suggested_tag, 80);
+
+  // measured_at remains the actual examination timestamp. It must never be
+  // silently replaced by upload/report time. Routing can separately fall back
+  // to occurred_at/reported_at without corrupting the detailed record.
   const measuredAt = cleanString(input.measured_at, 64)
-    || cleanString(existingCore.occurred_at, 64)
-    || cleanString(input.reported_at, 64);
+    || cleanString(input.measured_at_hint, 64);
   const reportedAt = cleanString(input.reported_at, 64)
-    || cleanString(existingCore.reported_at, 64)
-    || measuredAt;
+    || cleanString(existingCore.reported_at, 64);
+  const routingOccurredAt = cleanString(input.occurred_at, 64)
+    || measuredAt
+    || cleanString(existingCore.occurred_at, 64)
+    || reportedAt;
+
   const reportKeyValues = sanitizeKeyValues(input.report_key_values || existingValueAdd.report_key_values);
   const deviceVendor = cleanString(input.device_vendor || existingValueAdd.device_context?.device_vendor, 120);
   const deviceModel = cleanString(input.device_model || existingValueAdd.device_context?.device_model, 160);
   const requiresReupload = input.requires_reupload === true;
+  const effectiveItemTag = manualTag
+    || suggestedTag
+    || cleanString(existingCore.item_tag, 80)
+    || examItemName;
 
   const layers = buildMetadataLayers({
     core_routing_fields: {
@@ -135,12 +145,12 @@ export function createEyeExamMetadata(input: Record<string, any> = {}) {
       patient_id: input.patient_id || existingCore.patient_id,
       department: input.department || existingCore.department,
       role: input.role || existingCore.role,
-      occurred_at: input.occurred_at || measuredAt,
+      occurred_at: routingOccurredAt,
       reported_at: reportedAt,
       basic_summary: input.basic_summary
         || existingCore.basic_summary
         || buildBasicSummary({ examType, examItemName, manualLabel, requiresReupload }),
-      item_tag: manualTag || suggestedTag || examItemName,
+      item_tag: effectiveItemTag,
       priority_hint: input.priority_hint || existingCore.priority_hint || (requiresReupload ? "P2" : "P3"),
       sla_target_minutes: input.sla_target_minutes ?? existingCore.sla_target_minutes,
       requires_reupload: requiresReupload,
@@ -272,7 +282,7 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     patient_id: ruleMetadata.patient_id || null,
     department: ruleMetadata.department || null,
     role: ruleMetadata.role || null,
-    occurred_at: ruleMetadata.occurred_at || ruleMetadata.measured_at || null,
+    occurred_at: ruleMetadata.occurred_at || ruleMetadata.measured_at || ruleMetadata.reported_at || null,
     reported_at: ruleMetadata.reported_at || null,
     raw_artifact_id: ruleMetadata.raw_artifact_id || null,
     origin_evidence_item_id: ruleMetadata.origin_evidence_item_id || null,
@@ -316,8 +326,13 @@ function legacyCoreAliases(metadata: any, artifactId: string) {
   push("eye_exam.exam_item_suggested_tag", metadata.exam_item_suggested_tag, "medium");
   push("eye_exam.exam_item_manual_tag", metadata.exam_item_manual_tag, "high", "user_confirmed");
   push("eye_exam.exam_item_manual_label", metadata.exam_item_manual_label, "high", "user_confirmed");
-  push("eye_exam.match_exam_item", metadata.core_routing_fields?.item_tag, metadata.exam_item_manual_tag ? "high" : "medium", metadata.exam_item_manual_tag ? "user_confirmed" : "eye_exam_core_projection");
-  push("eye_exam.measured_at", metadata.core_routing_fields?.occurred_at, "medium");
+  push(
+    "eye_exam.match_exam_item",
+    metadata.core_routing_fields?.item_tag,
+    metadata.exam_item_manual_tag ? "high" : "medium",
+    metadata.exam_item_manual_tag ? "user_confirmed" : "eye_exam_core_projection",
+  );
+  push("eye_exam.measured_at", metadata.measured_at || metadata.core_routing_fields?.occurred_at, "medium");
   push("eye_exam.routing_status", metadata.routing_status);
   push("eye_exam.value_add_status", metadata.value_add_status);
   return fields;
