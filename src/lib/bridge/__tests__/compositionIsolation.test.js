@@ -26,13 +26,13 @@ describe("evidence bridge composition isolation regression", () => {
     expect(staffReport).not.toMatch(/from\s+["'][^"']*compositionOrchestrator/);
     expect(staffReport).not.toContain('functions.invoke("compositionOrchestrator"');
     expect(staffReport).toContain("bridgeEvidenceItemsRealtime");
-    expect(staffReport).toContain("bridge failure must never fail the employee report");
+    expect(staffReport).toContain("employee_report_preserved");
   });
 
-  it("pins seven-track, candidate ranking and Guardrail runtime files to the main baseline", () => {
+  it("pins seven-track, core-only candidate routing and Guardrail runtime files", () => {
     const expected = {
-      "base44/functions/compositionOrchestrator/runtimeAdapter.ts": "17175de97f6da1d4622a38a6a7b713d8205a8cb4",
-      "base44/functions/compositionOrchestrator/runtime/candidateFinder.js": "8077223bd00372df371ae3cc434a6693d5a87ecc",
+      "base44/functions/compositionOrchestrator/runtimeAdapter.ts": "676a498d9a9d46f2649ccab88e9ec5c9c05106a8",
+      "base44/functions/compositionOrchestrator/runtime/candidateFinder.js": "8e0a221ecc4d642dd02165be1acc0a0a877f2e38",
       "base44/functions/compositionOrchestrator/runtime/guardrailValidator.js": "8ee1aba674d9cf232aafc7cab7ab717d5923bb8a",
       "base44/functions/compositionOrchestrator/runtime/workflowAssembly.js": "2df2e7867ad20d6315079749b05138890925001f",
       "base44/functions/compositionOrchestrator/service.ts": "45cfd4b7c7483b9c2c5692d7dfe962fd411589a2",
