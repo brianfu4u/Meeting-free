@@ -432,7 +432,7 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
           setTaggingAttachment(null);
         }}
         onConfirmed={() => {
-          if (mode === "new_event" && !taskId) submit();
+          // 标签确认完成，保留附件在横滚条中，员工可继续编辑后手动点发送
         }} />
     </>
   );
