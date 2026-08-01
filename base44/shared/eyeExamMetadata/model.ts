@@ -243,10 +243,10 @@ export function metadataToFactCardFields(metadata: any, artifactId: string) {
   push("eye_exam.requires_exam_item_confirmation", metadata.requires_exam_item_confirmation === true);
 
   if (metadata.exam_item_manual_tag) {
-    push("eye_exam.exam_item_manual_tag", metadata.exam_item_manual_tag, "confirmed", "user_confirmed");
-    push("eye_exam.exam_item_manual_label", metadata.exam_item_manual_label, "confirmed", "user_confirmed");
-    push("eye_exam.exam_item_manual_note", metadata.exam_item_manual_note, "confirmed", "user_confirmed");
-    push("eye_exam.match_exam_item", metadata.exam_item_manual_tag, "confirmed", "user_confirmed");
+    push("eye_exam.exam_item_manual_tag", metadata.exam_item_manual_tag, "high", "user_confirmed");
+    push("eye_exam.exam_item_manual_label", metadata.exam_item_manual_label, "high", "user_confirmed");
+    push("eye_exam.exam_item_manual_note", metadata.exam_item_manual_note, "high", "user_confirmed");
+    push("eye_exam.match_exam_item", metadata.exam_item_manual_tag, "high", "user_confirmed");
   } else if (!metadata.requires_reupload) {
     push("eye_exam.match_exam_item", metadata.exam_item_suggested_tag || metadata.exam_item_name, "medium");
   }
