@@ -1,4 +1,10 @@
-export const EYE_EXAM_METADATA_SCHEMA_VERSION = "eye-exam-report-metadata.v1.2";
+import {
+  buildMetadataLayers,
+  coreRoutingToFactCardFields,
+  getValueAddAccessResult,
+} from "../metadataLayers.ts";
+
+export const EYE_EXAM_METADATA_SCHEMA_VERSION = "eye-exam-report-metadata.v1.3";
 export const EYE_EXAM_DISCLAIMER = "仅为检查数据记录，不构成医学诊断或治疗建议。";
 
 export const EYE_EXAM_PARSE_STATUS = Object.freeze({
@@ -75,45 +81,114 @@ function uniqueWarnings(value: unknown): string[] {
   return [...new Set(value.map((item) => cleanString(item, 160)).filter(Boolean) as string[])].slice(0, 20);
 }
 
-export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
+function buildBasicSummary({ examType, examItemName, manualLabel, requiresReupload }: any) {
+  if (requiresReupload) return `${examType}；原图质量不足，等待重新上传`;
+  const item = manualLabel || examItemName || examType;
+  return `${examType}：${item}`.slice(0, 300);
+}
+
+export function createEyeExamMetadata(input: Record<string, any> = {}) {
+  const existingCore = input.core_routing_fields || {};
+  const existingValueAdd = input.value_add_fields || {};
   const confidence = finiteNumber(input.parse_confidence);
   const templateMatchScore = finiteNumber(input.template_match_score);
   const ocrQualityScore = finiteNumber(input.ocr_quality_score);
   const status = Object.values(EYE_EXAM_PARSE_STATUS).includes(input.parse_status as string)
     ? input.parse_status
     : EYE_EXAM_PARSE_STATUS.partial;
-  const eyeSides = input.eye_side_results && typeof input.eye_side_results === "object"
-    ? input.eye_side_results as Record<string, unknown>
+  const eyeSidesInput = input.eye_side_results || existingValueAdd.eye_side_results;
+  const eyeSides = eyeSidesInput && typeof eyeSidesInput === "object"
+    ? eyeSidesInput as Record<string, unknown>
     : {};
+  const normalizedEyeSides = {
+    right: normalizeEyeSide(eyeSides.right),
+    left: normalizeEyeSide(eyeSides.left),
+  };
   const ocrQualityFlag = EYE_EXAM_OCR_QUALITY_FLAGS.includes(input.ocr_quality_flag as string)
     ? input.ocr_quality_flag
     : null;
+  const examType = cleanString(input.exam_type || existingCore.exam_type, 120)
+    || "未识别眼科检查报告";
+  const examItemName = cleanString(input.exam_item_name || existingCore.exam_item_name, 180)
+    || examType;
+  const manualTag = cleanString(input.exam_item_manual_tag, 80)
+    || cleanString(existingCore.item_tag, 80);
+  const manualLabel = cleanString(input.exam_item_manual_label, 120);
+  const suggestedTag = cleanString(input.exam_item_suggested_tag, 80);
+  const measuredAt = cleanString(input.measured_at, 64)
+    || cleanString(existingCore.occurred_at, 64)
+    || cleanString(input.reported_at, 64);
+  const reportedAt = cleanString(input.reported_at, 64)
+    || cleanString(existingCore.reported_at, 64)
+    || measuredAt;
+  const reportKeyValues = sanitizeKeyValues(input.report_key_values || existingValueAdd.report_key_values);
+  const deviceVendor = cleanString(input.device_vendor || existingValueAdd.device_context?.device_vendor, 120);
+  const deviceModel = cleanString(input.device_model || existingValueAdd.device_context?.device_model, 160);
+  const requiresReupload = input.requires_reupload === true;
+
+  const layers = buildMetadataLayers({
+    core_routing_fields: {
+      metadata_domain: "eye_exam",
+      exam_type: examType,
+      exam_item_name: examItemName,
+      clinic_id: input.clinic_id || existingCore.clinic_id,
+      patient_id: input.patient_id || existingCore.patient_id,
+      department: input.department || existingCore.department,
+      role: input.role || existingCore.role,
+      occurred_at: input.occurred_at || measuredAt,
+      reported_at: reportedAt,
+      basic_summary: input.basic_summary
+        || existingCore.basic_summary
+        || buildBasicSummary({ examType, examItemName, manualLabel, requiresReupload }),
+      item_tag: manualTag || suggestedTag || examItemName,
+      priority_hint: input.priority_hint || existingCore.priority_hint || (requiresReupload ? "P2" : "P3"),
+      sla_target_minutes: input.sla_target_minutes ?? existingCore.sla_target_minutes,
+      requires_reupload: requiresReupload,
+    },
+    value_add_fields: {
+      device_context: {
+        device_vendor: deviceVendor,
+        device_model: deviceModel,
+      },
+      report_key_values: reportKeyValues,
+      eye_side_results: normalizedEyeSides,
+    },
+    routing_required_fields: ["clinic_id", "exam_type", "exam_item_name", "occurred_at", "basic_summary"],
+    value_add_expected_fields: ["device_context", "report_key_values", "eye_side_results"],
+  });
 
   return {
     schema_version: EYE_EXAM_METADATA_SCHEMA_VERSION,
     record_kind: "exam_data_record",
-    exam_type: cleanString(input.exam_type, 120) || "未识别眼科检查报告",
-    exam_item_name: cleanString(input.exam_item_name, 180),
-    exam_item_suggested_tag: cleanString(input.exam_item_suggested_tag, 80),
-    exam_item_manual_tag: cleanString(input.exam_item_manual_tag, 80),
-    exam_item_manual_label: cleanString(input.exam_item_manual_label, 120),
+    ...layers,
+
+    // Flat fields are compatibility mirrors for existing Phase 1/2 parsers and UI.
+    // New routing code must read core_routing_fields; value-add services must read
+    // value_add_fields so the two product layers cannot be mixed accidentally.
+    exam_type: layers.core_routing_fields.exam_type,
+    exam_item_name: layers.core_routing_fields.exam_item_name,
+    exam_item_suggested_tag: suggestedTag,
+    exam_item_manual_tag: manualTag,
+    exam_item_manual_label: manualLabel,
     exam_item_manual_note: cleanString(input.exam_item_manual_note, 240),
     exam_item_confirmed_at: cleanString(input.exam_item_confirmed_at, 64),
     exam_item_confirmed_by_staff_id: cleanString(input.exam_item_confirmed_by_staff_id, 128),
     requires_exam_item_confirmation: input.requires_exam_item_confirmation === true,
-    device_vendor: cleanString(input.device_vendor, 120),
-    device_model: cleanString(input.device_model, 160),
-    measured_at: cleanString(input.measured_at, 64),
-    clinic_id: cleanString(input.clinic_id, 128),
-    patient_id: cleanString(input.patient_id, 128),
+    device_vendor: deviceVendor,
+    device_model: deviceModel,
+    measured_at: measuredAt,
+    clinic_id: layers.core_routing_fields.clinic_id,
+    patient_id: layers.core_routing_fields.patient_id,
+    department: layers.core_routing_fields.department,
+    role: layers.core_routing_fields.role,
+    occurred_at: layers.core_routing_fields.occurred_at,
+    reported_at: layers.core_routing_fields.reported_at,
+    basic_summary: layers.core_routing_fields.basic_summary,
     raw_artifact_id: cleanString(input.raw_artifact_id, 128),
     origin_evidence_item_id: cleanString(input.origin_evidence_item_id, 128),
     evidence_fact_card_id: cleanString(input.evidence_fact_card_id, 128),
-    report_key_values: sanitizeKeyValues(input.report_key_values),
-    eye_side_results: {
-      right: normalizeEyeSide(eyeSides.right),
-      left: normalizeEyeSide(eyeSides.left),
-    },
+    report_key_values: reportKeyValues,
+    eye_side_results: normalizedEyeSides,
     parser_id: cleanString(input.parser_id, 120) || "fallback_eye_exam_parser",
     parser_version: cleanString(input.parser_version, 64) || "phase1.v1",
     template_id: cleanString(input.template_id, 120),
@@ -126,7 +201,7 @@ export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
       : Math.round(Math.max(0, Math.min(100, ocrQualityScore))),
     ocr_quality_flag: ocrQualityFlag,
     ocr_quality_reasons: uniqueWarnings(input.ocr_quality_reasons),
-    requires_reupload: input.requires_reupload === true,
+    requires_reupload: requiresReupload,
     parse_status: status,
     parse_confidence: confidence == null ? 0.4 : Math.max(0, Math.min(1, confidence)),
     warnings: uniqueWarnings(input.warnings),
@@ -136,8 +211,12 @@ export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
 }
 
 export function hasEyeSideKeyValues(metadata: any): boolean {
-  const right = metadata?.eye_side_results?.right?.key_values || {};
-  const left = metadata?.eye_side_results?.left?.key_values || {};
+  const right = metadata?.value_add_fields?.eye_side_results?.right?.key_values
+    || metadata?.eye_side_results?.right?.key_values
+    || {};
+  const left = metadata?.value_add_fields?.eye_side_results?.left?.key_values
+    || metadata?.eye_side_results?.left?.key_values
+    || {};
   return Object.keys(right).length > 0 || Object.keys(left).length > 0;
 }
 
@@ -184,12 +263,17 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     ],
   });
 
-  // Tenant, provenance, upload quality and user-confirmation identity are
-  // controlled by deterministic/server layers. LLM output cannot replace them.
-  return {
+  // Tenant, provenance, layer routing identity, upload quality and user
+  // confirmation are controlled by deterministic/server layers. LLM output
+  // cannot replace them.
+  return createEyeExamMetadata({
     ...merged,
     clinic_id: ruleMetadata.clinic_id || null,
     patient_id: ruleMetadata.patient_id || null,
+    department: ruleMetadata.department || null,
+    role: ruleMetadata.role || null,
+    occurred_at: ruleMetadata.occurred_at || ruleMetadata.measured_at || null,
+    reported_at: ruleMetadata.reported_at || null,
     raw_artifact_id: ruleMetadata.raw_artifact_id || null,
     origin_evidence_item_id: ruleMetadata.origin_evidence_item_id || null,
     evidence_fact_card_id: ruleMetadata.evidence_fact_card_id || null,
@@ -210,57 +294,52 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     exam_item_confirmed_by_staff_id: ruleMetadata.exam_item_confirmed_by_staff_id || null,
     requires_exam_item_confirmation: ruleMetadata.requires_exam_item_confirmation === true,
     raw_text_excerpt: ruleMetadata.raw_text_excerpt || null,
-    disclaimer: EYE_EXAM_DISCLAIMER,
-  };
+  });
 }
 
-export function metadataToFactCardFields(metadata: any, artifactId: string) {
-  if (!metadata) return [];
+function legacyCoreAliases(metadata: any, artifactId: string) {
   const fields: any[] = [];
-  const push = (fieldName: string, value: unknown, quality = "high", method?: string) => {
+  const push = (fieldName: string, value: unknown, quality = "high", method = "eye_exam_core_projection") => {
     if (value == null || value === "") return;
     fields.push({
       field_name: fieldName,
       value: typeof value === "string" ? value : JSON.stringify(value),
       source_artifact_id: artifactId,
-      source_region: "eye_exam_report_metadata",
+      source_region: "core_routing_fields",
       source_quote: metadata.raw_text_excerpt || "",
       extraction_quality: quality,
-      extraction_method: method || (metadata.warnings?.includes("llm_completion_applied") ? "rule_plus_llm" : "rule_parser"),
+      extraction_method: method,
     });
   };
-
-  push("eye_exam.exam_type", metadata.exam_type);
-  push("eye_exam.exam_item_name", metadata.exam_item_name, metadata.exam_item_name ? "high" : "uncertain");
+  push("eye_exam.exam_type", metadata.core_routing_fields?.exam_type);
+  push("eye_exam.exam_item_name", metadata.core_routing_fields?.exam_item_name);
   push("eye_exam.exam_item_suggested_tag", metadata.exam_item_suggested_tag, "medium");
-  push("eye_exam.device_vendor", metadata.device_vendor, metadata.device_vendor ? "high" : "uncertain");
-  push("eye_exam.device_model", metadata.device_model, metadata.device_model ? "medium" : "uncertain");
-  push("eye_exam.measured_at", metadata.measured_at, metadata.measured_at ? "medium" : "uncertain");
-  push("eye_exam.parse_status", metadata.parse_status);
-  push("eye_exam.ocr_quality_score", metadata.ocr_quality_score, metadata.ocr_quality_flag === "poor" ? "uncertain" : "high");
-  push("eye_exam.ocr_quality_flag", metadata.ocr_quality_flag, metadata.ocr_quality_flag === "poor" ? "uncertain" : "high");
-  push("eye_exam.requires_reupload", metadata.requires_reupload === true);
-  push("eye_exam.requires_exam_item_confirmation", metadata.requires_exam_item_confirmation === true);
-
-  if (metadata.exam_item_manual_tag) {
-    push("eye_exam.exam_item_manual_tag", metadata.exam_item_manual_tag, "high", "user_confirmed");
-    push("eye_exam.exam_item_manual_label", metadata.exam_item_manual_label, "high", "user_confirmed");
-    push("eye_exam.exam_item_manual_note", metadata.exam_item_manual_note, "high", "user_confirmed");
-    push("eye_exam.match_exam_item", metadata.exam_item_manual_tag, "high", "user_confirmed");
-  } else if (!metadata.requires_reupload) {
-    push("eye_exam.match_exam_item", metadata.exam_item_suggested_tag || metadata.exam_item_name, "medium");
-  }
-
-  for (const [key, value] of Object.entries(metadata.report_key_values || {}).slice(0, 20)) {
-    push(`eye_exam.${key}`, value, "high");
-  }
-  for (const side of ["right", "left"]) {
-    const values = metadata.eye_side_results?.[side]?.key_values || {};
-    for (const [key, value] of Object.entries(values).slice(0, 20)) {
-      push(`eye_exam.${side}.${key}`, value, "medium");
-    }
-  }
+  push("eye_exam.exam_item_manual_tag", metadata.exam_item_manual_tag, "high", "user_confirmed");
+  push("eye_exam.exam_item_manual_label", metadata.exam_item_manual_label, "high", "user_confirmed");
+  push("eye_exam.match_exam_item", metadata.core_routing_fields?.item_tag, metadata.exam_item_manual_tag ? "high" : "medium", metadata.exam_item_manual_tag ? "user_confirmed" : "eye_exam_core_projection");
+  push("eye_exam.measured_at", metadata.core_routing_fields?.occurred_at, "medium");
+  push("eye_exam.routing_status", metadata.routing_status);
+  push("eye_exam.value_add_status", metadata.value_add_status);
   return fields;
+}
+
+export function metadataToFactCardFields(metadata: any, artifactId: string) {
+  if (!metadata?.core_routing_fields) return [];
+  return [
+    ...coreRoutingToFactCardFields({
+      core_routing_fields: metadata.core_routing_fields,
+      routing_status: metadata.routing_status,
+      value_add_status: metadata.value_add_status,
+      artifact_id: artifactId,
+      source_quote: metadata.raw_text_excerpt || "",
+      extraction_method: "eye_exam_core_projection",
+    }),
+    ...legacyCoreAliases(metadata, artifactId),
+  ];
+}
+
+export function getEyeExamValueAddAccess(metadata: any, featureEnabled = true) {
+  return getValueAddAccessResult(metadata, featureEnabled);
 }
 
 export const EYE_EXAM_LLM_SCHEMA = {
