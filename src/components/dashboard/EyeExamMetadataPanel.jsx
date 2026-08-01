@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { asList } from "@/hooks/useClinicData";
 
@@ -132,31 +132,60 @@ export default function EyeExamMetadataPanel({ artifactIds = [], clinicId }) {
           <div className="space-y-2.5">
             {records.map((record) => {
               const axisRecovered = (record.warnings || []).some((warning) => String(warning).includes("axis_trailing_zero_ocr_recovered"));
+              const poorQuality = record.requires_reupload === true || record.ocr_quality_flag === "poor";
+              const confirmedLabel = record.exam_item_manual_label || null;
               return (
                 <div key={record.id || record.raw_artifact_id}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
                     <span className="text-[11px] font-semibold" style={{ color: "#F1F5F9" }}>{record.exam_type}</span>
-                    {record.exam_item_name && <span className="text-[10px]" style={{ color: "#CBD5E1" }}>· {record.exam_item_name}</span>}
+                    {confirmedLabel ? (
+                      <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: "#4ADE80" }}>
+                        <CheckCircle2 size={10} /> {confirmedLabel}
+                      </span>
+                    ) : record.exam_item_name ? (
+                      <span className="text-[10px]" style={{ color: "#CBD5E1" }}>· {record.exam_item_name}</span>
+                    ) : null}
                     {record.parse_status === "fallback" && (
                       <span className="inline-flex items-center gap-1 text-[9px]" style={{ color: "#FBBF24" }}>
                         <AlertTriangle size={9} /> 格式未完全适配
                       </span>
                     )}
                   </div>
+
                   <div className="text-[9.5px] mb-2" style={{ color: "#64748B" }}>
                     {[record.device_vendor, record.device_model].filter(Boolean).join(" ") || "设备未识别"}
                     {record.measured_at ? ` · ${String(record.measured_at).replace("T", " ")}` : ""}
+                    {record.ocr_quality_score != null ? ` · OCR ${record.ocr_quality_score}/100 (${record.ocr_quality_flag || "—"})` : ""}
                   </div>
-                  {Object.keys(record.report_key_values || {}).length > 0 && (
-                    <div className="rounded-lg px-2.5 py-2 mb-2" style={{ background: "rgba(15,23,42,0.35)", border: "1px solid rgba(51,65,85,0.75)" }}>
-                      <KeyValueRow values={record.report_key_values} />
+
+                  {poorQuality ? (
+                    <div className="rounded-lg px-2.5 py-2 text-[10px] leading-relaxed" style={{ background: "rgba(239,68,68,0.09)", border: "1px solid rgba(239,68,68,0.3)", color: "#FCA5A5" }}>
+                      <div className="flex items-center gap-1 font-semibold mb-1"><AlertTriangle size={10} /> 报告图片需要重新上传</div>
+                      该图片质量不足，详细检查数值未进入解析或编组依据；原始证据仍已保存。
                     </div>
+                  ) : (
+                    <>
+                      {record.requires_exam_item_confirmation && (
+                        <div className="rounded-lg px-2.5 py-2 mb-2 text-[10px]" style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.28)", color: "#FBBF24" }}>
+                          等待上传人员确认具体检查项目；确认后人工标签将优先用于编组。
+                        </div>
+                      )}
+                      {record.exam_item_manual_note && (
+                        <div className="text-[9.5px] mb-2" style={{ color: "#94A3B8" }}>项目说明：{record.exam_item_manual_note}</div>
+                      )}
+                      {Object.keys(record.report_key_values || {}).length > 0 && (
+                        <div className="rounded-lg px-2.5 py-2 mb-2" style={{ background: "rgba(15,23,42,0.35)", border: "1px solid rgba(51,65,85,0.75)" }}>
+                          <KeyValueRow values={record.report_key_values} />
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <EyeSide label="右眼 OD/R" result={record.eye_side_results?.right} />
+                        <EyeSide label="左眼 OS/L" result={record.eye_side_results?.left} />
+                      </div>
+                    </>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <EyeSide label="右眼 OD/R" result={record.eye_side_results?.right} />
-                    <EyeSide label="左眼 OS/L" result={record.eye_side_results?.left} />
-                  </div>
-                  {axisRecovered && (
+
+                  {axisRecovered && !poorQuality && (
                     <div className="text-[9px] mt-1.5" style={{ color: "#94A3B8" }}>
                       轴位包含受限 OCR 尾零校正；原始数值与逐行测量已保留供审计。
                     </div>
