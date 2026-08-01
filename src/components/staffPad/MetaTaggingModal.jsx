@@ -233,7 +233,7 @@ export default function MetaTaggingModal({
   const Icon = ATT_ICON[attachment?.type] || Paperclip;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.55)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex flex-col justify-end" style={{ background: "rgba(0,0,0,0.55)" }}>
       <div onClick={(e) => e.stopPropagation()}
         className="rounded-t-2xl p-4 max-h-[88vh] overflow-y-auto"
         style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, animation: "slideInRight 0.25s ease-out" }}>
