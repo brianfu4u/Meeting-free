@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
   "category": "任务进度|异常事件|资源需求|人员协作|其他",
   "urgency": "yellow|red",
   "summary": "一句话摘要（≤30字）",
-  "marquee_label": "供看板走马灯播放的极简动作标签，格式'部门+动作+对象'，≤12字，例：前台完成新挂号 / 特检室完成角膜地形图 / OK镜试戴完成预检",
+  "marquee_label": "供走马灯播放的事件概括，须涵盖时间(HH:mm)/地点(部门)/人物(姓名或角色)/干了什么(动作+对象)，≤24字，例：14:20 前台 小李 完成新患者挂号 / 10:05 特检室 张医生 完成角膜地形图检查",
   "needs_manager_attention": true或false,
   "attention_title": "需要店长注意时的标题（≤20字）",
   "recommendation": "建议店长采取的行动（≤50字）",

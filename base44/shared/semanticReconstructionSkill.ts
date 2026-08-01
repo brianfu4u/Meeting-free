@@ -47,7 +47,7 @@ const DEPT_LABEL_FALLBACK = {
   supplemental: "兜底",
 };
 
-const MAX_LABEL_LEN = 28;
+const MAX_LABEL_LEN = 32;
 
 function truncate(s, n) {
   if (typeof s !== "string") return "";
@@ -85,21 +85,24 @@ function deriveUrgency(aligned) {
 }
 
 /**
- * 构造走马灯展示文本。
- * 形态：{业务族} · {主体名} · {首字段值}（超长截断）
+ * 构造走马灯展示文本（事件概括）。
+ * 形态：{地点}·{人物}·{干了什么}（超长截断）
+ * 时间由走马灯车厢时间戳单独呈现，此处聚焦「地点+人物+动作」三要素。
  */
 function buildMarqueeLabel(artifact, aligned, extraction) {
-  const family = deriveFamilyLabel(aligned?.workflow_family_hint);
-  const subjectName = aligned?.subject_fingerprint?.name || "";
-  const fv = firstFieldValue(aligned?.fields);
-  const parts = [family];
+  const dept = deriveDeptLabel(artifact.source_region);        // 地点
+  const subjectName = aligned?.subject_fingerprint?.name || ""; // 人物
+  const fv = firstFieldValue(aligned?.fields);                  // 干了什么
+  const parts = [];
+  if (dept) parts.push(dept);
   if (subjectName) parts.push(subjectName);
   if (fv) parts.push(truncate(fv, 14));
-  let label = parts.filter(Boolean).join(" · ");
+  let label = parts.filter(Boolean).join("·");
   if (!label) {
-    // 兜底：使用归一化文本前缀
+    // 兜底：业务族 + 归一化文本前缀
+    const family = deriveFamilyLabel(aligned?.workflow_family_hint);
     const text = (extraction?.normalized_text || "").trim();
-    label = truncate(text, MAX_LABEL_LEN) || "新证据已归档";
+    label = truncate(text, MAX_LABEL_LEN) || (family ? `${family}·新证据` : "新证据已归档");
   }
   return truncate(label, MAX_LABEL_LEN);
 }
