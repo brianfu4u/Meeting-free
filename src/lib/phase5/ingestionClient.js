@@ -29,7 +29,11 @@ export const STATUS_COLORS = {
 export const ERROR_LABELS = {
   idempotency_conflict: "幂等冲突：相同请求键但碎片类型/校验和不同",
   mime_for_supported: "MIME 类型不支持",
+  mime_type_required: "文件已上传，但后续处理缺少 MIME 类型信息，请重新选择文件后再试",
+  mime_not_supported: "文件已上传，但文件类型不受后续证据处理支持",
   mime_forbidden: "MIME 类型被禁用",
+  size_required: "文件已上传，但后续处理缺少文件大小信息，请重新选择文件后再试",
+  file_too_large: "文件已上传，但超过证据处理的大小限制",
   url_not_whitelisted: "上传 URL 不在白名单",
   tenant_scope_violation: "租户越权",
   unauthenticated: "未登录",
