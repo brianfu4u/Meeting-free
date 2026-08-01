@@ -17,15 +17,13 @@ export const PHASE2_RUNTIME_SOURCES = {
   "src/lib/composition/ophthalmologyCompositionContext.js": "70bfef2a873ce0b86d48d3a76b6c8c12decf13d9",
   "src/lib/composition/prompts.js": "a328371620b8eaeb6da623e3167bbd88522aa614",
   "src/lib/composition/evidenceInterpreter.js": "1fe84faf2f7be6ed9ba4f5ab121e19a651d1a9f2",
-  "src/lib/composition/candidateFinder.js": "f09de528bd2e0948f74e844ef5e29cffdbb7b330",
+  "src/lib/composition/candidateFinder.js": "cc89e89bd9d578cfb432ac23f7c28c45f2b338a1",
   "src/lib/composition/clustering.js": "bcdf4db155bd85d493106236531f3300216a1770",
   "src/lib/composition/workflowAssembly.js": "8ed5ef568743f1128ed738bb48e4f466848c4e0f",
   "src/lib/composition/guardrailValidator.js": "39275606474fe379c5bd3370eea90ba6b4284770",
   "src/lib/tenant/tenantContext.js": "b7504dcf1c9fb86ff2ec30bc4f0b9a439cf4a82c",
 };
 
-// Deploy-time provenance for Agent v1.1 mirrors. These pins are deliberately
-// separate from the legacy Phase 2 map so older parity contracts stay stable.
 export const AGENT_V11_RUNTIME_SOURCES = {
   "src/lib/agentV11/attachmentProjection.js": "f9383ef747eb6b61e52cf1b7623ff46b62cc649d",
   "src/lib/agentV11/authoritativeAttachSaga.js": "d9cb0aab76a06cf967fee98d613f740ef83dfa2d",
