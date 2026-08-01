@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { ClinicProvider } from '@/lib/ClinicContext';
@@ -20,7 +20,7 @@ import ClinicSettings from "./pages/ClinicSettings";
 import PerformanceReport from "./pages/PerformanceReport";
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { user, isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const canUseHostedLogin = Boolean(appParams.appId && appParams.appBaseUrl);
 
   // Only redirect when a real Base44 backend/login is configured.
@@ -51,7 +51,7 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
+      <Route path="/" element={user?.role === 'admin' ? <Dashboard /> : <Navigate to="/staff-pad" replace />} />
       <Route path="/daily-review" element={<DailyReview />} />
       <Route path="/staff-pad" element={<StaffPad />} />
       <Route path="/staff-mgmt" element={<StaffManagement />} />
