@@ -1,9 +1,15 @@
 /**
- * Clinic OS V10 — Candidate Finder（修订版 R2.4）
+ * Clinic OS V10 — Candidate Finder（修订版 R2.5）
+ *
+ * R2.5：
+ * - 眼科 FactCard 存在人工确认项目时，将 eye_exam.exam_item_manual_tag
+ *   作为项目匹配的第一依据；自动识别项目仅作为辅助参考；
+ * - 人工项目标签只调整候选排序/LLM 上下文，不绕过显式 ID、租户隔离、
+ *   候选白名单、经理复核或自动挂接门槛。
  *
  * R2.4：
  * - clinicId、Artifact/FactCard 的 clinic_id 必须存在且完全一致；缺失或不一致均抛错；
- * - 时空候选按 min_delta_ms ASC, workflow_id ASC 稳定排序后取前 5（禁止按数据库原始顺序截断）；
+ * - 时空候选按 min_delta_ms ASC, workflow_id ASC 稳定排序后取前 5；
  * - LLM 返回白名单内 ID 时合并/标注既有候选，禁止追加重复项；
  * - 已有 5 个候选时 LLM 选中项必须保留，不得被 slice 丢弃；
  * - 白名单外 ID 输出 invalid_candidate，不加入候选或自动挂接。
@@ -44,6 +50,53 @@ function assertSourceClinicMatch(source, clinicId) {
   }
 }
 
+function normalizeTag(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function factCardFieldValue(factCard, fieldName) {
+  const fields = Array.isArray(factCard?.fields) ? factCard.fields : [];
+  const field = fields.find((item) => item?.field_name === fieldName);
+  return field?.value ?? null;
+}
+
+export function getEyeExamMatchingContext(factCard) {
+  const manualTag = factCardFieldValue(factCard, "eye_exam.exam_item_manual_tag");
+  const manualLabel = factCardFieldValue(factCard, "eye_exam.exam_item_manual_label");
+  const suggestedTag = factCardFieldValue(factCard, "eye_exam.exam_item_suggested_tag");
+  const autoName = factCardFieldValue(factCard, "eye_exam.exam_item_name");
+  const matchItem = factCardFieldValue(factCard, "eye_exam.match_exam_item");
+  return {
+    manual_tag: manualTag || null,
+    manual_label: manualLabel || null,
+    suggested_tag: suggestedTag || null,
+    automatic_exam_item_name: autoName || null,
+    effective_match_item: manualTag || matchItem || suggestedTag || autoName || null,
+    source: manualTag ? "user_confirmed" : (matchItem || suggestedTag || autoName ? "automatic" : null),
+  };
+}
+
+function collectWorkflowExamItemTags(workflow) {
+  const directValues = [
+    workflow?.expected_exam_item_tag,
+    workflow?.exam_item_tag,
+    workflow?.exam_item_manual_tag,
+    workflow?.task_exam_item_tag,
+    workflow?.task_type,
+  ];
+  const listValues = [
+    ...(Array.isArray(workflow?.expected_exam_item_tags) ? workflow.expected_exam_item_tags : []),
+    ...(Array.isArray(workflow?.exam_item_tags) ? workflow.exam_item_tags : []),
+  ];
+  return new Set([...directValues, ...listValues].map(normalizeTag).filter(Boolean));
+}
+
+function workflowMatchesEyeExamItem(workflow, matchingContext) {
+  const effective = normalizeTag(matchingContext?.effective_match_item);
+  if (!effective) return false;
+  return collectWorkflowExamItemTags(workflow).has(effective);
+}
+
 export function deterministicCandidates({ artifact, factCard, workflows, clinicId }) {
   assertClinicId(clinicId);
   const source = artifact || factCard;
@@ -51,7 +104,6 @@ export function deterministicCandidates({ artifact, factCard, workflows, clinicI
   assertSourceClinicMatch(source, clinicId);
   if (!Array.isArray(workflows)) return [];
 
-  // 强制 clinic_id 隔离：仅在同一门店内寻找候选
   const scoped = workflows.filter((w) => w.clinic_id === clinicId);
   const candidates = [];
 
@@ -71,8 +123,9 @@ export function deterministicCandidates({ artifact, factCard, workflows, clinicI
     }
   }
 
-  // 2. 时空匹配：计算每个 Workflow 与所有时间锚点（temporal_anchors/started_at/last_event_at）的最小时间差
+  // 2. 时空匹配；人工确认的眼科项目仅提高同类候选排序，不单独创造候选。
   const capturedAt = artifact?.captured_at || factCard?.occurred_at;
+  const eyeExamContext = getEyeExamMatchingContext(factCard);
   if (capturedAt) {
     const ts = new Date(capturedAt).getTime();
     if (!Number.isNaN(ts)) {
@@ -83,17 +136,30 @@ export function deterministicCandidates({ artifact, factCard, workflows, clinicI
         const deltas = times.map((pt) => Math.abs(pt - ts));
         const minDelta = Math.min(...deltas);
         if (minDelta <= windowMs) {
+          const manualItemMatch = eyeExamContext.source === "user_confirmed"
+            && workflowMatchesEyeExamItem(w, eyeExamContext);
+          const automaticItemMatch = eyeExamContext.source !== "user_confirmed"
+            && workflowMatchesEyeExamItem(w, eyeExamContext);
           candidates.push({
             workflow_id: w.id,
             method: "spatiotemporal",
-            score: 0.6,
+            score: manualItemMatch ? 0.82 : automaticItemMatch ? 0.68 : 0.6,
             min_delta_ms: minDelta,
-            reason: `最小时间差 ${Math.round(minDelta / 1000)}s（±${SPATIOTEMPORAL_WINDOW_MIN}分钟内，仅候选，不自动挂接）`,
+            eye_exam_item_match: manualItemMatch ? "manual" : automaticItemMatch ? "automatic" : null,
+            reason: manualItemMatch
+              ? `人工确认检查项目 ${eyeExamContext.manual_tag} 与 Workflow 匹配；最小时间差 ${Math.round(minDelta / 1000)}s`
+              : automaticItemMatch
+                ? `自动识别检查项目 ${eyeExamContext.effective_match_item} 与 Workflow 匹配；最小时间差 ${Math.round(minDelta / 1000)}s`
+                : `最小时间差 ${Math.round(minDelta / 1000)}s（±${SPATIOTEMPORAL_WINDOW_MIN}分钟内，仅候选，不自动挂接）`,
           });
         }
       }
-      // 稳定排序：min_delta_ms ASC, workflow_id ASC，取前 5
+      // 人工项目匹配优先，其次自动项目匹配，再按时间差和 workflow_id 稳定排序。
+      const itemRank = { manual: 0, automatic: 1 };
       candidates.sort((a, b) => {
+        const aRank = itemRank[a.eye_exam_item_match] ?? 2;
+        const bRank = itemRank[b.eye_exam_item_match] ?? 2;
+        if (aRank !== bRank) return aRank - bRank;
         if (a.min_delta_ms !== b.min_delta_ms) return a.min_delta_ms - b.min_delta_ms;
         return a.workflow_id < b.workflow_id ? -1 : a.workflow_id > b.workflow_id ? 1 : 0;
       });
@@ -115,21 +181,38 @@ export async function llmCandidateMatch({ factCard, candidateWorkflows, invokeLL
   }
 
   const whitelist = candidateWorkflows.map((w) => w.id);
+  const eyeExamMatchingContext = getEyeExamMatchingContext(factCard);
+  const orderedFields = (factCard.fields || []).slice().sort((a, b) => {
+    const priority = (field) => field?.field_name === "eye_exam.exam_item_manual_tag" ? 0
+      : field?.field_name === "eye_exam.match_exam_item" ? 1
+        : field?.field_name === "eye_exam.exam_item_name" ? 2 : 3;
+    return priority(a) - priority(b);
+  });
 
   const prompt = [
     "你是视光诊所工作流归属判定器。在给定的候选 Workflow 白名单内选择最可能归属项。",
     "约束（影子模式）：仅输出候选建议（带信心度与理由），禁止直接修改系统状态；",
     "best_workflow_id 必须来自候选白名单，不得发明；confidence 仅记录，不决定自动挂接。",
+    "眼科检查项目规则：存在 manual_tag 时，它是上传人员确认的业务分类，优先于 automatic_exam_item_name；自动识别仅作辅助。",
+    "",
+    "眼科项目匹配上下文:",
+    JSON.stringify(eyeExamMatchingContext),
     "",
     "证据主体:",
     JSON.stringify({
       subject_type: factCard.subject_type || null,
       subject_fingerprint: factCard.subject_fingerprint || null,
-      fields: (factCard.fields || []).map((f) => ({ field_name: f.field_name, value: f.value })),
+      fields: orderedFields.map((f) => ({ field_name: f.field_name, value: f.value })),
     }),
     "",
     "候选 Workflow 白名单（≤5）:",
-    JSON.stringify(candidateWorkflows.map((w) => ({ id: w.id, workflow_family: w.workflow_family, subject_type: w.subject_type }))),
+    JSON.stringify(candidateWorkflows.map((w) => ({
+      id: w.id,
+      workflow_family: w.workflow_family,
+      subject_type: w.subject_type,
+      expected_exam_item_tag: w.expected_exam_item_tag || w.exam_item_tag || null,
+      expected_exam_item_tags: w.expected_exam_item_tags || w.exam_item_tags || [],
+    }))),
   ].join("\n");
 
   const result = await invokeLLM({
@@ -190,7 +273,6 @@ export async function resolveWorkflowLink({ artifact, factCard, workflows, invok
     };
   }
 
-  // 时空候选已按 min_delta_ms 排序并截到 ≤5
   const candidates = det.filter((c) => c.method === "spatiotemporal");
   const invalid_candidates = [];
 
@@ -205,7 +287,6 @@ export async function resolveWorkflowLink({ artifact, factCard, workflows, invok
     });
     invalid_candidates.push(...invalid);
 
-    // R2.4：合并/标注既有候选，禁止追加重复项；不得 slice 丢弃 LLM 选中项
     const byId = new Map(candidates.map((c) => [c.workflow_id, c]));
     for (const llm of llmCands) {
       const existing = byId.get(llm.workflow_id);
@@ -215,8 +296,6 @@ export async function resolveWorkflowLink({ artifact, factCard, workflows, invok
           new Set([...(existing.methods || [existing.method]), "llm"])
         );
       } else {
-        // 白名单外的 LLM 结果已在 llmCandidateMatch 记为 invalid_candidate；
-        // 此分支理论上不可达（whitelist = candidates），但保留以防遗漏且不 slice 丢弃
         byId.set(llm.workflow_id, llm);
         candidates.push(llm);
       }
