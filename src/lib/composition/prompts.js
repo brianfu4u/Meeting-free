@@ -51,6 +51,7 @@ export function buildInterpreterPrompt({ artifact, sopDigest, businessLine }) {
     "- 抽取质量四档：high/medium/low/uncertain；无依据字段不得输出；",
     "- subject_fingerprint 仅记录高可信主体线索（姓名/病历号等），低可信不得写入；",
     "- occurred_at 为业务发生时间（若可从证物识别），否则留空由调用方以 captured_at 兜底；",
+    "- 所有字段值（value）与主体名称（subject_fingerprint.name）必须用中文输出；若证物含英文医学术语或缩写，翻译为中文后填写；",
     "- 输出严格符合给定 JSON Schema。",
     "",
     `业务线: ${businessLine || "unknown"}`,
