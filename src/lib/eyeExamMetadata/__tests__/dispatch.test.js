@@ -90,7 +90,7 @@ TOPCON`;
     const result = await dispatchEyeExamReportMetadata({ rawText: text, context: baseContext, deps: noLlm });
 
     expect(result).toMatchObject({
-      schema_version: "eye-exam-report-metadata.v1.1",
+      schema_version: EYE_EXAM_METADATA_SCHEMA_VERSION,
       parser_id: "topcon_refraction_parser",
       parser_version: "phase1.1.v1",
       parse_status: "parsed",
