@@ -65,6 +65,72 @@ describe("eye exam report metadata dispatch", () => {
     expect(result.eye_side_results.left.key_values.sphere_d).toBe(-3);
   });
 
+  it("parses the clinic TOPCON multi-row OCR receipt as complete metadata", async () => {
+    const text = `NAME
+2026_08_01 AM 10:34
+NO.0465
+SN:4694190
+REF. DATA
+VD: 12.00 CYL: (-)
+<R> S C A
+ - 2.25 - 1.25 163
+ - 2.25 - 1.00 164
+ - 2.25 - 1.00 163
+ - 2.25 - 1.00 163
+ S. E. - 2.75
+<L> S C A
+ - 2.50 - 1.25 14
+ - 2.50 - 1.00 14
+ - 2.25 - 1.25 14
+ - 2.50 - 1.25 14
+ S. E. - 3.25
+PD: 61.5
+TOPCON`;
+
+    const result = await dispatchEyeExamReportMetadata({ rawText: text, context: baseContext, deps: noLlm });
+
+    expect(result).toMatchObject({
+      schema_version: "eye-exam-report-metadata.v1.1",
+      parser_id: "topcon_refraction_parser",
+      parser_version: "phase1.1.v1",
+      parse_status: "parsed",
+      exam_type: "屈光验光",
+      exam_item_name: "自动验光 / Ref Data",
+      device_vendor: "TOPCON",
+      measured_at: "2026-08-01T10:34:00",
+      report_key_values: { pd_mm: 61.5, vd_mm: 12 },
+    });
+    expect(result.eye_side_results.right.key_values).toMatchObject({
+      sphere_d: -2.75,
+      spherical_equivalent_d: -2.75,
+      cylinder_d: -1,
+      axis_deg: 163,
+    });
+    expect(result.eye_side_results.left.key_values).toMatchObject({
+      sphere_d: -3.25,
+      spherical_equivalent_d: -3.25,
+      cylinder_d: -1.25,
+      axis_deg: 140,
+      axis_original_ocr_deg: 14,
+      axis_correction_applied: true,
+    });
+    expect(result.eye_side_results.right.raw_measurements).toHaveLength(4);
+    expect(result.eye_side_results.left.raw_measurements).toHaveLength(4);
+    expect(result.eye_side_results.left.raw_measurements[0]).toMatchObject({
+      sphere_d: -2.5,
+      cylinder_d: -1.25,
+      axis_raw_deg: 14,
+      axis_deg: 140,
+    });
+    expect(result.warnings).toContain("left_axis_trailing_zero_ocr_recovered");
+    expect(result.warnings).not.toContain("refraction_values_not_fully_detected");
+
+    const fields = metadataToFactCardFields(result, "artifact-001");
+    expect(fields.some((field) => field.field_name === "eye_exam.pd_mm" && field.value === "61.5")).toBe(true);
+    expect(fields.some((field) => field.field_name === "eye_exam.vd_mm" && field.value === "12")).toBe(true);
+    expect(fields.some((field) => field.field_name === "eye_exam.left.axis_deg" && field.value === "140")).toBe(true);
+  });
+
   it("parses a ZEISS Cirrus OCT report", async () => {
     const text = `ZEISS CIRRUS HD-OCT 5000\nMacular Cube 512x128\n2026/08/01 11:20\nOD Central Subfield Thickness: 248 um Signal Strength: 8\nOS Central Subfield Thickness: 251 um Signal Strength: 9`;
     const result = await dispatchEyeExamReportMetadata({ rawText: text, context: baseContext, deps: noLlm });
