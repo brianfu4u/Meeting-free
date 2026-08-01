@@ -166,7 +166,6 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
               className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none mb-3"
               style={{ background: theme.canvas, border: `1px solid ${theme.border}`, color: theme.text }} />
 
-            {/* 一键采集按钮 */}
             <div className="grid grid-cols-4 gap-2 mb-3">
               <button onClick={() => cameraRef.current?.click()} disabled={uploading || recording}
                 className="flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all active:scale-95 disabled:opacity-50" style={btnBase}>
@@ -198,7 +197,6 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
               </div>
             )}
 
-            {/* 附件列表 */}
             {attachments.length > 0 && (
               <div className="space-y-2 mb-3">
                 {attachments.map((a, i) => {
@@ -225,7 +223,6 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
               </div>
             )}
 
-            {/* 隐藏输入：拍照 / 相册 / 文件 */}
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
               onChange={(e) => { addImage(e.target.files?.[0]); e.target.value = ""; }} />
             <input ref={photoRef} type="file" accept="image/*" className="hidden"
@@ -247,8 +244,13 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
 
       <MetaTaggingModal open={!!taggingAttachment} attachment={taggingAttachment} staff={staff} clinicId={clinicId}
         onClose={() => setTaggingAttachment(null)}
+        onNeedsReupload={(target) => {
+          setAttachments((prev) => prev.filter((item) => item !== target && item.url !== target?.url));
+          setTaggingAttachment(null);
+          setErr("原始上传记录已保留。请重新拍照，确保文字清晰、四边完整且无明显反光。");
+        }}
         onConfirmed={() => {
-          // 新事件模式：标签确认后自动提交汇报，生成历史记录（无需再单独按"提交汇报"）
+          // 新事件模式：只有通用标签和眼科项目确认都完成后才自动提交。
           if (mode === "new_event" && !taskId) submit();
         }} />
     </div>
