@@ -6,7 +6,7 @@
  * 数据源：今日 OperationalTask（assignee_staff_id）+ EvidenceFactCard（artifact.source_staff_id）。
  */
 
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
@@ -136,6 +136,23 @@ export default function EventStreamMarquee() {
 
   const isLoading = q.isLoading && fc.isLoading;
 
+  // 仅当内容超出容器宽度时才复制+滚动，避免少量条目时出现"两列重复"
+  const trackRef = useRef(null);
+  const containerRef = useRef(null);
+  const [overflow, setOverflow] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const track = trackRef.current;
+      const container = containerRef.current;
+      if (track && container) setOverflow(track.scrollWidth > container.clientWidth + 1);
+    };
+    check();
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(check);
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [items.length]);
+
   return (
     <div className="rounded-xl overflow-hidden flex flex-col h-full" style={{ background: theme.cardBg, border: `1px solid ${theme.border}` }}>
       {/* 面板头 */}
@@ -152,7 +169,7 @@ export default function EventStreamMarquee() {
       </div>
 
       {/* 轨道 */}
-      <div className="flex-1 flex items-center overflow-hidden" style={{ background: theme.canvas }}>
+      <div ref={containerRef} className="flex-1 flex items-center overflow-hidden" style={{ background: theme.canvas }}>
         {isLoading ? (
           <div className="w-full flex items-center justify-center gap-2 text-xs" style={{ color: theme.textFaint }}>
             <Loader className="animate-spin" size={14} /> 事件流加载中…
@@ -162,12 +179,16 @@ export default function EventStreamMarquee() {
             <Radio size={13} style={{ color: "#16A34A" }} /> 今日无事件流
           </div>
         ) : (
-          <div className="marquee-track flex items-center whitespace-nowrap py-2" style={{ width: "max-content" }}>
+          <div
+            ref={trackRef}
+            className={`flex items-center whitespace-nowrap py-2 ${overflow ? "marquee-track" : ""}`}
+            style={{ width: overflow ? "max-content" : "100%", justifyContent: overflow ? undefined : "center" }}
+          >
             {/* 火车头 */}
             <div className="inline-flex items-center justify-center flex-shrink-0 px-2.5 py-2 rounded-l-lg" style={{ background: "linear-gradient(135deg,#00C7D9,#00A8BD)", color: "#0D1B2A" }}>
               <Train size={20} />
             </div>
-            {[...items, ...items].map((it, i) => (
+            {(overflow ? [...items, ...items] : items).map((it, i) => (
               <Carriage key={it.kind + "-" + it.id + "-" + i} item={it} theme={theme} />
             ))}
           </div>
