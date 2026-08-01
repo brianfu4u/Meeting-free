@@ -32,8 +32,11 @@ function fmtHHmm(ts) {
 
 function marqueeLabel(task) {
   if (task.ai_parsed?.marquee_label) return task.ai_parsed.marquee_label;
-  if (task.ai_parsed?.summary) return task.ai_parsed.summary;
-  return (task.description || "事件流").slice(0, 28);
+  const { category, summary } = task.ai_parsed || {};
+  if (summary && category) return `${category}·${summary}`.slice(0, 28);
+  if (summary) return String(summary).slice(0, 28);
+  if (category) return String(category).slice(0, 28);
+  return "事件流";
 }
 
 function Carriage({ item, theme }) {
