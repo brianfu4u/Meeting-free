@@ -118,8 +118,10 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
     if (!f) return;
     setUploading(true); setErr("");
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
-      const att = { type: "image", url: file_url, name: f.name, file: f };
+      const res = await base44.integrations.Core.UploadFile({ file: f });
+      const file_url = res?.file_url || res?.data?.file_url;
+      if (!file_url) throw new Error("上传返回无效，未获取到文件地址");
+      const att = { type: "image", url: file_url, name: f.name };
       const idx = retakeIndexRef.current;
       if (idx !== null && idx !== undefined) {
         setAttachments((prev) => prev.map((item, i) => (i === idx ? att : item)));
@@ -128,20 +130,36 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
         setAttachments((prev) => [...prev, att]);
       }
       setTaggingAttachment(att);
-    } catch { setErr("图片上传失败"); retakeIndexRef.current = null; }
-    finally { setUploading(false); }
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || "图片上传失败";
+      setErr(typeof msg === "string" ? msg : "图片上传失败");
+      retakeIndexRef.current = null;
+    }
+    finally {
+      setUploading(false);
+      if (cameraRef.current) cameraRef.current.value = "";
+      if (photoRef.current) photoRef.current.value = "";
+    }
   };
 
   const addFile = async (f) => {
     if (!f) return;
     setUploading(true); setErr("");
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
-      const att = { type: "file", url: file_url, name: f.name, file: f };
+      const res = await base44.integrations.Core.UploadFile({ file: f });
+      const file_url = res?.file_url || res?.data?.file_url;
+      if (!file_url) throw new Error("上传返回无效，未获取到文件地址");
+      const att = { type: "file", url: file_url, name: f.name };
       setAttachments((prev) => [...prev, att]);
       setTaggingAttachment(att);
-    } catch { setErr("文件上传失败"); }
-    finally { setUploading(false); }
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || "文件上传失败";
+      setErr(typeof msg === "string" ? msg : "文件上传失败");
+    }
+    finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const removeAttach = (i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i));
@@ -415,13 +433,13 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
           )}
         </div>
 
-        {/* 隐藏文件输入 */}
+        {/* 隐藏文件输入 — 不在 onChange 中立即清空 value，避免 iOS 上 File 对象被回收导致上传失败 */}
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-          onChange={(e) => { addImage(e.target.files?.[0]); e.target.value = ""; }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) addImage(f); }} />
         <input ref={photoRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => { addImage(e.target.files?.[0]); e.target.value = ""; }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) addImage(f); }} />
         <input ref={fileRef} type="file" className="hidden"
-          onChange={(e) => { addFile(e.target.files?.[0]); e.target.value = ""; }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) addFile(f); }} />
       </div>
 
       <MetaTaggingModal open={!!taggingAttachment} attachment={taggingAttachment} staff={staff} clinicId={clinicId}
