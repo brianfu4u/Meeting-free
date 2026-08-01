@@ -75,6 +75,7 @@ function uniqueWarnings(value: unknown): string[] {
 
 export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
   const confidence = finiteNumber(input.parse_confidence);
+  const templateMatchScore = finiteNumber(input.template_match_score);
   const status = Object.values(EYE_EXAM_PARSE_STATUS).includes(input.parse_status as string)
     ? input.parse_status
     : EYE_EXAM_PARSE_STATUS.partial;
@@ -102,6 +103,11 @@ export function createEyeExamMetadata(input: Record<string, unknown> = {}) {
     },
     parser_id: cleanString(input.parser_id, 120) || "fallback_eye_exam_parser",
     parser_version: cleanString(input.parser_version, 64) || "phase1.v1",
+    template_id: cleanString(input.template_id, 120),
+    template_version: cleanString(input.template_version, 64),
+    template_match_score: templateMatchScore == null
+      ? null
+      : Math.max(0, Math.min(1, templateMatchScore)),
     parse_status: status,
     parse_confidence: confidence == null ? 0.4 : Math.max(0, Math.min(1, confidence)),
     warnings: uniqueWarnings(input.warnings),
@@ -159,7 +165,8 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     ],
   });
 
-  // Context and provenance are always controlled by the rule/dispatch layer.
+  // Tenant, provenance and format-template identity are always controlled by
+  // the deterministic dispatch layer. LLM output cannot replace them.
   return {
     ...merged,
     clinic_id: ruleMetadata.clinic_id || null,
@@ -169,6 +176,9 @@ export function mergeRuleAndLlmMetadata(ruleMetadata: any, llmMetadata: any) {
     evidence_fact_card_id: ruleMetadata.evidence_fact_card_id || null,
     parser_id: ruleMetadata.parser_id,
     parser_version: ruleMetadata.parser_version,
+    template_id: ruleMetadata.template_id || null,
+    template_version: ruleMetadata.template_version || null,
+    template_match_score: ruleMetadata.template_match_score ?? null,
     raw_text_excerpt: ruleMetadata.raw_text_excerpt || null,
     disclaimer: EYE_EXAM_DISCLAIMER,
   };
