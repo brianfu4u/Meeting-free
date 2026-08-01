@@ -13,7 +13,7 @@ import TaskDetail from "@/components/staffPad/TaskDetail";
 import ReportSheet from "@/components/staffPad/ReportSheet";
 import HistoryList from "@/components/staffPad/HistoryList";
 import HistoryDetail from "@/components/staffPad/HistoryDetail";
-import { Loader, LogIn, ArrowLeft, Plus, Activity, Search } from "lucide-react";
+import { Loader, LogIn, LogOut, ArrowLeft, Plus, Activity, Search } from "lucide-react";
 
 function StaffPadInner() {
   const { theme } = useTheme();
@@ -120,6 +120,12 @@ function StaffPadInner() {
           style={{ background: `${STAFF_STATUS_COLORS[staff.status]}22`, color: STAFF_STATUS_COLORS[staff.status] }}>
           {STAFF_STATUS_LABELS[staff.status] || staff.status}
         </span>
+        <button onClick={() => base44.auth.logout(window.location.href)}
+          title="退出登录"
+          className="p-1.5 rounded-lg flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.04)" }}>
+          <LogOut size={15} style={{ color: theme.textSub }} />
+        </button>
       </header>
 
       {view === "home" && (
