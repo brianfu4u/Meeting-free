@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/lib/ThemeContext";
+import { persistEyeExamMetadataForBridgeResults } from "@/lib/phase5/ingestionClient";
 import MetaTaggingModal from "@/components/staffPad/MetaTaggingModal";
 import { X, Camera, Image as ImageIcon, FileText, Mic, Square, Loader, Send, CheckCircle2, Sparkles, Paperclip } from "lucide-react";
 
@@ -115,7 +116,12 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
       };
       if (taskId) payload.task_id = taskId;
       const res = await base44.functions.invoke("staffReportService", payload);
-      setResult(res.data || res);
+      const responseData = res.data || res;
+      await persistEyeExamMetadataForBridgeResults({
+        clinicId,
+        bridgeResults: responseData?.evidence_bridge || [],
+      });
+      setResult(responseData);
       onSubmitted?.();
     } catch (e2) {
       setErr(e2?.response?.data?.error || e2?.message || "提交失败");

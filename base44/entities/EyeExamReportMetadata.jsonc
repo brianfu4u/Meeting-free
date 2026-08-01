@@ -1,0 +1,128 @@
+{
+  "name": "EyeExamReportMetadata",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "门店唯一标识；必须与来源 Artifact、EvidenceItem 和 FactCard 的 clinic_id 完全一致"
+    },
+    "patient_id": {
+      "type": "string",
+      "description": "可选的患者/PatientSession 关联标识；Phase 1 不从报告内容猜测患者身份"
+    },
+    "raw_artifact_id": {
+      "type": "string",
+      "description": "来源原始 Artifact ID，作为解析幂等锚点"
+    },
+    "origin_evidence_item_id": {
+      "type": "string",
+      "description": "若来源于 EvidenceItem 桥接，记录原始 EvidenceItem ID"
+    },
+    "evidence_fact_card_id": {
+      "type": "string",
+      "description": "关联 EvidenceFactCard ID；关键字段会同时扁平写入 FactCard.fields"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "统一眼科检查报告元数据模型版本"
+    },
+    "record_kind": {
+      "type": "string",
+      "enum": ["exam_data_record"],
+      "description": "固定为检查数据记录，明确区别于诊断或治疗建议"
+    },
+    "exam_type": {
+      "type": "string",
+      "description": "检查大类，例如眼压检查、屈光验光、OCT、眼底照相、角膜内皮细胞检查、眼科超声"
+    },
+    "exam_item_name": {
+      "type": "string",
+      "description": "报告中的具体检查项目名称，例如 Tono Data、Macular Cube 512x128"
+    },
+    "device_vendor": {
+      "type": "string",
+      "description": "设备厂商，例如 TOPCON、ZEISS"
+    },
+    "device_model": {
+      "type": "string",
+      "description": "设备型号；仅记录报告中明确出现或规则可靠识别的型号"
+    },
+    "measured_at": {
+      "type": "string",
+      "description": "报告中记录的检查日期时间；不确定时可为空"
+    },
+    "eye_side_results": {
+      "type": "object",
+      "description": "统一左右眼结果结构；仅记录原始检查数据，不评价是否正常",
+      "properties": {
+        "right": {
+          "type": "object",
+          "properties": {
+            "raw_text": { "type": "string" },
+            "key_values": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        },
+        "left": {
+          "type": "object",
+          "properties": {
+            "raw_text": { "type": "string" },
+            "key_values": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "parser_id": {
+      "type": "string",
+      "description": "命中的设备/格式解析器 ID"
+    },
+    "parser_version": {
+      "type": "string",
+      "description": "解析器版本"
+    },
+    "parse_status": {
+      "type": "string",
+      "enum": ["parsed", "partial", "fallback"],
+      "description": "parsed=已适配；partial=部分字段；fallback=未知格式保底解析"
+    },
+    "parse_confidence": {
+      "type": "number",
+      "description": "元数据解析置信度 0-1；不代表医学结论置信度"
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "格式适配或字段缺失提示，不包含诊断判断"
+    },
+    "raw_text_excerpt": {
+      "type": "string",
+      "description": "用于溯源的 OCR/文本摘录，最大长度由解析模型控制"
+    },
+    "disclaimer": {
+      "type": "string",
+      "description": "固定声明：仅为检查数据记录，不构成医学诊断或治疗建议"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "元数据记录创建时间"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "raw_artifact_id",
+    "schema_version",
+    "record_kind",
+    "exam_type",
+    "eye_side_results",
+    "parser_id",
+    "parser_version",
+    "parse_status",
+    "parse_confidence",
+    "disclaimer",
+    "created_at"
+  ]
+}
