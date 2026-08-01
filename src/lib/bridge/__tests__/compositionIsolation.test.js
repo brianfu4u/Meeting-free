@@ -31,8 +31,8 @@ describe("evidence bridge composition isolation regression", () => {
 
   it("pins seven-track, core-only candidate routing and Guardrail runtime files", () => {
     const expected = {
-      "base44/functions/compositionOrchestrator/runtimeAdapter.ts": "676a498d9a9d46f2649ccab88e9ec5c9c05106a8",
-      "base44/functions/compositionOrchestrator/runtime/candidateFinder.js": "8e0a221ecc4d642dd02165be1acc0a0a877f2e38",
+      "base44/functions/compositionOrchestrator/runtimeAdapter.ts": "73c6ef97ed73dda610506d2858bebf10bf7c2b29",
+      "base44/functions/compositionOrchestrator/runtime/candidateFinder.js": "7980e3a2993fcc191436f3fd029bfadf077911d0",
       "base44/functions/compositionOrchestrator/runtime/guardrailValidator.js": "8ee1aba674d9cf232aafc7cab7ab717d5923bb8a",
       "base44/functions/compositionOrchestrator/runtime/workflowAssembly.js": "2df2e7867ad20d6315079749b05138890925001f",
       "base44/functions/compositionOrchestrator/service.ts": "45cfd4b7c7483b9c2c5692d7dfe962fd411589a2",
