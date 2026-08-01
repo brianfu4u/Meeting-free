@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { asList, CLINIC_ID } from "@/hooks/useClinicData";
+import EyeExamMetadataPanel from "@/components/dashboard/EyeExamMetadataPanel";
 
 const C = {
   canvas: "#0D1B2A", card: "#1E293B", border: "#334155",
@@ -95,6 +96,12 @@ function SnapshotCard({ snap, onClose }) {
           </div>
         )}
       </div>
+
+      {/* Eye exam report metadata — data record only, never diagnosis */}
+      <EyeExamMetadataPanel
+        artifactIds={snap.artifact_ids || []}
+        clinicId={snap.clinic_id || CLINIC_ID}
+      />
 
       {/* Stats row */}
       <div className="flex items-center gap-3 px-3 py-2">
