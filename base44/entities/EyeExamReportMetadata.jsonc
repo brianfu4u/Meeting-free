@@ -51,6 +51,11 @@
       "type": "string",
       "description": "报告中记录的检查日期时间；不确定时可为空"
     },
+    "report_key_values": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "不属于单眼的报告级测量值，例如 PD、VD"
+    },
     "eye_side_results": {
       "type": "object",
       "description": "统一左右眼结果结构；仅记录原始检查数据，不评价是否正常",
@@ -59,7 +64,21 @@
           "type": "object",
           "properties": {
             "raw_text": { "type": "string" },
-            "key_values": { "type": "object", "additionalProperties": true }
+            "key_values": { "type": "object", "additionalProperties": true },
+            "raw_measurements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sphere_d": { "type": "number" },
+                  "cylinder_d": { "type": "number" },
+                  "axis_raw_deg": { "type": "number" },
+                  "axis_deg": { "type": "number" },
+                  "source_line": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
           },
           "additionalProperties": false
         },
@@ -67,7 +86,21 @@
           "type": "object",
           "properties": {
             "raw_text": { "type": "string" },
-            "key_values": { "type": "object", "additionalProperties": true }
+            "key_values": { "type": "object", "additionalProperties": true },
+            "raw_measurements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sphere_d": { "type": "number" },
+                  "cylinder_d": { "type": "number" },
+                  "axis_raw_deg": { "type": "number" },
+                  "axis_deg": { "type": "number" },
+                  "source_line": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
           },
           "additionalProperties": false
         }
