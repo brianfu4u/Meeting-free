@@ -5,7 +5,8 @@
  * - 编组 Agent 只读取 FactCard 中的 routing.* 基础层字段；
  * - 旧记录仅允许从眼科 legacy core aliases 回退，不读取左右眼数值、设备参数或运营指标；
  * - department / role / priority_hint / SLA 作为路由提示进入候选与 LLM 上下文；
- * - value_add_fields 不投影到编组总线，详细解析不完整不得阻断基础编组。
+ * - value_add_fields 不投影到编组总线，详细解析不完整不得阻断基础编组；
+ * - 同一 FactCard 多次专业化解析时，最后写入的 core projection 优先。
  *
  * R2.5：人工确认眼科项目优先于自动项目，但只调整候选排序/上下文。
  * R2.4：租户隔离、候选白名单、稳定排序与 invalid_candidate 护栏保持不变。
@@ -79,8 +80,13 @@ function normalizeTag(value) {
 
 function factCardFieldValue(factCard, fieldName) {
   const fields = Array.isArray(factCard?.fields) ? factCard.fields : [];
-  const field = fields.find((item) => item?.field_name === fieldName);
-  return field?.value ?? null;
+  // New, more specific metadata is appended after the generic bridge projection.
+  // Read from the end so an eye-exam specialization overrides an earlier generic
+  // ops-event route without mutating or deleting the original evidence history.
+  for (let index = fields.length - 1; index >= 0; index -= 1) {
+    if (fields[index]?.field_name === fieldName) return fields[index]?.value ?? null;
+  }
+  return null;
 }
 
 export function getCoreRoutingContext(factCard) {
