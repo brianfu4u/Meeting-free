@@ -1,5 +1,5 @@
 // Phase 5 前端碎片采集客户端 —— 唯一允许的入站桥接封装。
-// 仅调用 UploadFile + fragmentIngestionService，禁止直接操作 Artifact/EvidenceFactCard/FragmentProcessingResult。
+// 仅调用 UploadFile + 后端函数，禁止前端直接操作 Artifact/EvidenceFactCard/FragmentProcessingResult。
 import { base44 } from "@/api/base44Client";
 
 export const STATUS_LABELS = {
@@ -64,6 +64,23 @@ export async function captureFragment(payload) {
     err.error_code = code;
     err.response = { data: res };
     throw err;
+  }
+
+  // Direct ingestion may produce useful OCR even when the generic workflow
+  // quality gate asks for clarification. Metadata derivation is therefore
+  // attempted here as a non-blocking post-step as well as after Evidence bridge.
+  if (payload?.clinic_id && res?.artifact?.id) {
+    try {
+      const metadataResult = await persistEyeExamMetadata({
+        clinic_id: payload.clinic_id,
+        artifact_id: res.artifact.id,
+        evidence_fact_card_id: res?.alignment?.fact_card_ids?.[0] || null,
+      });
+      return { ...res, eye_exam_metadata: metadataResult?.metadata || null };
+    } catch {
+      // Never turn a successful evidence upload into a failed upload because
+      // optional eye-exam metadata derivation was unavailable.
+    }
   }
   return res;
 }
