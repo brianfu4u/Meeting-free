@@ -21,6 +21,7 @@ import {
   metadataToFactCardFields,
 } from "../../../../base44/shared/eyeExamMetadata/model.ts";
 import {
+  coreRoutingFieldsForLlm,
   deterministicCandidates,
   getEyeExamMatchingContext,
   llmCandidateMatch,
@@ -30,6 +31,10 @@ const context = {
   clinic_id: "clinic-001",
   raw_artifact_id: "artifact-001",
   evidence_fact_card_id: "fact-001",
+  occurred_at: "2026-08-01T10:00:00Z",
+  reported_at: "2026-08-01T10:01:00Z",
+  department: "特检室",
+  role: "OPTOMETRIST",
 };
 
 const clearTono = `TOPCON CT-800
@@ -81,6 +86,8 @@ describe("eye exam OCR upload quality gate", () => {
       requires_reupload: true,
       requires_exam_item_confirmation: false,
       parse_status: "partial",
+      routing_status: "routing_ready",
+      value_add_status: "value_add_unavailable",
     });
     expect(metadata.warnings).toContain(LOW_QUALITY_REUPLOAD_CODE);
     expect(response.warning_code).toBe(LOW_QUALITY_REUPLOAD_CODE);
@@ -144,7 +151,9 @@ describe("eye exam item confirmation catalog", () => {
       requires_reupload: false,
       requires_exam_item_confirmation: true,
       exam_item_suggested_tag: "tono",
+      routing_status: "routing_ready",
     });
+    expect(metadata.value_add_fields.eye_side_results.right.key_values.average_iop_mmhg).toBe(19);
   });
 });
 
@@ -173,12 +182,13 @@ describe("manual item projection and workflow matching", () => {
     fields,
   };
 
-  it("projects the manual tag as the canonical match item", () => {
+  it("projects the manual tag as the canonical core routing item", () => {
     expect(fields.find((field) => field.field_name === "eye_exam.exam_item_manual_tag")).toMatchObject({
       value: "optic_nerve_oct",
       extraction_quality: "high",
       extraction_method: "user_confirmed",
     });
+    expect(fields.find((field) => field.field_name === "routing.item_tag")?.value).toBe("optic_nerve_oct");
     expect(fields.find((field) => field.field_name === "eye_exam.match_exam_item")?.value).toBe("optic_nerve_oct");
     expect(getEyeExamMatchingContext(factCard)).toMatchObject({
       manual_tag: "optic_nerve_oct",
@@ -208,25 +218,36 @@ describe("manual item projection and workflow matching", () => {
       ],
     });
     expect(candidates.map((candidate) => candidate.workflow_id)).toEqual(["wf-optic", "wf-macular"]);
-    expect(candidates[0]).toMatchObject({ eye_exam_item_match: "manual", score: 0.82 });
+    expect(candidates[0]).toMatchObject({ item_match_source: "manual", score: 0.82 });
   });
 
-  it("puts the manual tag into the LLM whitelist prompt as authoritative context", async () => {
+  it("puts the manual core tag into the LLM prompt and excludes value-add fields", async () => {
+    const factCardWithDetailNoise = {
+      ...factCard,
+      fields: [
+        ...factCard.fields,
+        { field_name: "eye_exam.right.sphere_d", value: "-9.99" },
+        { field_name: "eye_exam.device_model", value: "SECRET-MODEL" },
+      ],
+    };
     const invokeLLM = vi.fn(async () => ({
       best_workflow_id: "wf-optic",
       confidence: 0.88,
       reason_codes: ["manual_exam_item_match"],
     }));
     await llmCandidateMatch({
-      factCard,
+      factCard: factCardWithDetailNoise,
       candidateWorkflows: [
         { id: "wf-optic", workflow_family: "patient_visit", expected_exam_item_tag: "optic_nerve_oct" },
       ],
       invokeLLM,
     });
     const prompt = invokeLLM.mock.calls[0][0].prompt;
-    expect(prompt).toContain('"manual_tag":"optic_nerve_oct"');
-    expect(prompt).toContain("优先于 automatic_exam_item_name");
+    expect(prompt).toContain('"item_tag":"optic_nerve_oct"');
+    expect(prompt).toContain('"item_tag_source":"user_confirmed"');
+    expect(prompt).not.toContain("-9.99");
+    expect(prompt).not.toContain("SECRET-MODEL");
+    expect(coreRoutingFieldsForLlm(factCardWithDetailNoise).some((field) => field.field_name === "eye_exam.right.sphere_d")).toBe(false);
   });
 });
 
