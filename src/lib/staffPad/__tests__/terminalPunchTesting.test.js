@@ -11,14 +11,13 @@ import {
 } from "../terminalPunchTesting.js";
 
 describe("terminal punch test-clinic signup", () => {
-  it("scopes the simplified flow to clinic-001 only", () => {
-    expect(TEST_TERMINAL_SIGNUP_CLINICS).toEqual(["clinic-001"]);
-    expect(isTerminalPunchTestClinic("clinic-001")).toBe(true);
+  it("does not lock any production clinic into the simplified flow", () => {
+    expect(TEST_TERMINAL_SIGNUP_CLINICS).toEqual([]);
+    expect(isTerminalPunchTestClinic("clinic-001")).toBe(false);
     expect(isTerminalPunchTestClinic("clinic-002")).toBe(false);
-    expect(isTerminalPunchTestClinic("phase5-it-e2e-test")).toBe(false);
   });
 
-  it("creates a bound, punch-ready generic staff record for clinic-001", () => {
+  it("creates a bound, punch-ready staff record for clinic-001 with selected role", () => {
     const payload = buildStaffBindingPayload({
       clinicId: "clinic-001",
       user: { id: "user-001" },
@@ -30,9 +29,9 @@ describe("terminal punch test-clinic signup", () => {
     expect(payload).toEqual({
       clinic_id: "clinic-001",
       staff_name: "测试员工",
-      role: TEST_TERMINAL_STAFF_ROLE,
-      role_group: TEST_TERMINAL_STAFF_ROLE_GROUP,
-      department_id: TEST_TERMINAL_STAFF_DEPARTMENT_ID,
+      role: "doctor",
+      role_group: "clinical",
+      department_id: "outpatient",
       status: "off_duty",
       pad_online: true,
       user_id: "user-001",

@@ -10,7 +10,7 @@ import {
  * existing non-clinical role for a simple terminal registration/punch test.
  * Production clinics keep their existing role-selection flow.
  */
-export const TEST_TERMINAL_SIGNUP_CLINICS = Object.freeze(["clinic-001"]);
+export const TEST_TERMINAL_SIGNUP_CLINICS = Object.freeze([]);
 export const TEST_TERMINAL_STAFF_ROLE = "reception";
 export const TEST_TERMINAL_STAFF_ROLE_GROUP = "non_clinical";
 export const TEST_TERMINAL_STAFF_DEPARTMENT_ID = "front_desk";
