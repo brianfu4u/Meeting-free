@@ -6,10 +6,12 @@ Phase 2 将 Phase 1 的“统一模型 + 独立 parser”扩展为可持续优�
 
 ```text
 新报告
+  → OCR 上传质量门槛
   → parser 规则检测
   → 格式模板匹配
   → 确定性规则解析
   → 仅在不完整时使用格式级、Schema 受限的 LLM 补全
+  → 上传人员确认业务检查项目
   → EyeExamReportMetadata
   → 幂等解析质量事件
   → 7 天质量概览
@@ -20,7 +22,9 @@ Phase 2 将 Phase 1 的“统一模型 + 独立 parser”扩展为可持续优�
 
 1. 同一报告族的数值变化、空格变化和有限布局变化可自动泛化；
 2. 新厂商、新模板或长期低成功率类型自动进入优化清单；
-3. 用户只需按“类型”提供少量代表样本，不需逐张反馈。
+3. 用户只需按“类型”提供少量代表样本，不需逐张反馈；
+4. OCR 质量不足时停止详细解析，避免低质量数据进入编组；
+5. 自动识别后由上传人员确认具体项目，提高业务匹配精度。
 
 固定安全边界不变：
 
@@ -81,6 +85,8 @@ LLM 不负责自由判断报告含义。调用条件仍是规则结果不完整�
 - Artifact / EvidenceItem / FactCard 关联 ID
 - `parser_id`
 - `template_id` / `template_version`
+- OCR 质量字段
+- 人工确认项目及确认员工字段
 
 诊断、异常判断、配镜建议、治疗和用药字段不在 Schema 中，也不会保存。
 
@@ -143,7 +149,7 @@ clinic_id + raw_artifact_id + parser_version
 - `top_n`：1–50，默认 10；
 - 仅诊所管理员、`clinic_director` 或 `qa_officer` 可读取；
 - 数据严格按 `clinic_id` 聚合；
-- Phase 2 不新增前端 UI。
+- Phase 2 不新增质量统计前端 UI。
 
 前端/内部工具客户端：
 
@@ -231,11 +237,69 @@ device_vendor + exam_item_name
 
 用户后续只需从 `optimization_candidates` 中选择一类，提供 1–2 份代表样本并提出一次“按类型增强”需求。
 
-## 7. 安全与非范围
+## 7. 上传质量与项目类型确认
+
+完整设计见：
+
+```text
+docs/EYE_EXAM_UPLOAD_QUALITY_AND_CONFIRMATION.md
+```
+
+### 7.1 OCR 质量门槛
+
+详细 parser 和格式级 LLM 之前运行 `assessEyeExamOcrQuality`：
+
+- `good`：70–100；
+- `borderline`：45–69；
+- `poor`：低于 45，或命中过短、有效行太少、乱码过多、重复字符过多、provider confidence 低于 35% 等硬条件。
+
+poor 报告仍保存 Artifact、EvidenceItem 和最小元数据，但：
+
+- `requires_reupload = true`；
+- 返回 `eye_exam_upload_needs_reupload_due_to_low_quality`；
+- 不运行设备 parser；
+- 不调用 LLM；
+- 不把详细检查值用于后续编组。
+
+### 7.2 项目确认
+
+清晰报告解析后：
+
+```text
+requires_exam_item_confirmation = true
+exam_item_suggested_tag = 系统建议
+```
+
+前端候选：
+
+- 眼压检查（Tono）
+- 屈光/验光
+- 黄斑 OCT
+- 视神经 OCT
+- 眼底照相
+- 角膜内皮细胞检查
+- 眼科 A/B 超声
+- 其他眼科检查（必须填写说明）
+
+确认后写入：
+
+```text
+exam_item_manual_tag
+exam_item_manual_label
+exam_item_manual_note
+exam_item_confirmed_at
+exam_item_confirmed_by_staff_id
+```
+
+FactCard 生成 `eye_exam.match_exam_item`。Candidate Finder 在原有时空候选范围内优先排列匹配人工项目标签的 Workflow；人工标签不会突破白名单、自动挂接或经理复核门槛。
+
+## 8. 安全与非范围
 
 - fallback 始终保留，模板不足时不强行猜测；
+- 重新上传提示只基于 OCR 可用性，不评价医学结果；
+- 人工检查项目标签只用于业务分类，不产生医学结论；
 - 不以质量成功率替代医学审核；
 - 不自动学习并发布新的生产规则；
 - 不把 OCR 原文或患者信息写入质量事件；
-- 不修改 Workflow 编组、经理审批或租户隔离规则；
+- 不修改 Workflow 经理审批或租户隔离规则；
 - 自动生成 parser 代码和自动上线属于后续阶段，需要独立审核与 CI 门槛。
