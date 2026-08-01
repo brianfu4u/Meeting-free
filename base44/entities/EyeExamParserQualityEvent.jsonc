@@ -1,0 +1,89 @@
+{
+  "name": "EyeExamParserQualityEvent",
+  "type": "object",
+  "properties": {
+    "clinic_id": {
+      "type": "string",
+      "description": "服务端确认的诊所 ID；质量统计必须严格按诊所隔离"
+    },
+    "raw_artifact_id": {
+      "type": "string",
+      "description": "来源 Artifact ID，仅用于同一 Artifact/解析器版本的幂等统计，不作为概览输出"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "本次元数据解析质量事件记录时间"
+    },
+    "exam_type": {
+      "type": "string",
+      "description": "检查大类"
+    },
+    "exam_item_name": {
+      "type": "string",
+      "description": "检查项目或报告标题；与设备厂商共同形成主要聚合维度"
+    },
+    "device_vendor": {
+      "type": "string",
+      "description": "设备厂商；未知时为 UNKNOWN"
+    },
+    "device_model": {
+      "type": "string",
+      "description": "设备型号；未知时为 UNKNOWN"
+    },
+    "parser_id": {
+      "type": "string",
+      "description": "实际执行的解析器 ID"
+    },
+    "parser_version": {
+      "type": "string",
+      "description": "解析器版本；同一 Artifact/版本仅保留一条最新事件"
+    },
+    "template_id": {
+      "type": "string",
+      "description": "命中的格式级模板 ID；未匹配时为 unmatched"
+    },
+    "template_version": {
+      "type": "string",
+      "description": "格式模板版本"
+    },
+    "metadata_parse_status": {
+      "type": "string",
+      "description": "EyeExamReportMetadata 原始解析状态，如 parsed/partial/fallback"
+    },
+    "quality_status": {
+      "type": "string",
+      "enum": ["success", "needs_clarification", "fallback"],
+      "description": "用于质量统计的统一状态映射"
+    },
+    "parse_confidence": {
+      "type": "number",
+      "description": "元数据解析置信度 0-1；不代表医学结论置信度"
+    },
+    "warning_codes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "技术性解析告警代码；不保存 OCR 原文、患者信息或医学判断"
+    },
+    "llm_completion_used": {
+      "type": "boolean",
+      "default": false,
+      "description": "本次是否使用了受 Schema 限制的格式级 LLM 补全"
+    }
+  },
+  "required": [
+    "clinic_id",
+    "raw_artifact_id",
+    "recorded_at",
+    "exam_type",
+    "exam_item_name",
+    "device_vendor",
+    "parser_id",
+    "parser_version",
+    "template_id",
+    "metadata_parse_status",
+    "quality_status",
+    "parse_confidence"
+  ]
+}
