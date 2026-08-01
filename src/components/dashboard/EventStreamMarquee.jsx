@@ -13,6 +13,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import { Radio, Loader, Train, Link2 } from "lucide-react";
 import { isToday } from "@/lib/clinicDate";
 import { asList, CLINIC_ID } from "@/hooks/useClinicData";
+import MarqueeDetailModal from "@/components/dashboard/MarqueeDetailModal";
 const PRIORITY_COLOR = { P1: "#DC2626", P2: "#D97706", P3: "#00C7D9", P4: "#64748B" };
 const URGENCY_COLOR = { green: "#16A34A", yellow: "#D97706", red: "#DC2626" };
 
@@ -39,7 +40,7 @@ function marqueeLabel(task) {
   return "事件流";
 }
 
-function Carriage({ item, theme }) {
+function Carriage({ item, theme, onClick }) {
   const accent = item.dot;
   return (
     <div className="inline-flex items-stretch flex-shrink-0">
@@ -51,7 +52,8 @@ function Carriage({ item, theme }) {
       </div>
       {/* 车厢本体 */}
       <div
-        className="relative rounded-lg px-3 py-2 flex flex-col justify-center min-w-[180px] max-w-[280px]"
+        onClick={onClick}
+        className="relative rounded-lg px-3 py-2 flex flex-col justify-center min-w-[180px] max-w-[280px] cursor-pointer transition-all duration-150 hover:brightness-125"
         style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderTop: `2px solid ${accent}` }}
       >
         {/* 车顶条纹 */}
@@ -121,6 +123,7 @@ export default function EventStreamMarquee() {
       dot: PRIORITY_COLOR[t.priority] || "#64748B",
       staffName: t.dispatched_by === "manager" ? "店长" : resolveName(t.assignee_staff_id),
       time: fmtHHmm(t.created_date),
+      raw: t,
     }));
 
   const factItems = asList(fc.data)
@@ -133,6 +136,7 @@ export default function EventStreamMarquee() {
       dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A",
       staffName: resolveName(artifactStaff[f.artifact_id]),
       time: fmtHHmm(f.extracted_at),
+      raw: f,
     }));
 
   const items = [...factItems, ...taskItems];
@@ -143,6 +147,7 @@ export default function EventStreamMarquee() {
   const trackRef = useRef(null);
   const containerRef = useRef(null);
   const [overflow, setOverflow] = useState(false);
+  const [selected, setSelected] = useState(null);
   useEffect(() => {
     const check = () => {
       const track = trackRef.current;
@@ -192,11 +197,14 @@ export default function EventStreamMarquee() {
               <Train size={20} />
             </div>
             {(overflow ? [...items, ...items] : items).map((it, i) => (
-              <Carriage key={it.kind + "-" + it.id + "-" + i} item={it} theme={theme} />
+              <Carriage key={it.kind + "-" + it.id + "-" + i} item={it} theme={theme}
+                onClick={() => setSelected(it)} />
             ))}
           </div>
         )}
       </div>
+
+      <MarqueeDetailModal item={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
