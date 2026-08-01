@@ -104,10 +104,14 @@ export default function EventStreamMarquee() {
     return m;
   }, [staffQ.data]);
 
-  const artifactStaff = React.useMemo(() => {
-    const m = {};
-    for (const a of asList(artQ.data)) m[a.id] = a.source_staff_id;
-    return m;
+  const artifactMeta = React.useMemo(() => {
+    const staff = {};
+    const captured = {};
+    for (const a of asList(artQ.data)) {
+      staff[a.id] = a.source_staff_id;
+      captured[a.id] = a.captured_at || a.received_at || null;
+    }
+    return { staff, captured };
   }, [artQ.data]);
 
   const resolveName = (id) => (id && staffMap[id]) || "员工";
@@ -128,14 +132,14 @@ export default function EventStreamMarquee() {
 
   const factItems = asList(fc.data)
     .filter((f) => f.marquee_label)
-    .sort((a, b) => new Date(a.extracted_at) - new Date(b.extracted_at))
+    .sort((a, b) => new Date(artifactMeta.captured[a.artifact_id] || a.extracted_at) - new Date(artifactMeta.captured[b.artifact_id] || b.extracted_at))
     .map((f) => ({
       kind: "fact",
       id: f.id,
       label: f.marquee_label,
       dot: URGENCY_COLOR[f.marquee_urgency] || "#16A34A",
-      staffName: resolveName(artifactStaff[f.artifact_id]),
-      time: fmtHHmm(f.extracted_at),
+      staffName: resolveName(artifactMeta.staff[f.artifact_id]),
+      time: fmtHHmm(artifactMeta.captured[f.artifact_id] || f.extracted_at),
       raw: f,
     }));
 
