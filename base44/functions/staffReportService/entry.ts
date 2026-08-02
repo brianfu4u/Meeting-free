@@ -98,11 +98,22 @@ Deno.serve(async (req) => {
     }
     // 终端可切换同门店已绑定员工：当前登录用户在该门店至少绑定了一位员工，
     // 即可代表门店内任意已绑定员工提交（多岗位轮换 / 店长代采场景）。
+    // 店长（ClinicConfig.manager_id === user.id）亦允许代采。
     const myStaffRows = await svc.entities.Staff.filter({ user_id: user.id });
     const boundInSameClinic = (myStaffRows || []).some(
       (s) => s && s.clinic_id === staff.clinic_id,
     );
+    let isClinicManager = false;
     if (!boundInSameClinic) {
+      if (user.role === "admin") {
+        isClinicManager = true;
+      } else {
+        const configs = await svc.entities.ClinicConfig.filter({ clinic_id: staff.clinic_id });
+        const cfg = configs?.[0];
+        isClinicManager = Boolean(cfg && cfg.manager_id === user.id);
+      }
+    }
+    if (!boundInSameClinic && !isClinicManager) {
       return Response.json({ error: "宪法违规：终端未绑定该员工账号" }, { status: 403 });
     }
     const clinic_id = staff.clinic_id;
