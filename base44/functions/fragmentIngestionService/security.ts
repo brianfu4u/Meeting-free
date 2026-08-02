@@ -6,7 +6,7 @@ import {
   MIME_WHITELIST,
   FORBIDDEN_EXTENSIONS,
   FORBIDDEN_MIME_PREFIXES,
-} from "./contract.ts";
+} from "../../shared/fragmentIngestion/contract.ts";
 
 export function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;

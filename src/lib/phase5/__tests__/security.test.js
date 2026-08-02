@@ -9,7 +9,7 @@ import {
   validateUploadUrl,
   assertTenantScope,
 } from "../../../../base44/functions/fragmentIngestionService/security.ts";
-import { DEFAULT_UPLOAD_DOMAINS, LIMITS } from "../../../../base44/functions/fragmentIngestionService/contract.ts";
+import { DEFAULT_UPLOAD_DOMAINS, LIMITS } from "../../../../base44/shared/fragmentIngestion/contract.ts";
 
 describe("fragmentIngestionService security", () => {
   it("rejects non-https upload URLs", () => {

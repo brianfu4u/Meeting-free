@@ -7,6 +7,7 @@ import {
 
 /**
  * Clinic OS V10 — StaffReportService（采集层 Collection Layer）
+ * 终端多员工切换：同门店已绑定员工可互相代采（V10.1）。
  *
  * V10 宪法合规说明：
  * - AI 职责严格限定为：观察证据 → 转化为结构化 Event → 生成 AttentionItem 建议

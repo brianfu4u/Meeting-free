@@ -10,12 +10,12 @@ import {
   ALIGNMENT_STATUS,
   PROCESSING_STATUS,
   sanitizeErrorCode,
-} from "../functions/fragmentIngestionService/contract.ts";
-import { runAdapter } from "../functions/fragmentIngestionService/adapters.ts";
+} from "./fragmentIngestion/contract.ts";
+import { runAdapter } from "./fragmentIngestion/adapters.ts";
 import {
   alignExtraction,
   evaluateAlignment,
-} from "../functions/fragmentIngestionService/alignment.ts";
+} from "./fragmentIngestion/alignment.ts";
 
 export const EVIDENCE_BRIDGE_VERSION = "evidence-artifact-bridge.v1";
 export const EVIDENCE_BRIDGE_MAX_ATTEMPTS = 3;

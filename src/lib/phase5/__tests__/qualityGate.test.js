@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { evaluateFactCard } from "../../../../base44/functions/fragmentIngestionService/qualityGate.ts";
-import { ALIGNMENT_STATUS } from "../../../../base44/functions/fragmentIngestionService/contract.ts";
+import { evaluateFactCard } from "../../../../base44/shared/fragmentIngestion/qualityGate.ts";
+import { ALIGNMENT_STATUS } from "../../../../base44/shared/fragmentIngestion/contract.ts";
 
 const alignedCard = () => ({
   artifact_id: "a1",

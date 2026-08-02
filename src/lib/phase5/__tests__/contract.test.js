@@ -10,7 +10,7 @@ import {
   isTestClinic,
   mapFragmentTypeToArtifactType,
   sanitizeErrorCode,
-} from "../../../../base44/functions/fragmentIngestionService/contract.ts";
+} from "../../../../base44/shared/fragmentIngestion/contract.ts";
 import {
   HANDOFF_VERSION,
   EVENT_GENE_CODE_FORMAT,

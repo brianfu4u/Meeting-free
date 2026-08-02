@@ -16,7 +16,7 @@ import {
   makeResponse,
   mapFragmentTypeToArtifactType,
   sanitizeErrorCode,
-} from "./contract.ts";
+} from "../../shared/fragmentIngestion/contract.ts";
 import {
   assertTenantScope,
   isNonEmptyString,
@@ -29,8 +29,8 @@ import {
   validateTextContent,
   validateUploadUrl,
 } from "./security.ts";
-import { runAdapter } from "./adapters.ts";
-import { alignExtraction, evaluateAlignment } from "./alignment.ts";
+import { runAdapter } from "../../shared/fragmentIngestion/adapters.ts";
+import { alignExtraction, evaluateAlignment } from "../../shared/fragmentIngestion/alignment.ts";
 import { reconstruct } from "../../shared/semanticReconstructionSkill.ts";
 import { resolveClinicActor } from "../../shared/clinicActor.ts";
 

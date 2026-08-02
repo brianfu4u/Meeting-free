@@ -1,6 +1,8 @@
 // FragmentIngestionService contracts — Clinic OS Phase 5
 // Authoritative for action names, idempotency key, tenant scope, security limits.
 // Do NOT modify Phase 1–4 composition rules from this layer.
+// Moved to shared/ so evidenceArtifactBridge (shared) can import it without
+// crossing into a function directory (platform bundler forbids that).
 
 export const FRAGMENT_TYPES = ["image", "document", "audio", "text"];
 export const FRAGMENT_TYPE_SET = new Set(FRAGMENT_TYPES);
