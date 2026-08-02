@@ -49,7 +49,15 @@ export function useStaffSelf() {
         list = all.filter((s) => s.user_id);
       }
     } catch (e) { list = []; }
-    const picked = (list.find((s) => s.id === selectedId) || list.find((s) => s.user_id === me.id) || list[0] || null);
+    // 当前登录用户必须在本门店有自己的员工绑定记录，方可使用终端。
+    // 无自身绑定时 staff=null → 显示 BindingScreen 引导绑定，而非冒用他人身份。
+    // 有自身绑定后，可在切换器中选择本门店任意已绑定员工代采。
+    const myBindings = list.filter((s) => s.user_id === me.id);
+    if (myBindings.length === 0) {
+      setState({ loading: false, user: me, staff: null, staffList: list });
+      return;
+    }
+    const picked = list.find((s) => s.id === selectedId) || myBindings[0];
     setState({ loading: false, user: me, staff: picked, staffList: list });
   }, [clinicId, selectedId]);
 
