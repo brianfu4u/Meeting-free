@@ -34,19 +34,21 @@ export const TASK_STATUS_LABELS = {
 
 export function useStaffSelf() {
   const clinicId = useClinicId();
-  const [state, setState] = useState({ loading: true, user: null, staff: null });
+  const [state, setState] = useState({ loading: true, user: null, staff: null, staffList: [] });
+  const [selectedId, setSelectedId] = useState(null);
 
   const refresh = useCallback(async () => {
     let me = null;
     try { me = await base44.auth.me(); } catch (e) { me = null; }
-    if (!me) { setState({ loading: false, user: null, staff: null }); return; }
-    let staff = null;
+    if (!me) { setState({ loading: false, user: null, staff: null, staffList: [] }); return; }
+    let list = [];
     try {
-      const list = await base44.entities.Staff.filter({ clinic_id: clinicId, user_id: me.id }, "-created_date", 1);
-      staff = list[0] || null;
-    } catch (e) { staff = null; }
-    setState({ loading: false, user: me, staff });
-  }, [clinicId]);
+      list = await base44.entities.Staff.filter({ clinic_id: clinicId, user_id: me.id }, "-created_date", 50);
+      if (!Array.isArray(list)) list = [];
+    } catch (e) { list = []; }
+    const picked = (list.find((s) => s.id === selectedId) || list[0] || null);
+    setState({ loading: false, user: me, staff: picked, staffList: list });
+  }, [clinicId, selectedId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -63,5 +65,6 @@ export function useStaffSelf() {
     return unsub;
   }, [state.staff?.id]);
 
-  return { ...state, refresh, clinicId };
+  const switchStaff = useCallback((id) => { setSelectedId(id); }, []);
+  return { ...state, refresh, clinicId, switchStaff };
 }

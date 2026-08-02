@@ -13,14 +13,15 @@ import TaskDetail from "@/components/staffPad/TaskDetail";
 import ReportSheet from "@/components/staffPad/ReportSheet";
 import HistoryList from "@/components/staffPad/HistoryList";
 import HistoryDetail from "@/components/staffPad/HistoryDetail";
-import { Loader, LogIn, LogOut, ArrowLeft, Plus, Activity, Search } from "lucide-react";
+import { Loader, LogIn, LogOut, ArrowLeft, Plus, Activity, Search, ChevronDown, Check } from "lucide-react";
 
 function StaffPadInner() {
   const { theme } = useTheme();
-  const { user, staff, loading, refresh, clinicId } = useStaffSelf();
+  const { user, staff, staffList, loading, refresh, clinicId, switchStaff } = useStaffSelf();
   const tasksQ = useOperationalTasks();
   const qc = useQueryClient();
   const [view, setView] = useState("home");
+  const [showStaffPicker, setShowStaffPicker] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
   const [sheet, setSheet] = useState({ open: false, mode: "new_event", taskId: null });
   const [histRange, setHistRange] = useState(() => {
@@ -106,14 +107,44 @@ function StaffPadInner() {
         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(0,199,217,0.15)", border: "1px solid rgba(0,199,217,0.35)" }}>
           <Activity size={17} style={{ color: "#00C7D9" }} />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold truncate" style={{ color: theme.text }}>
-            {view === "history" ? "历史记录" : view === "historyDetail" ? "历史详情" : view === "task" ? "任务详情" : `${staff.staff_name} · ${ROLE_LABELS[staff.role] || staff.role}`}
-          </div>
+        <div className="flex-1 min-w-0 relative">
+          {view === "home" && staffList.length > 1 ? (
+            <button onClick={() => setShowStaffPicker((v) => !v)}
+              className="flex items-center gap-1 text-sm font-bold truncate max-w-full"
+              style={{ color: theme.text }}>
+              <span className="truncate">{staff.staff_name} · {ROLE_LABELS[staff.role] || staff.role}</span>
+              <ChevronDown size={14} style={{ color: theme.textSub, flexShrink: 0 }} />
+            </button>
+          ) : (
+            <div className="text-sm font-bold truncate" style={{ color: theme.text }}>
+              {view === "history" ? "历史记录" : view === "historyDetail" ? "历史详情" : view === "task" ? "任务详情" : `${staff.staff_name} · ${ROLE_LABELS[staff.role] || staff.role}`}
+            </div>
+          )}
           {view === "home" && (
             <div className="text-xs truncate" style={{ color: theme.textMuted }}>
               {clinicId} · {DEPARTMENT_BY_ID[staff.department_id || ROLE_TO_DEPARTMENT[staff.role]]?.name || "未分配部门"}
             </div>
+          )}
+          {showStaffPicker && view === "home" && staffList.length > 1 && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowStaffPicker(false)} />
+              <div className="absolute top-full left-0 mt-1 rounded-xl py-1 z-50 min-w-[200px]"
+                style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, boxShadow: "0 8px 30px rgba(0,0,0,0.4)" }}>
+                {staffList.map((s) => {
+                  const active = s.id === staff.id;
+                  return (
+                    <button key={s.id} onClick={() => { switchStaff(s.id); setShowStaffPicker(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs"
+                      style={{ background: active ? "rgba(0,199,217,0.08)" : "transparent" }}>
+                      <span className="flex-1 truncate" style={{ color: active ? "#00C7D9" : theme.text }}>
+                        {s.staff_name} · {ROLE_LABELS[s.role] || s.role}
+                      </span>
+                      {active && <Check size={12} style={{ color: "#00C7D9", flexShrink: 0 }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
         <span className="text-[10px] px-2 py-1 rounded-full font-semibold flex-shrink-0"
