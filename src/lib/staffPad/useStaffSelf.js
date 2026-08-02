@@ -43,10 +43,13 @@ export function useStaffSelf() {
     if (!me) { setState({ loading: false, user: null, staff: null, staffList: [] }); return; }
     let list = [];
     try {
-      list = await base44.entities.Staff.filter({ clinic_id: clinicId, user_id: me.id }, "-created_date", 50);
-      if (!Array.isArray(list)) list = [];
+      const all = await base44.entities.Staff.filter({ clinic_id: clinicId }, "-created_date", 100);
+      if (Array.isArray(all)) {
+        // 终端可切换本门店所有已绑定登录账号的员工（不限当前账号）
+        list = all.filter((s) => s.user_id);
+      }
     } catch (e) { list = []; }
-    const picked = (list.find((s) => s.id === selectedId) || list[0] || null);
+    const picked = (list.find((s) => s.id === selectedId) || list.find((s) => s.user_id === me.id) || list[0] || null);
     setState({ loading: false, user: me, staff: picked, staffList: list });
   }, [clinicId, selectedId]);
 
