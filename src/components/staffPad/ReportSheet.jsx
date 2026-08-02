@@ -435,16 +435,19 @@ export default function ReportSheet({ open, mode, taskId, staff, clinicId, onClo
           )}
         </div>
 
-        {/* 隐藏文件输入 — iOS 不允许 display:none 的 input.click()，改用离屏绝对定位 */}
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment"
-          style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) addImage(f); }} />
-        <input ref={photoRef} type="file" accept="image/*"
-          style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) addImage(f); }} />
-        <input ref={fileRef} type="file"
-          style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) addFile(f); }} />
+        {/* 隐藏文件输入 — iOS 不允许 display:none 的 input.click()，改用离屏绝对定位；
+            stopPropagation 阻止 .click() 冒泡到遮罩层 onClose，避免弹窗被误关闭 */}
+        <div onClick={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+            style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) addImage(f); }} />
+          <input ref={photoRef} type="file" accept="image/*"
+            style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) addImage(f); }} />
+          <input ref={fileRef} type="file"
+            style={{ position: "absolute", top: "-9999px", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) addFile(f); }} />
+        </div>
       </div>
 
       <MetaTaggingModal open={!!taggingAttachment} attachment={taggingAttachment} staff={staff} clinicId={clinicId}
