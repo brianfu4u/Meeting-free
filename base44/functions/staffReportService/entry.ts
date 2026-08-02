@@ -92,7 +92,16 @@ Deno.serve(async (req) => {
     } catch {
       return Response.json({ error: "员工记录不存在" }, { status: 404 });
     }
-    if (!staff || staff.user_id !== user.id) {
+    if (!staff || !staff.user_id) {
+      return Response.json({ error: "员工记录不存在或未绑定账号" }, { status: 404 });
+    }
+    // 终端可切换同门店已绑定员工：当前登录用户在该门店至少绑定了一位员工，
+    // 即可代表门店内任意已绑定员工提交（多岗位轮换 / 店长代采场景）。
+    const myStaffRows = await svc.entities.Staff.filter({ user_id: user.id });
+    const boundInSameClinic = (myStaffRows || []).some(
+      (s) => s && s.clinic_id === staff.clinic_id,
+    );
+    if (!boundInSameClinic) {
       return Response.json({ error: "宪法违规：终端未绑定该员工账号" }, { status: 403 });
     }
     const clinic_id = staff.clinic_id;
