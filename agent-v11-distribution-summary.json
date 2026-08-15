@@ -1,0 +1,155 @@
+{
+  "mode": "observe",
+  "designed_all_200": {
+    "sample_count": 200,
+    "expected_eligible_count": 173,
+    "expected_eligible_rate": 0.865
+  },
+  "supported_main_stat": {
+    "sample_count": 196,
+    "completed_count": 196,
+    "eligible_count": 173,
+    "actual_eligible_rate": 0.8826530612244898,
+    "expected_eligible_count": 173,
+    "expected_eligible_rate": 0.8826530612244898,
+    "missing_results": []
+  },
+  "approximate_excluded": [
+    {
+      "scenario_id": "s010-190",
+      "scenario_type": "cross_clinic",
+      "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+      "excluded_from_main_stat": true
+    },
+    {
+      "scenario_id": "s010-191",
+      "scenario_type": "cross_clinic",
+      "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+      "excluded_from_main_stat": true
+    },
+    {
+      "scenario_id": "s010-192",
+      "scenario_type": "cross_clinic",
+      "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+      "excluded_from_main_stat": true
+    },
+    {
+      "scenario_id": "s011-199",
+      "scenario_type": "causal_inversion",
+      "reason": "causal_order_is_descriptive_until_runtime_rule_code_is_wired",
+      "excluded_from_main_stat": true
+    }
+  ],
+  "scenario_type_distribution": {
+    "normal_forward": {
+      "sample_count": 116,
+      "eligible_count": 116,
+      "eligible_rate": 1,
+      "gate_reasons": {}
+    },
+    "delayed_upload": {
+      "sample_count": 24,
+      "eligible_count": 24,
+      "eligible_rate": 1,
+      "gate_reasons": {}
+    },
+    "ambiguous_candidates": {
+      "sample_count": 7,
+      "eligible_count": 0,
+      "eligible_rate": 0,
+      "gate_reasons": {
+        "llm_audit_required": 7,
+        "unique_best_missing": 7
+      }
+    },
+    "finance_reverse": {
+      "sample_count": 7,
+      "eligible_count": 7,
+      "eligible_rate": 1,
+      "gate_reasons": {}
+    },
+    "missing_head": {
+      "sample_count": 10,
+      "eligible_count": 10,
+      "eligible_rate": 1,
+      "gate_reasons": {}
+    },
+    "missing_tail": {
+      "sample_count": 8,
+      "eligible_count": 8,
+      "eligible_rate": 1,
+      "gate_reasons": {}
+    },
+    "long_cycle_nonclinical": {
+      "sample_count": 8,
+      "eligible_count": 8,
+      "eligible_rate": 1,
+      "gate_reasons": {}
+    },
+    "business_family_conflict": {
+      "sample_count": 5,
+      "eligible_count": 0,
+      "eligible_rate": 0,
+      "gate_reasons": {
+        "llm_audit_required": 5,
+        "validation_blocks_present": 5,
+        "unique_best_missing": 5
+      }
+    },
+    "role_conflict": {
+      "sample_count": 4,
+      "eligible_count": 0,
+      "eligible_rate": 0,
+      "gate_reasons": {
+        "llm_audit_required": 4,
+        "validation_blocks_present": 4,
+        "unique_best_missing": 4
+      }
+    },
+    "validation_block_device": {
+      "sample_count": 3,
+      "eligible_count": 0,
+      "eligible_rate": 0,
+      "gate_reasons": {
+        "llm_audit_required": 3,
+        "validation_blocks_present": 3,
+        "unique_best_missing": 3
+      }
+    },
+    "device_conflict": {
+      "sample_count": 3,
+      "eligible_count": 0,
+      "eligible_rate": 0,
+      "gate_reasons": {
+        "llm_audit_required": 3,
+        "validation_blocks_present": 3,
+        "unique_best_missing": 3
+      }
+    },
+    "manager_exception": {
+      "sample_count": 1,
+      "eligible_count": 0,
+      "eligible_rate": 0,
+      "gate_reasons": {
+        "llm_audit_required": 1,
+        "validation_blocks_present": 1,
+        "unique_best_missing": 1
+      }
+    }
+  },
+  "gate_reason_distribution": {
+    "llm_audit_required": 23,
+    "unique_best_missing": 23,
+    "validation_blocks_present": 16
+  },
+  "risk": {
+    "false_eligible": [],
+    "all_low_frequency_blocks_safe": true
+  },
+  "safety": {
+    "all_results_present": true,
+    "all_completed": true,
+    "authoritative_writes_zero": true,
+    "cleanup_all_zero": true
+  }
+}

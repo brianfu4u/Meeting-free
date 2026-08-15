@@ -1,0 +1,119 @@
+{
+  "summary": {
+    "mode": "observe",
+    "supported_executed": 1,
+    "supported_failed": 0,
+    "eligible_count": 0,
+    "eligible_rate": 0,
+    "oracle_mismatch": [],
+    "approximate_report": [
+      {
+        "scenario_id": "s010",
+        "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s011",
+        "reason": "causal_order_is_descriptive_until_runtime_rule_code_is_wired",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      }
+    ],
+    "unsupported_skipped": [
+      {
+        "scenario_id": "s003",
+        "reason": "runtime_role_source_conflict_fixture_not_wired",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s004",
+        "reason": "runtime_business_family_conflict_fixture_not_wired",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s009",
+        "reason": "runtime_finance_expected_missing_projection_not_wired",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s014",
+        "reason": "runtime_device_identity_veto_fixture_not_wired",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s015",
+        "reason": "runtime_manager_approved_exception_archive_path_not_wired",
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      }
+    ],
+    "safety": {
+      "authoritative_writes_zero": true,
+      "cleanup_all_zero": true
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "s005",
+      "execution_support": "supported",
+      "result": {
+        "eligible": false,
+        "gate_reasons": [
+          "manager_dispatch_required",
+          "unique_best_missing"
+        ],
+        "oracle_match": true,
+        "observed_intent_count": 0,
+        "replay_idempotent": true,
+        "authoritative_writes_zero": true
+      },
+      "cleanup": {
+        "before": {
+          "AgentAttachIntent": 0,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 1,
+          "AttentionItem": 1,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 0,
+          "CompositionRun": 1,
+          "WorkflowSnapshot": 2,
+          "Workflow": 2,
+          "EvidenceFactCard": 1,
+          "Artifact": 1,
+          "GuessPolicy": 1,
+          "Staff": 1,
+          "ClinicConfig": 1
+        },
+        "after": {
+          "AgentAttachIntent": 0,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 0,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 0,
+          "CompositionRun": 0,
+          "WorkflowSnapshot": 0,
+          "Workflow": 0,
+          "EvidenceFactCard": 0,
+          "Artifact": 0,
+          "GuessPolicy": 0,
+          "Staff": 0,
+          "ClinicConfig": 0
+        },
+        "cleanup_all_zero": true
+      },
+      "oracle": {
+        "expected_eligible": false,
+        "expected_guardrail_dispatch": false,
+        "expected_validation_block": false
+      }
+    }
+  ]
+}

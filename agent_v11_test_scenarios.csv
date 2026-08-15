@@ -1,0 +1,16 @@
+scenario_id,department,business_family,description,candidates_count,has_guardrail_dispatch,has_validation_block,expected_eligible,notes
+S001,flow,patient_care,normal_forward,1,false,false,true,supported
+S002,flow,patient_care,retroactive_delay,1,false,false,true,supported
+S003,role,patient_care,role_conflict,1,false,true,false,supported
+S004,family,procurement,family_conflict,1,false,true,false,supported
+S005,ambiguous,patient_care,two_candidates,2,false,false,false,supported
+S006,ambiguous,patient_care,validation_block,2,false,true,false,supported
+S007,missing_head,patient_care,missing_head_normal,1,false,false,true,supported
+S008,missing_tail,patient_care,missing_tail_normal,1,false,false,true,supported
+S009,finance,patient_care,reverse_inference,1,false,false,true,supported
+S010,cross_tenant,patient_care,cross_tenant,1,true,true,false,approximate
+S011,causal,patient_care,causal_inversion,1,true,true,false,approximate
+S012,closed,patient_care,closed_workflow,1,false,false,false,supported
+S013,marketing,marketing,long_cycle_open,1,false,false,true,supported
+S014,device,inventory,device_conflict,1,false,true,false,supported
+S015,exception,patient_care,manager_exception,1,false,true,false,supported
