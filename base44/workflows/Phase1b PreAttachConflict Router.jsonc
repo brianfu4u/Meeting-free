@@ -1,0 +1,44 @@
+{
+  "name": "Phase1b PreAttachConflict Router",
+  "description": "\u5b9a\u65f6\u626b\u63cf llm_audit_required=true \u7684 CompositionRun\uff0c\u8def\u7531\u4e3a pre_attach_conflict AttentionItem\u3002Phase 1b interim A1 \u5b89\u5168\u8def\u7531\u3002",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "interval",
+      "cron_expression": null,
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": 10,
+      "interval_unit": "minutes",
+      "interval_anchor": "2026-07-24T14:38:34.136000",
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "phase1b_preattachconflict_router",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "preAttachConflictRouter",
+            "args": {}
+          },
+          "then": "end"
+        }
+      }
+    ]
+  },
+  "x-base44-migrated-from-automation": {
+    "legacy_payload_function": "preAttachConflictRouter"
+  }
+}

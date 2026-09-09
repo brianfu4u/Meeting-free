@@ -1,0 +1,37 @@
+{
+  "name": "pipelineEngine \u8c03\u7528\u89c2\u5bdf\u544a\u8b66\uff0830\u5929\u89c2\u5bdf\u671f\uff09",
+  "description": "\u89c2\u5bdf\u671f\u76d1\u63a7\uff1apipelineEngine \u9274\u6743\u524d\u63a2\u9488\u6bcf\u6b21\u5199 AuditLog(source_agent=PipelineEngine_PROBE) \u5373\u89e6\u53d1 pipelineEngineCallAlert\uff0c\u5728 Dashboard AttentionQueue \u751f\u6210\u7ea2\u8272\u544a\u8b66\u3002\u89c2\u5bdf\u7a97\u53e3 2026-07-24\u21922026-08-23\uff0c\u5230\u671f\u81ea\u52a8\u505c\u7528\u3002",
+  "trigger": {
+    "condition": "${ (.trigger.data.source_agent == \"PipelineEngine_PROBE\") }",
+    "config": {
+      "trigger_type": "entity",
+      "events": [
+        "create"
+      ],
+      "entity_name": "AuditLog"
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "pipelineengine_30",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "pipelineEngineCallAlert",
+            "args": {}
+          },
+          "then": "end"
+        }
+      }
+    ]
+  },
+  "x-base44-migrated-from-automation": {
+    "legacy_payload_function": "pipelineEngineCallAlert"
+  }
+}
