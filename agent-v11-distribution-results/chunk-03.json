@@ -1,0 +1,359 @@
+{
+  "summary": {
+    "mode": "observe",
+    "supported_executed": 4,
+    "supported_failed": 0,
+    "eligible_count": 4,
+    "eligible_rate": 1,
+    "oracle_mismatch": [],
+    "approximate_report": [
+      {
+        "scenario_id": "s010-190",
+        "scenario_type": "cross_clinic",
+        "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+        "oracle": {
+          "expected_eligible": false,
+          "expected_guardrail_dispatch": false,
+          "expected_validation_block": true
+        },
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s010-191",
+        "scenario_type": "cross_clinic",
+        "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+        "oracle": {
+          "expected_eligible": false,
+          "expected_guardrail_dispatch": false,
+          "expected_validation_block": true
+        },
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s010-192",
+        "scenario_type": "cross_clinic",
+        "reason": "runner_uses_isolated_foreign_fixture_not_a_real_second_tenant_authority_context",
+        "oracle": {
+          "expected_eligible": false,
+          "expected_guardrail_dispatch": false,
+          "expected_validation_block": true
+        },
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      },
+      {
+        "scenario_id": "s011-199",
+        "scenario_type": "causal_inversion",
+        "reason": "causal_order_is_descriptive_until_runtime_rule_code_is_wired",
+        "oracle": {
+          "expected_eligible": false,
+          "expected_guardrail_dispatch": false,
+          "expected_validation_block": true
+        },
+        "executed": false,
+        "excluded_from_eligible_rate": true
+      }
+    ],
+    "unsupported_skipped": [],
+    "safety": {
+      "authoritative_writes_zero": true,
+      "cleanup_all_zero": true
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "s001-013",
+      "scenario_type": "normal_forward",
+      "execution_support": "supported",
+      "result": {
+        "eligible": true,
+        "gate_reasons": [],
+        "actual_guardrail_dispatch": false,
+        "actual_validation_block": false,
+        "llm_audit": {
+          "required": false,
+          "type": null,
+          "status": null,
+          "reason_codes": []
+        },
+        "oracle_checks": {
+          "eligible": true,
+          "guardrail_dispatch": true,
+          "validation_block": true
+        },
+        "oracle_match": true,
+        "observed_intent_count": 1,
+        "replay_idempotent": true,
+        "authoritative_writes_zero": true,
+        "expected_missing_segments": [],
+        "reverse_inference_rule_codes": [],
+        "reverse_inference_match": true,
+        "virtual_artifact_writes_zero": true,
+        "exception_archive": null
+      },
+      "cleanup": {
+        "before": {
+          "AgentAttachIntent": 1,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 3,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 1,
+          "CompositionRun": 1,
+          "WorkflowSnapshot": 1,
+          "Workflow": 1,
+          "EvidenceFactCard": 3,
+          "Artifact": 3,
+          "GuessPolicy": 1,
+          "Staff": 1,
+          "ClinicConfig": 1
+        },
+        "after": {
+          "AgentAttachIntent": 0,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 0,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 0,
+          "CompositionRun": 0,
+          "WorkflowSnapshot": 0,
+          "Workflow": 0,
+          "EvidenceFactCard": 0,
+          "Artifact": 0,
+          "GuessPolicy": 0,
+          "Staff": 0,
+          "ClinicConfig": 0
+        },
+        "cleanup_all_zero": true
+      },
+      "oracle": {
+        "expected_eligible": true,
+        "expected_guardrail_dispatch": false,
+        "expected_validation_block": false
+      }
+    },
+    {
+      "scenario_id": "s001-014",
+      "scenario_type": "normal_forward",
+      "execution_support": "supported",
+      "result": {
+        "eligible": true,
+        "gate_reasons": [],
+        "actual_guardrail_dispatch": false,
+        "actual_validation_block": false,
+        "llm_audit": {
+          "required": false,
+          "type": null,
+          "status": null,
+          "reason_codes": []
+        },
+        "oracle_checks": {
+          "eligible": true,
+          "guardrail_dispatch": true,
+          "validation_block": true
+        },
+        "oracle_match": true,
+        "observed_intent_count": 1,
+        "replay_idempotent": true,
+        "authoritative_writes_zero": true,
+        "expected_missing_segments": [],
+        "reverse_inference_rule_codes": [],
+        "reverse_inference_match": true,
+        "virtual_artifact_writes_zero": true,
+        "exception_archive": null
+      },
+      "cleanup": {
+        "before": {
+          "AgentAttachIntent": 1,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 3,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 1,
+          "CompositionRun": 1,
+          "WorkflowSnapshot": 1,
+          "Workflow": 1,
+          "EvidenceFactCard": 3,
+          "Artifact": 3,
+          "GuessPolicy": 1,
+          "Staff": 1,
+          "ClinicConfig": 1
+        },
+        "after": {
+          "AgentAttachIntent": 0,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 0,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 0,
+          "CompositionRun": 0,
+          "WorkflowSnapshot": 0,
+          "Workflow": 0,
+          "EvidenceFactCard": 0,
+          "Artifact": 0,
+          "GuessPolicy": 0,
+          "Staff": 0,
+          "ClinicConfig": 0
+        },
+        "cleanup_all_zero": true
+      },
+      "oracle": {
+        "expected_eligible": true,
+        "expected_guardrail_dispatch": false,
+        "expected_validation_block": false
+      }
+    },
+    {
+      "scenario_id": "s001-015",
+      "scenario_type": "normal_forward",
+      "execution_support": "supported",
+      "result": {
+        "eligible": true,
+        "gate_reasons": [],
+        "actual_guardrail_dispatch": false,
+        "actual_validation_block": false,
+        "llm_audit": {
+          "required": false,
+          "type": null,
+          "status": null,
+          "reason_codes": []
+        },
+        "oracle_checks": {
+          "eligible": true,
+          "guardrail_dispatch": true,
+          "validation_block": true
+        },
+        "oracle_match": true,
+        "observed_intent_count": 1,
+        "replay_idempotent": true,
+        "authoritative_writes_zero": true,
+        "expected_missing_segments": [],
+        "reverse_inference_rule_codes": [],
+        "reverse_inference_match": true,
+        "virtual_artifact_writes_zero": true,
+        "exception_archive": null
+      },
+      "cleanup": {
+        "before": {
+          "AgentAttachIntent": 1,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 3,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 1,
+          "CompositionRun": 1,
+          "WorkflowSnapshot": 1,
+          "Workflow": 1,
+          "EvidenceFactCard": 3,
+          "Artifact": 3,
+          "GuessPolicy": 1,
+          "Staff": 1,
+          "ClinicConfig": 1
+        },
+        "after": {
+          "AgentAttachIntent": 0,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 0,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 0,
+          "CompositionRun": 0,
+          "WorkflowSnapshot": 0,
+          "Workflow": 0,
+          "EvidenceFactCard": 0,
+          "Artifact": 0,
+          "GuessPolicy": 0,
+          "Staff": 0,
+          "ClinicConfig": 0
+        },
+        "cleanup_all_zero": true
+      },
+      "oracle": {
+        "expected_eligible": true,
+        "expected_guardrail_dispatch": false,
+        "expected_validation_block": false
+      }
+    },
+    {
+      "scenario_id": "s001-016",
+      "scenario_type": "normal_forward",
+      "execution_support": "supported",
+      "result": {
+        "eligible": true,
+        "gate_reasons": [],
+        "actual_guardrail_dispatch": false,
+        "actual_validation_block": false,
+        "llm_audit": {
+          "required": false,
+          "type": null,
+          "status": null,
+          "reason_codes": []
+        },
+        "oracle_checks": {
+          "eligible": true,
+          "guardrail_dispatch": true,
+          "validation_block": true
+        },
+        "oracle_match": true,
+        "observed_intent_count": 1,
+        "replay_idempotent": true,
+        "authoritative_writes_zero": true,
+        "expected_missing_segments": [],
+        "reverse_inference_rule_codes": [],
+        "reverse_inference_match": true,
+        "virtual_artifact_writes_zero": true,
+        "exception_archive": null
+      },
+      "cleanup": {
+        "before": {
+          "AgentAttachIntent": 1,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 3,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 1,
+          "CompositionRun": 1,
+          "WorkflowSnapshot": 1,
+          "Workflow": 1,
+          "EvidenceFactCard": 3,
+          "Artifact": 3,
+          "GuessPolicy": 1,
+          "Staff": 1,
+          "ClinicConfig": 1
+        },
+        "after": {
+          "AgentAttachIntent": 0,
+          "WorkflowArtifactLink": 0,
+          "UndoListItem": 0,
+          "AttentionItem": 0,
+          "ManagerDecision": 0,
+          "WorkflowCommitIntent": 0,
+          "WorkflowHypothesis": 0,
+          "CompositionRun": 0,
+          "WorkflowSnapshot": 0,
+          "Workflow": 0,
+          "EvidenceFactCard": 0,
+          "Artifact": 0,
+          "GuessPolicy": 0,
+          "Staff": 0,
+          "ClinicConfig": 0
+        },
+        "cleanup_all_zero": true
+      },
+      "oracle": {
+        "expected_eligible": true,
+        "expected_guardrail_dispatch": false,
+        "expected_validation_block": false
+      }
+    }
+  ]
+}
